@@ -18271,7 +18271,13 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
   window.__PP95_MEMORY_NOTEBOOK_MASK_PATCH__=true;
 
   const PP95_VISIBLE_RADIUS = 1; // current page + one page above/below only
-  const PP95_HISTORY_LIMIT = 8;
+  // NOTE(consolidation): was 8, which most editing sessions blow through in
+  // under a minute (undo/redo would silently stop working after only 8
+  // actions). Genuinely oversized projects already get their undo history
+  // cleared separately by ppMemoryTrimState's 7MB check below (with a
+  // visible toast), so this cap only needs to bound normal-sized sessions -
+  // raised to match the original base save()'s 35-entry limit.
+  const PP95_HISTORY_LIMIT = 35;
   const PP95_MAX_MOCKUP_SIDE = 2200; // keeps iPad RAM calmer for custom mock-ups
 
   window.pp95MaybeShrinkDataUrl = function(dataUrl, maxSide=PP95_MAX_MOCKUP_SIDE){
@@ -18300,13 +18306,18 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
   if(typeof save==='function'){
     window.save=function(){
       try{
-        state.history.push(JSON.stringify({pages:state.pages,selectedPage:state.selectedPage,selected:state.selected}));
+        var snapshot=JSON.stringify({pages:state.pages,selectedPage:state.selectedPage,selected:state.selected});
+        state.history.push(snapshot);
         state.redoStack=[];
         while(state.history.length>PP95_HISTORY_LIMIT) state.history.shift();
       }catch(err){
-        console.warn('History skipped to protect memory',err);
-        state.history=[];
-        state.redoStack=[];
+        // NOTE(consolidation): this used to wipe state.history/redoStack
+        // entirely on any snapshot failure, so one transient error (e.g. a
+        // momentary stringify hiccup) would silently erase already-good
+        // undo history. Skip this snapshot instead and keep what's there -
+        // the separate 7MB ppMemoryTrimState check below is the intended
+        // place to clear history for genuinely oversized projects.
+        console.warn('History snapshot skipped to protect memory',err);
       }
     };
   }
