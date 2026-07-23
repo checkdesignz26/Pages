@@ -15810,37 +15810,10 @@ function makeNumberedList(){
     l.className = ((l.className || "") + " patternSlot filledSlot").trim();
   }
 
-  const oldFillSelectedFrame = typeof window.fillSelectedFrame === "function" ? window.fillSelectedFrame : null;
-
-  window.fillSelectedFrame = function(){
-    const src = selectedPatternSrc();
-    if(!src){
-      alert("Choose a pattern from the Pattern Tray first.");
-      return;
-    }
-
-    let l = selectedLayer();
-    if(!isFillableFrame(l) && DD.lastFrameId){
-      const found = getLayerById(DD.lastFrameId);
-      if(found) l = found.layer;
-    }
-
-    if(!isFillableFrame(l)){
-      if(oldFillSelectedFrame) return oldFillSelectedFrame();
-      alert("Select a frame or slot first.");
-      return;
-    }
-
-    saveUndo();
-    fillLayerWithPattern(l, src);
-
-    const s = S();
-    if(s) s.selected = l.id;
-    DD.lastFrameId = l.id;
-
-    renderApp();
-    setTimeout(patchFrameDom, 80);
-  };
+  // NOTE(consolidation): window.fillSelectedFrame used to also be defined
+  // here, fully superseded by later generations (confirmed via a fresh scan:
+  // many later window.fillSelectedFrame assignments exist) - removed as dead
+  // code.
 
   function getMaskBounds(mask, w, h){
     const c = document.createElement("canvas");
@@ -16016,40 +15989,12 @@ function makeNumberedList(){
     return newPage;
   }
 
-  window.createCustomMockupFromMask = async function(){
-    saveUndo();
-
-    const result = await composeCustomMockup();
-    if(!result) return;
-
-    // IMPORTANT: always create a separate page.
-    // Do not resize or overwrite the current listing/page.
-    const p = createStandaloneMockupPage(result.w, result.h);
-    if(!p){
-      alert("Could not create a new custom mock-up page.");
-      return;
-    }
-
-    const l = makeLayerObj("image", {
-      name:"custom mock-up",
-      src:result.src,
-      fit:"contain",
-      x:0,y:0,w:100,h:100,r:0,opacity:1,z:1,
-      className:"customMockupLayer",
-      customMockup:true
-    });
-
-    p.layers.push(l);
-    DD.customMockupLayerId = l.id;
-
-    const s = S();
-    if(s) s.selected = l.id;
-
-    renderApp();
-
-    const st = $("customMockupStatus");
-    if(st) st.textContent = "new custom mock-up page created ✨";
-  };
+  // NOTE(consolidation): window.createCustomMockupFromMask used to also be
+  // defined here, fully superseded by the v163/createClean generation later
+  // in the file - removed as dead code. attachSliderSafety below now
+  // degrades to a harmless no-op (its DD.customMockupLayerId guard never
+  // gets set without the removed create function), which is expected since
+  // the live generation has its own equivalent tracking.
 
   // Keep slider updates from resizing the current page. They only update the custom mock-up page if it exists.
   function attachSliderSafety(){
