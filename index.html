@@ -21489,76 +21489,6 @@ function makeNumberedList(){
 .layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
-<script id="pp-doggy-98-real-box-tighter-trim-js">
-(function(){
-  /* DOGGY 94: keep the real bounding-box CSS, but do not crop source images automatically. */
-  return;
-  if(window.__PP_DOGGY_98_REAL_BOX_TIGHTER_TRIM__) return;
-  window.__PP_DOGGY_98_REAL_BOX_TIGHTER_TRIM__=true;
-
-  function st(){try{return state;}catch(e){return null;}}
-  function cur(){try{return current();}catch(e){var s=st();return s&&s.pages?s.pages[s.selectedPage||0]:null;}}
-  function selectedLayer(){var s=st(),p=cur(); if(!s||!p||!p.layers)return null; return p.layers.find(function(l){return l.id===s.selected;})||null;}
-  function redraw(){try{render();}catch(e){try{renderPages();renderLayers();syncControls();}catch(_){}}}
-  function loadImage(src){return new Promise(function(resolve,reject){var im=new Image();im.onload=function(){resolve(im);};im.onerror=reject;im.src=src;});}
-  function boundsFromAlpha(img, threshold){
-    var iw=img.naturalWidth||img.width, ih=img.naturalHeight||img.height;
-    var maxSide=1200, sc=Math.min(1,maxSide/Math.max(iw,ih));
-    var w=Math.max(1,Math.round(iw*sc)), h=Math.max(1,Math.round(ih*sc));
-    var c=document.createElement('canvas'); c.width=w; c.height=h;
-    var ctx=c.getContext('2d',{willReadFrequently:true}); ctx.clearRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
-    var d; try{d=ctx.getImageData(0,0,w,h).data;}catch(e){return null;}
-    var minX=w,minY=h,maxX=-1,maxY=-1;
-    threshold=threshold==null?8:threshold;
-    for(var y=0;y<h;y++){
-      for(var x=0;x<w;x++){
-        var a=d[(y*w+x)*4+3];
-        if(a>threshold){ if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
-      }
-    }
-    if(maxX<0)return null;
-    return {x:minX/sc,y:minY/sc,w:(maxX-minX+1)/sc,h:(maxY-minY+1)/sc,iw:iw,ih:ih};
-  }
-  function cropSrc(img,b){
-    var c=document.createElement('canvas'); c.width=Math.max(1,Math.round(b.w)); c.height=Math.max(1,Math.round(b.h));
-    var ctx=c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); ctx.drawImage(img,b.x,b.y,b.w,b.h,0,0,c.width,c.height);
-    return c.toDataURL('image/png');
-  }
-  function meaningful(tx,ty,tw,th){return !(tx<.008 && ty<.008 && tw>.985 && th>.985);}
-  async function tightenSrcLayer(l, prop){
-    if(!l || !l[prop]) return false;
-    var img; try{img=await loadImage(l[prop]);}catch(e){return false;}
-    var b=boundsFromAlpha(img,6); if(!b)return false;
-    var pad=1;
-    var x=Math.max(0,b.x-pad), y=Math.max(0,b.y-pad);
-    var w=Math.min(b.iw-x,b.w+pad*2), h=Math.min(b.ih-y,b.h+pad*2);
-    var tx=x/b.iw, ty=y/b.ih, tw=w/b.iw, th=h/b.ih;
-    if(!meaningful(tx,ty,tw,th)) return false;
-    var ox=Number(l.x)||0, oy=Number(l.y)||0, ow=Number(l.w)||10, oh=Number(l.h)||10;
-    l.x=ox+ow*tx; l.y=oy+oh*ty; l.w=Math.max(1,ow*tw); l.h=Math.max(1,oh*th);
-    try{l[prop]=cropSrc(img,{x:x,y:y,w:w,h:h});}catch(e){}
-    return true;
-  }
-  async function tightenSelected(){
-    var l=selectedLayer(); if(!l)return;
-    var changed=false;
-    /* Custom PNG frames use maskSrc; images/banners/overlays use src. No one-time flag here: imported old files can still be cleaned. */
-    if(l.maskSrc && (l.frameShape==='custom' || l.slotShape==='customFrame' || l.type==='frame')) changed=await tightenSrcLayer(l,'maskSrc') || changed;
-    else if(l.src && !l.patternSlot && !l.customMockup && !l.disclosureBadge) changed=await tightenSrcLayer(l,'src') || changed;
-    if(changed) redraw();
-  }
-  var waiting=false;
-  function schedule(){ if(waiting)return; waiting=true; setTimeout(function(){waiting=false; tightenSelected();},90); }
-  document.addEventListener('click',schedule,true);
-  document.addEventListener('pointerup',schedule,true);
-  document.addEventListener('change',schedule,true);
-  var oldRender=window.render;
-  if(typeof oldRender==='function'){
-    window.render=function(){var r=oldRender.apply(this,arguments); setTimeout(tightenSelected,120); return r;};
-  }
-  setTimeout(tightenSelected,250);
-})();
-</script>
 
 
 <!-- Pattern Pages Memory Safe v3: live editor image caps + lighter DOM previews -->
@@ -28571,30 +28501,6 @@ window.addEventListener('DOMContentLoaded',function(){
 <!-- v181f: daisy frame refinement -->
 <style id="v181f-daisy-frame">
 /* Keep the daisy proportional and crisp on iPad/Safari. */
-.stage .layer.frameSlot > svg.frameSvg{
-  shape-rendering:geometricPrecision!important;
-}
-</style>
-
-
-<!-- v181g: balanced five-petal flower -->
-<style id="v181g-five-petal-flower">
-.stage .layer.frameSlot > svg.frameSvg{
-  shape-rendering:geometricPrecision!important;
-}
-</style>
-
-
-<!-- v181h: mathematically spaced daisy petals -->
-<style id="v181h-mathematical-daisy">
-.stage .layer.frameSlot > svg.frameSvg{
-  shape-rendering:geometricPrecision!important;
-}
-</style>
-
-
-<!-- v181i: refined daisy proportions -->
-<style id="v181i-refined-daisy">
 .stage .layer.frameSlot > svg.frameSvg{
   shape-rendering:geometricPrecision!important;
 }
