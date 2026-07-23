@@ -15058,27 +15058,56 @@ document.addEventListener('click', function(e){
   }
   function showAutoSaveNotice(msg){
     let n=safe$('autosaveNotice');
-    if(!n){n=document.createElement('div'); n.id='autosaveNotice'; n.className='autosaveNotice'; document.body.appendChild(n);} 
+    if(!n){n=document.createElement('div'); n.id='autosaveNotice'; n.className='autosaveNotice'; document.body.appendChild(n);}
     n.textContent=msg; n.classList.add('show'); clearTimeout(n._t); n._t=setTimeout(()=>n.classList.remove('show'),1600);
   }
-  // NOTE(consolidation): auto-save used to retry a full localStorage write
-  // every ~4.5s (plus on every click/input) forever, even after it had
-  // already failed with QuotaExceededError - burning CPU/battery and
-  // spamming the console on any large project. Now backs off for a while
-  // after a failure (retrying the write itself is pointless until the
-  // project shrinks) and only notifies the user once per backoff window
-  // instead of on every silent retry.
+  // NOTE(consolidation): auto-save used to write to localStorage, which has
+  // a small (~5-10MB) per-origin quota that a real project's full-size
+  // pattern/mock-up images blow through almost immediately - meaning
+  // auto-save silently never actually worked for realistic projects, only
+  // ever failing with QuotaExceededError. IndexedDB has a much larger quota
+  // (based on available disk space, typically hundreds of MB+), so it's
+  // now the real storage backend. A one-time migration reads any old
+  // localStorage autosave in so nobody's existing backup is lost.
+  const AUTOSAVE_DB_NAME='patternPagesAutoSaveDB';
+  const AUTOSAVE_DB_STORE='autosave';
+  let autoSaveDBPromise=null;
+  function openAutoSaveDB(){
+    if(autoSaveDBPromise) return autoSaveDBPromise;
+    autoSaveDBPromise=new Promise((resolve,reject)=>{
+      if(!window.indexedDB){reject(new Error('indexedDB unavailable'));return;}
+      const req=indexedDB.open(AUTOSAVE_DB_NAME,1);
+      req.onupgradeneeded=()=>{ if(!req.result.objectStoreNames.contains(AUTOSAVE_DB_STORE)) req.result.createObjectStore(AUTOSAVE_DB_STORE); };
+      req.onsuccess=()=>resolve(req.result);
+      req.onerror=()=>reject(req.error);
+    });
+    return autoSaveDBPromise;
+  }
+  function idbSet(key,value){
+    return openAutoSaveDB().then(db=>new Promise((resolve,reject)=>{
+      const tx=db.transaction(AUTOSAVE_DB_STORE,'readwrite');
+      tx.objectStore(AUTOSAVE_DB_STORE).put(value,key);
+      tx.oncomplete=()=>resolve(true);
+      tx.onerror=()=>reject(tx.error);
+    }));
+  }
+  function idbGet(key){
+    return openAutoSaveDB().then(db=>new Promise((resolve,reject)=>{
+      const tx=db.transaction(AUTOSAVE_DB_STORE,'readonly');
+      const req=tx.objectStore(AUTOSAVE_DB_STORE).get(key);
+      req.onsuccess=()=>resolve(req.result);
+      req.onerror=()=>reject(req.error);
+    }));
+  }
   let autoSaveBackoffUntil=0;
   let autoSaveNotifiedQuotaFull=false;
   const AUTOSAVE_BACKOFF_MS=60000;
   window.saveAutoSaveNow=function(silent){
     if(Date.now()<autoSaveBackoffUntil){ return false; }
-    try{
-      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(makeProjectSnapshot()));
+    idbSet(AUTOSAVE_KEY, makeProjectSnapshot()).then(()=>{
       autoSaveNotifiedQuotaFull=false;
       if(!silent) showAutoSaveNotice('auto-saved');
-      return true;
-    }catch(err){
+    }).catch(err=>{
       console.warn('Auto-save failed',err);
       autoSaveBackoffUntil=Date.now()+AUTOSAVE_BACKOFF_MS;
       if(!silent){
@@ -15087,16 +15116,37 @@ document.addEventListener('click', function(e){
         autoSaveNotifiedQuotaFull=true;
         setStatus('Auto-save is full - your project is too large for browser storage. Use "save .ppages" to back up your work.');
       }
-      return false;
-    }
+    });
+    return true;
   };
   window.restoreAutoSave=function(){
-    try{ const raw=localStorage.getItem(AUTOSAVE_KEY); if(!raw){alert('No auto-save found yet.');return false;} return applyProjectSnapshot(JSON.parse(raw),'Auto-save'); }
-    catch(err){ alert('Could not restore auto-save.'); console.error(err); return false; }
+    idbGet(AUTOSAVE_KEY).then(data=>{
+      if(data){ applyProjectSnapshot(data,'Auto-save'); return; }
+      // Fall back to a pre-migration localStorage autosave, if any.
+      try{
+        const raw=localStorage.getItem(AUTOSAVE_KEY);
+        if(raw){ applyProjectSnapshot(JSON.parse(raw),'Auto-save'); return; }
+      }catch(err){}
+      alert('No auto-save found yet.');
+    }).catch(err=>{ alert('Could not restore auto-save.'); console.error(err); });
   };
+  // One-time migration: carry forward any old localStorage autosave (from
+  // small projects that fit under its quota) into IndexedDB, then stop
+  // touching localStorage for this at all.
+  idbGet(AUTOSAVE_KEY).then(data=>{
+    if(data) return;
+    try{
+      const raw=localStorage.getItem(AUTOSAVE_KEY);
+      if(raw){ idbSet(AUTOSAVE_KEY, JSON.parse(raw)).catch(()=>{}); }
+    }catch(err){}
+  }).catch(()=>{});
   let saveTimer=null;
   function queueAutoSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>window.saveAutoSaveNow(true),900); }
   window.addEventListener('beforeunload',()=>window.saveAutoSaveNow(true));
+  // iPad Safari suspends/kills backgrounded tabs without reliably firing
+  // beforeunload, and IndexedDB writes are async - visibilitychange fires
+  // earlier and more reliably, giving the write a real chance to finish.
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') window.saveAutoSaveNow(true); });
   setInterval(()=>window.saveAutoSaveNow(true),AUTOSAVE_INTERVAL);
   document.addEventListener('input',e=>{ if(e.target && (e.target.matches('input,textarea,select'))) queueAutoSave(); },true);
   document.addEventListener('click',()=>queueAutoSave(),true);
@@ -15216,15 +15266,22 @@ document.addEventListener('click', function(e){
   }
   window.addEventListener('load',()=>{
     registerPWA(); populateTextureSelect(); applyPageBackgroundStyles();
-    try{
-      const raw=localStorage.getItem(AUTOSAVE_KEY);
-      if(raw){
-        const data=JSON.parse(raw); const age=Date.now()-new Date(data.savedAt||0).getTime();
-        if(data.pages && data.pages.length && age<1000*60*60*24*14){
-          setTimeout(()=>{ if(confirm('We found an unsaved Pattern Pages project. Restore it?')) applyProjectSnapshot(data,'Crash recovery'); },350);
-        }
+    idbGet(AUTOSAVE_KEY).then(data=>{
+      if(!data) throw new Error('no idb autosave, try localStorage');
+      return data;
+    }).catch(()=>{
+      // Pre-migration fallback for a localStorage-only autosave.
+      try{
+        const raw=localStorage.getItem(AUTOSAVE_KEY);
+        return raw?JSON.parse(raw):null;
+      }catch(err){ return null; }
+    }).then(data=>{
+      if(!data) return;
+      const age=Date.now()-new Date(data.savedAt||0).getTime();
+      if(data.pages && data.pages.length && age<1000*60*60*24*14){
+        setTimeout(()=>{ if(confirm('We found an unsaved Pattern Pages project. Restore it?')) applyProjectSnapshot(data,'Crash recovery'); },350);
       }
-    }catch(err){}
+    }).catch(()=>{});
     setTimeout(()=>window.saveAutoSaveNow(true),1200);
   });
 })();
