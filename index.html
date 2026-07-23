@@ -31519,9 +31519,13 @@ else install();
     if(!list.length){el.innerHTML='<div class="smallText">No pattern frames yet. Add strips, cards or frames above.</div>';return;}
     list.forEach(function(l){el.appendChild(rowFor(l,'frames'));});
   }
-  window.rowForLayer=rowFor; try{rowForLayer=rowFor;}catch(e){}
-  window.renderLayers=renderCleanLayers; try{renderLayers=renderCleanLayers;}catch(e){}
-  window.renderFrameList=renderCleanFrames; try{renderFrameList=renderCleanFrames;}catch(e){}
+  // NOTE(consolidation): this used to also expose window.rowForLayer,
+  // window.renderLayers and window.renderFrameList here, all fully
+  // superseded by later generations before any user interaction could
+  // observe them - removed as dead code. renderCleanLayers/renderCleanFrames/
+  // rowFor above are still invoked directly by name from boot() below, so
+  // their function bodies stay untouched, only the redundant global exposure
+  // is gone.
 
   // When content genuinely changes, throw away old previews. Moving/resizing does not call this.
   ['fillSelectedFrame','placePatternOnPage','resetPngColor','applyPngColor','updateClean','createCustomMockup'].forEach(function(fn){
@@ -31800,7 +31804,12 @@ else install();
     if(!list.length){el.innerHTML='<div class="smallText">No pattern frames yet. Add strips, cards or frames above.</div>';return;}
     list.forEach(function(l){el.appendChild(rowForLayerV170(l,'frames'));});
   }
-  window.renderLayers=renderLayersV170; try{renderLayers=renderLayersV170;}catch(e){}
+  // NOTE(consolidation): window.renderLayers used to also be exposed here,
+  // fully superseded by the v182i generation later in the file before any
+  // user interaction could observe it - removed as dead code.
+  // window.renderFrameList below is NOT superseded by anything later and
+  // remains the live implementation - kept as-is. renderLayersV170's
+  // function body still runs once via boot() below, untouched.
   window.renderFrameList=renderFrameListV170; try{renderFrameList=renderFrameListV170;}catch(e){}
 
   function boot(){try{renderLayersV170();renderFrameListV170();}catch(e){}}
