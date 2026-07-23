@@ -21565,132 +21565,15 @@ window.addEventListener('DOMContentLoaded',function(){
 
 
 
-<script id="pp-v162-mockup-paparazzi-isolation">
-/* Pattern Pages v162 — Mock-up Paparazzi Isolation
-   Do not touch Pattern Tray / Place Pattern / Fill Slot.
-   This final script quarantines only the custom mock-up organ:
-   - removes older duplicate mock-up listeners by cloning the controls
-   - forces one create button brain
-   - forces Multiply blend internally
-   - regenerates only the selected live mock-up layer on slider moves
-   - replaces the image src atomically to avoid Safari/iPad ghost redraws */
-(function(){
-  const SAFE = window.PP_SAFE_MOCKUP_V162 = { bg:null, mask:null, pattern:null, lastLayerId:null, timer:null, ticket:0, creating:false };
-  const cache = new Map();
-  const $ = id => document.getElementById(id);
-  function st(){ try{return window.state || state;}catch(e){return window.state || null;} }
-  function cur(){ const s=st(); return s && s.pages ? s.pages[s.selectedPage||0] : null; }
-  function status(msg){ const el=$('customMockupStatus'); if(el) el.textContent = msg || ((SAFE.bg?'mock-up ✓ ':'mock-up needed · ')+(SAFE.mask?'mask ✓':'mask needed')); }
-  function num(id, fallback){ const n=$(id), v=n?Number(n.value):NaN; return Number.isFinite(v)?v:fallback; }
-  function readInput(id){ const input=$(id), file=input && input.files && input.files[0]; if(!file) return Promise.resolve(null); return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=rej; r.readAsDataURL(file); }); }
-  function loadImg(src){ if(!src) return Promise.reject(new Error('missing image')); if(cache.has(src)) return cache.get(src); const p=new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=src; }); cache.set(src,p); return p; }
-  function renderApp(){ try{ if(typeof render==='function') render(); else if(typeof renderPages==='function') renderPages(); }catch(e){ console.warn(e); } }
-  function nextZSafe(){ try{ if(typeof nextZ==='function') return nextZ(); }catch(e){} const p=cur(); return p && p.layers ? Math.max(0,...p.layers.map(l=>+l.z||0))+1 : Date.now(); }
-  function makeLayerSafe(props){ try{ if(typeof layer==='function') return layer('image', props); }catch(e){} return Object.assign({id:'l'+Date.now()+Math.random().toString(36).slice(2), type:'image', name:'custom mock-up', x:0,y:0,w:100,h:100,r:0,opacity:1,z:nextZSafe(),fit:'contain'}, props||{}); }
-  function selectedPatternSrc(){
-    try{ const s=st(); if(s && s.trays && s.trays.pattern && s.trays.pattern.length){ const idx=s.selectedTray && Number.isInteger(s.selectedTray.pattern) ? s.selectedTray.pattern : 0; const src=(s.trays.pattern[idx]&&s.trays.pattern[idx].src)||(s.trays.pattern[0]&&s.trays.pattern[0].src); if(src){ SAFE.pattern=src; return src; } } }catch(e){}
-    const img=document.querySelector('#patternTray .thumb.selected img, #patternTray .thumb img');
-    if(img && img.src){ SAFE.pattern=img.src; return img.src; }
-    return SAFE.pattern;
-  }
-  document.addEventListener('click', e=>{ const t=e.target && e.target.closest && e.target.closest('#patternTray .thumb'); if(t){ const im=t.querySelector('img'); if(im && im.src) SAFE.pattern=im.src; } }, true);
-
-  function alphaMask(mask,w,h){
-    const c=document.createElement('canvas'); c.width=w; c.height=h;
-    const ctx=c.getContext('2d',{willReadFrequently:true}); ctx.drawImage(mask,0,0,w,h);
-    const img=ctx.getImageData(0,0,w,h), d=img.data;
-    for(let i=0;i<d.length;i+=4){ const lum=(d[i]+d[i+1]+d[i+2])/3; d[i]=255; d[i+1]=255; d[i+2]=255; d[i+3]=Math.round((lum/255)*d[i+3]); }
-    ctx.putImageData(img,0,0); return c;
-  }
-  function maskBounds(mask,w,h){
-    const c=document.createElement('canvas'); c.width=w; c.height=h; const ctx=c.getContext('2d',{willReadFrequently:true}); ctx.drawImage(mask,0,0,w,h);
-    const data=ctx.getImageData(0,0,w,h).data; let minX=w,minY=h,maxX=0,maxY=0,found=false; const step=Math.max(1,Math.floor(Math.max(w,h)/900));
-    for(let y=0;y<h;y+=step){ for(let x=0;x<w;x+=step){ const i=(y*w+x)*4, bright=(data[i]+data[i+1]+data[i+2])/3; if(data[i+3]>18 && bright>135){ found=true; if(x<minX)minX=x;if(y<minY)minY=y;if(x>maxX)maxX=x;if(y>maxY)maxY=y; } } }
-    if(!found) return {x:0,y:0,w,h}; const pad=step*4; minX=Math.max(0,minX-pad); minY=Math.max(0,minY-pad); maxX=Math.min(w,maxX+pad); maxY=Math.min(h,maxY+pad); return {x:minX,y:minY,w:Math.max(1,maxX-minX),h:Math.max(1,maxY-minY)};
-  }
-  function drawRepeat(ctx, pattern, bounds, recipe){
-    const repeat=Math.max(12, Math.min(140, Number(recipe.repeat||62)));
-    const pW=pattern.naturalWidth||pattern.width, pH=pattern.naturalHeight||pattern.height, ratio=pH?pW/pH:1;
-    const tileW=Math.max(16, bounds.w*repeat/100), tileH=Math.max(16, tileW/ratio);
-    const tile=document.createElement('canvas'); tile.width=Math.round(tileW); tile.height=Math.round(tileH);
-    const t=tile.getContext('2d'); t.imageSmoothingEnabled=true; t.imageSmoothingQuality='high'; t.clearRect(0,0,tile.width,tile.height); t.drawImage(pattern,0,0,tile.width,tile.height);
-    const pat=ctx.createPattern(tile,'repeat'); if(!pat) return;
-    const ox=((Number(recipe.offsetX||0)/100)*tile.width)%tile.width, oy=((Number(recipe.offsetY||0)/100)*tile.height)%tile.height;
-    ctx.save(); ctx.translate(bounds.x+ox,bounds.y+oy); ctx.fillStyle=pat; ctx.fillRect(-tile.width*3,-tile.height*3,bounds.w+tile.width*6,bounds.h+tile.height*6); ctx.restore();
-  }
-  function recipeFrom(base){ return Object.assign({}, base||{}, { bg: SAFE.bg || (base&&base.bg), mask: SAFE.mask || (base&&base.mask), pattern:selectedPatternSrc() || (base&&base.pattern), repeat:num('customMockupRepeat',62), offsetX:num('customMockupOffsetX',0), offsetY:num('customMockupOffsetY',0), texture:num('customMockupTexture',55), blend:'multiply', version:'v162-mockup-isolated' }); }
-  async function renderRecipe(recipe){
-    if(!recipe.bg || !recipe.mask || !recipe.pattern) throw new Error('incomplete recipe');
-    const [bg,mask,pattern]=await Promise.all([loadImg(recipe.bg),loadImg(recipe.mask),loadImg(recipe.pattern)]);
-    const w=bg.naturalWidth||bg.width, h=bg.naturalHeight||bg.height;
-    const alpha=alphaMask(mask,w,h), bounds=maskBounds(mask,w,h);
-    const patLayer=document.createElement('canvas'); patLayer.width=w; patLayer.height=h;
-    const pctx=patLayer.getContext('2d'); pctx.imageSmoothingEnabled=true; pctx.imageSmoothingQuality='high'; drawRepeat(pctx,pattern,bounds,recipe); pctx.globalCompositeOperation='destination-in'; pctx.drawImage(alpha,0,0,w,h);
-    const out=document.createElement('canvas'); out.width=w; out.height=h;
-    const ctx=out.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high'; ctx.clearRect(0,0,w,h); ctx.drawImage(bg,0,0,w,h);
-    ctx.save(); ctx.globalAlpha=.97; ctx.globalCompositeOperation='multiply'; ctx.drawImage(patLayer,0,0,w,h); ctx.restore();
-    const texture=Math.max(0,Math.min(100,Number(recipe.texture||0)))/100;
-    if(texture){ const shade=document.createElement('canvas'); shade.width=w; shade.height=h; const s=shade.getContext('2d'); s.drawImage(bg,0,0,w,h); s.globalCompositeOperation='destination-in'; s.drawImage(alpha,0,0,w,h); ctx.save(); ctx.globalCompositeOperation='multiply'; ctx.globalAlpha=.08+texture*.20; ctx.drawImage(shade,0,0); ctx.restore(); }
-    return {src:out.toDataURL('image/png'), w, h};
-  }
-  function makePage(rendered, recipe){
-    const s=st(); if(!s || !Array.isArray(s.pages)) throw new Error('no pages');
-    const p={id:'p'+Date.now()+Math.random().toString(36).slice(2,6), name:'custom mock-up · live', title:'custom mock-up', kind:'mockup', type:'mockup', w:rendered.w, h:rendered.h, layers:[]};
-    const l=makeLayerSafe({name:'custom mock-up · live', src:rendered.src, fit:'contain', x:0,y:0,w:100,h:100,r:0,opacity:1,z:nextZSafe(), customMockup:true, customMockupLive:true, customMockupRecipe:recipe, aspect:rendered.w/Math.max(1,rendered.h), className:'customMockupLayer'});
-    p.layers.push(l); s.pages.push(p); s.selectedPage=s.pages.length-1; s.selected=l.id; SAFE.lastLayerId=l.id; return l;
-  }
-  function selectedLive(){ const s=st(), p=cur(); if(!s || !s.pages) return null; let l=p && p.layers && p.layers.find(x=>x && x.id===s.selected && x.customMockupLive); if(l) return l; for(const pg of s.pages){ l=pg.layers && pg.layers.find(x=>x && x.id===SAFE.lastLayerId && x.customMockupLive); if(l) return l; } return null; }
-  async function create(e){
-    if(e){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
-    if(SAFE.creating){ status('already creating one mock-up…'); return false; }
-    SAFE.creating=true;
-    try{
-      SAFE.bg = SAFE.bg || await readInput('customMockupBgInput');
-      SAFE.mask = SAFE.mask || await readInput('customMockupMaskInput');
-      const recipe=recipeFrom({});
-      if(!recipe.bg){ alert('Upload a mock-up background first.'); return false; }
-      if(!recipe.mask){ alert('Upload a white mask first.'); return false; }
-      if(!recipe.pattern){ alert('Upload or select a pattern from the Pattern Tray first.'); return false; }
-      try{ if(typeof save==='function') save(); }catch(e){}
-      status('creating clean mock-up…'); const rendered=await renderRecipe(recipe); makePage(rendered,recipe); renderApp(); status('clean live mock-up created ✨');
-    }catch(err){ console.error(err); status('mock-up failed'); alert('Could not create the custom mock-up. Try PNG/JPG files and a clean white mask.'); }
-    finally{ setTimeout(()=>{ SAFE.creating=false; },700); }
-    return false;
-  }
-  async function update(){
-    const l=selectedLive(); if(!l){ status('select a live custom mock-up first'); return; }
-    l.customMockupRecipe=recipeFrom(l.customMockupRecipe||{});
-    const ticket=++SAFE.ticket;
-    try{ status('updating clean mock-up…'); const rendered=await renderRecipe(l.customMockupRecipe); if(ticket!==SAFE.ticket) return; l.src=rendered.src; l.aspect=rendered.w/Math.max(1,rendered.h); l.customMockup=true; l.customMockupLive=true; renderApp(); requestAnimationFrame(()=>requestAnimationFrame(()=>{ document.querySelectorAll('.stage.mockup,.layer.customMockupLayer img').forEach(n=>{ n.style.webkitTransform='translateZ(0)'; n.style.transform='translateZ(0)'; }); })); status('clean mock-up updated ✨'); }
-    catch(err){ console.error(err); status('mock-up update failed'); }
-  }
-  function schedule(e){ if(e){ e.preventDefault&&e.preventDefault(); e.stopPropagation&&e.stopPropagation(); e.stopImmediatePropagation&&e.stopImmediatePropagation(); } clearTimeout(SAFE.timer); SAFE.timer=setTimeout(update,160); return false; }
-  async function loadPart(e,part){
-    if(e){ e.stopPropagation&&e.stopPropagation(); e.stopImmediatePropagation&&e.stopImmediatePropagation(); }
-    const file=e && e.target && e.target.files && e.target.files[0]; if(!file) return false;
-    const src=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=ev=>res(ev.target.result); r.onerror=rej; r.readAsDataURL(file); });
-    SAFE[part]=src; SAFE[part+'Name']=file.name||'';
-    const prev=part==='bg' ? $('customMockupBgPreview') : $('customMockupMaskPreview');
-    if(prev) prev.innerHTML='<img src="'+src+'" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">';
-    status(); return false;
-  }
-  function cloneClean(node){ if(!node) return null; const fresh=node.cloneNode(true); fresh.removeAttribute('onchange'); fresh.removeAttribute('onclick'); node.parentNode.replaceChild(fresh,node); return fresh; }
-  function bind(){
-    const bg=cloneClean($('customMockupBgInput')); if(bg) bg.addEventListener('change', e=>loadPart(e,'bg'), true);
-    const mask=cloneClean($('customMockupMaskInput')); if(mask) mask.addEventListener('change', e=>loadPart(e,'mask'), true);
-    ['customMockupRepeat','customMockupOffsetX','customMockupOffsetY','customMockupTexture','customMockupBlendMode'].forEach(id=>{ const n=cloneClean($(id)); if(!n) return; if(id==='customMockupBlendMode'){ n.value='multiply'; const row=n.closest('.rangeRow'); if(row) row.style.display='none'; } n.addEventListener('input', schedule, true); n.addEventListener('change', schedule, true); });
-    const oldBtn=[...document.querySelectorAll('.customMockupBox button, button')].find(b=>/create/i.test(b.textContent||'') && /mock-up/i.test(b.textContent||'')) || document.querySelector('[onclick*="createCustomMockupFromMask"]');
-    const btn=cloneClean(oldBtn); if(btn){ btn.id='createCustomMockupBtnV162'; btn.textContent='create clean live mock-up ✨'; btn.addEventListener('click', create, true); }
-    window.loadCustomMockupPart=loadPart; window.createCustomMockupFromMask=create; window.createOrUpdateCustomMockup=create; window.regenerateSelectedCustomMockupV162=schedule;
-    status('v162 mock-up paparazzi trap ready · general pages untouched');
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', bind); else bind();
-  setTimeout(bind,600);
-})();
-</script>
-
-
-
+<!-- NOTE(consolidation): the pp-v162-mockup-paparazzi-isolation script used to
+     live here. Confirmed dead: its window.createCustomMockupFromMask/
+     createOrUpdateCustomMockup/loadCustomMockupPart globals and its rebound
+     "create" button were always overwritten by the pp-v163-custom-mockup-
+     paparazzi-crop-cage script that binds right after it (both on the same
+     DOMContentLoaded dispatch and again via a later setTimeout), and its
+     window.regenerateSelectedCustomMockupV162 / #createCustomMockupBtnV162
+     / window.PP_SAFE_MOCKUP_V162 identifiers were not referenced anywhere
+     else in the file - removed as dead code. -->
 <script id="pp-v163-custom-mockup-paparazzi-crop-cage">
 /* Pattern Pages v163 — Custom mock-up paparazzi cage
    Only touches custom mock-up creation/update.
