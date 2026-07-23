@@ -29578,6 +29578,19 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     return origDeselect.apply(this,arguments);
   };
 
+  // A tap/click landing on an embedded image is an image-select gesture,
+  // not a text-edit gesture - suppress the browser's native "focus the
+  // contentEditable host on any descendant click" behavior so tapping an
+  // image doesn't also pop the on-screen keyboard.
+  document.addEventListener('pointerdown',function(e){
+    var img=e.target.closest&&e.target.closest('.documentEditor img');
+    if(img) e.preventDefault();
+  },true);
+  document.addEventListener('mousedown',function(e){
+    var img=e.target.closest&&e.target.closest('.documentEditor img');
+    if(img) e.preventDefault();
+  },true);
+
   document.addEventListener('click',function(e){
     var img=e.target.closest&&e.target.closest('.documentEditor img');
     if(img){
@@ -29664,6 +29677,12 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     if(!editor) return;
 
     prepare(editor);
+
+    // A tap starting on an embedded image is an image-select gesture (see
+    // pp-document-image-adjust-js), not a text-edit gesture - don't steal
+    // focus into the editor/open the keyboard for it.
+    if(e.target && e.target.closest && e.target.closest('img')) return;
+
     pressedEditor=editor;
     startX=e.clientX;
     startY=e.clientY;
