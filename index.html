@@ -34268,7 +34268,11 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     }catch(e){}
     editor.classList.add('ppPersistentDoc183');
     var panel=byId('textStudioPanel') || (byId('fontFamily')&&byId('fontFamily').closest('.box'));
-    if(panel)panel.classList.add('ppDocActive183');
+    if(panel){
+      panel.classList.add('ppDocActive183');
+      panel.classList.remove('collapsed');
+    }
+    document.body.classList.remove('rightCollapsed');
     rememberRange();
     syncPanel();
   }
