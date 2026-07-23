@@ -29244,6 +29244,9 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   window.__PP_PERSISTENT_DOCUMENT_ENGINE_183__=true;
 
   var layerSetTextAlign=window.setTextAlign;
+  var layerToggleBold=window.toggleBold;
+  var layerToggleItalic=window.toggleItalic;
+  var layerApplyTextControls=window.applyTextControls;
   var activeEditor=null;
   var savedRange=null;
   var saveTimer=0;
@@ -29373,8 +29376,13 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     fresh.addEventListener(eventName||'click',handler);
   }
   function wireControls(){
-    cleanClone('boldBtn',function(e){e.preventDefault();if(activeEditor)exec('bold')});
-    cleanClone('italicBtn',function(e){e.preventDefault();if(activeEditor)exec('italic')});
+    // NOTE(consolidation): these used to no-op entirely outside document
+    // mode (if(activeEditor) was the only branch), which broke bold/italic/
+    // font/size/spacing/color for normal text layers - now falls back to
+    // the pre-existing layer-editing behavior, matching how setTextAlign
+    // above already handled this same activeEditor split.
+    cleanClone('boldBtn',function(e){e.preventDefault();window.toggleBold();});
+    cleanClone('italicBtn',function(e){e.preventDefault();window.toggleItalic();});
 
     var map={
       fontFamily:function(el){exec('fontName',el.value)},
@@ -29389,7 +29397,10 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
       fresh.dataset.ppPersistent183='yes';
       old.replaceWith(fresh);
       ['input','change'].forEach(function(type){
-        fresh.addEventListener(type,function(){if(activeEditor)map[id](fresh)});
+        fresh.addEventListener(type,function(){
+          if(activeEditor){map[id](fresh);return;}
+          if(typeof layerApplyTextControls==='function')layerApplyTextControls();
+        });
       });
     });
   }
@@ -29412,8 +29423,14 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     }
     exec(where==='center'?'justifyCenter':where==='right'?'justifyRight':'justifyLeft');
   };
-  window.toggleBold=function(){if(activeEditor)exec('bold')};
-  window.toggleItalic=function(){if(activeEditor)exec('italic')};
+  window.toggleBold=function(){
+    if(activeEditor){exec('bold');return;}
+    if(typeof layerToggleBold==='function')layerToggleBold();
+  };
+  window.toggleItalic=function(){
+    if(activeEditor){exec('italic');return;}
+    if(typeof layerToggleItalic==='function')layerToggleItalic();
+  };
 
   function upgrade(editor){
     if(!editor||editor.dataset.ppPersistent183==='yes')return;
