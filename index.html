@@ -25745,11 +25745,13 @@ window.addEventListener('DOMContentLoaded',function(){
     var info=body.querySelector('p.smallText');
     if(info) info.textContent='Tap a layer row to select it. Use duplicate for a quick copy, or copy + Paste to Page for repeating headers and footers.';
   }
-  var oldRenderLayers=window.renderLayers;
-  if(typeof oldRenderLayers==='function' && !oldRenderLayers.__ppV160PasteWrapped){
-    var wrapped=function(){ var r=oldRenderLayers.apply(this,arguments); setTimeout(addControls,0); return r; };
-    wrapped.__ppV160PasteWrapped=true; window.renderLayers=wrapped; try{renderLayers=wrapped;}catch(e){}
-  }
+  // NOTE(consolidation): this used to also wrap window.renderLayers to
+  // re-trigger addControls() after every layer-list render, but that wrap
+  // was fully discarded by later renderLayers generations regardless
+  // (renderLayers uses full-replacement semantics, not chaining). Removed as
+  // dead code - the DOMContentLoaded listener and setTimeout retries below
+  // already guarantee addControls() runs early, and it's itself idempotent
+  // (checks for an existing #ppLayerReuseBar before inserting).
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',addControls); else addControls();
   setTimeout(addControls,300); setTimeout(addControls,1200);
 })();
