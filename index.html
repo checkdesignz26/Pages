@@ -2701,7 +2701,10 @@ function changeFrameCount(delta){
   $('cardCount').value=n;
   if($('cardCountDisplay')) $('cardCountDisplay').textContent=n;
 }
-function makeSingle(){save();current().layers=[];let l=layer('pattern',{name:'single pattern slot',x:0,y:0,w:100,h:100,src:null,fit:'cover',patternSlot:true,slotShape:'single'});current().layers.push(l);state.selected=l.id;render()}
+// NOTE(consolidation): function makeSingle(){...} used to be defined here.
+// It was only ever called from the base setCards('single') branch removed
+// above, and is not referenced anywhere else in the file - removed as dead
+// code.
 function makeStrips(){showcaseLayoutType='strips';setCards(getFrameCount(),'strips')}
 function chooseShowcaseLayout(type){
   showcaseLayoutType=type;
@@ -2897,105 +2900,13 @@ function generatePatternShowcaseLayout(){
  renderAll();
  autosaveSoon();
 }
-function setCards(n,style){
- save();
- let p=current();
- let s=style||showcaseLayoutType||'strips';
- p.layers=p.layers.filter(l=>!l.generatedPatternLayout);
- if(s==='single')return makeSingle();
- const slotName=(i)=>`pattern slot ${i+1}`;
- if(s==='strips'){
-   const count=Math.max(1,n);
-   const zBase=nextZ();
-
-   if(isHorizontalStashSelected()){
-     // HORIZONTAL FABRIC STASH MODE:
-     // Not rotated bookmarks. These are separate full-width fabric samples laid on the page,
-     // with visible background gaps and soft shadows so they feel like a collection board.
-     const marginX = 7;
-     const topBottomMargin = 8;
-     const gap = count <= 1 ? 0 : Math.min(3.8, Math.max(1.8, 13 / count));
-     const stripH = count <= 1 ? 84 : (100 - (topBottomMargin * 2) - gap * (count - 1)) / count;
-     const safeStripH = Math.max(5.5, stripH);
-     const totalH = safeStripH * count + gap * (count - 1);
-     const startY = Math.max(4, (100 - totalH) / 2);
-     for(let i=count-1;i>=0;i--){
-       p.layers.push(layer('strip',{
-         name:`fabric stash ${i+1}`,
-         x:marginX,
-         y:startY + i*(safeStripH + gap),
-         w:100 - marginX*2,
-         h:safeStripH,
-         z:zBase+(count-i),
-         src:null,
-         fit:'cover',
-         patternSlot:true,
-         slotShape:'strip',
-         stripDirection:'horizontal',
-         generatedPatternLayout:true,
-         locked:true,
-         lockedStrip:true,
-         noResize:true,
-         noDelete:true,
-         stackIndex:i
-       }));
-     }
-   }else{
-     // VERTICAL STRIPS:
-     // Even swatches with no visible frame and clearer right-side stacked shadow.
-     const stripW = count===1 ? 100 : Math.min(42, Math.max(18, 100 / count + 10));
-     const visibleStep = count===1 ? 0 : (100 - stripW) / (count - 1);
-     for(let i=count-1;i>=0;i--){
-       p.layers.push(layer('strip',{
-         name:slotName(i),
-         x:i*visibleStep,
-         y:0,
-         w:stripW,
-         h:100,
-         z:zBase+(count-i),
-         src:null,
-         fit:'cover',
-         patternSlot:true,
-         slotShape:'strip',
-         stripDirection:'vertical',
-         generatedPatternLayout:true,
-         locked:true,
-         lockedStrip:true,
-         noResize:true,
-         noDelete:true,
-         stackIndex:i
-       }));
-     }
-   }
- }else if(s==='rectangles'){
-   let cols=Math.min(n, Math.max(1, Math.ceil(Math.sqrt(n*1.35))));
-   let rows=Math.ceil(n/cols);
-   let gap=3;
-   let tileW=(88-gap*(cols-1))/cols;
-   let tileH=Math.min(24,(78-gap*(rows-1))/rows);
-   let startX=(100-(cols*tileW+(cols-1)*gap))/2;
-   let startY=(100-(rows*tileH+(rows-1)*gap))/2;
-   for(let i=0;i<n;i++){
-     let r=Math.floor(i/cols), c=i%cols;
-     p.layers.push(layer('card',{name:slotName(i),x:startX+c*(tileW+gap),y:startY+r*(tileH+gap),w:tileW,h:tileH,z:nextZ()+i,src:null,fit:'cover',patternSlot:true,slotShape:'rectangle',generatedPatternLayout:true}));
-   }
- }else{
-   let cols=Math.ceil(Math.sqrt(n));
-   let rows=Math.ceil(n/cols);
-   let gap=3;
-   const availableW=86, availableH=78;
-   const squareW=Math.min((availableW-gap*(cols-1))/cols, ((availableH-gap*(rows-1))/rows)*(p.h/p.w));
-   const squareH=squareW*(p.w/p.h);
-   const startX=(100-(cols*squareW+(cols-1)*gap))/2;
-   const startY=(100-(rows*squareH+(rows-1)*gap))/2;
-   for(let i=0;i<n;i++){
-     let r=Math.floor(i/cols), c=i%cols;
-     p.layers.push(layer('card',{name:slotName(i),x:startX+c*(squareW+gap),y:startY+r*(squareH+gap),w:squareW,h:squareH,z:nextZ()+i,src:null,fit:'cover',patternSlot:true,slotShape:s==='circles'?'circle':'square',generatedPatternLayout:true}));
-   }
- }
- state.selected=null;
- render();
-}
+// NOTE(consolidation): the original function setCards(n,style){...} used to
+// be defined here. Confirmed dead: window.setCards is fully replaced (not
+// wrapped) by the ppages-stacked-showcase-no-pink-js script synchronously
+// during initial page load, before any user interaction is possible, so this
+// base definition was never reachable again - removed as dead code. (Later
+// setCards generations do wrap each other in a live chain and were left
+// untouched.)
 function applyCardDropdown(){generatePatternShowcaseLayout()}
 function getSelectedPattern(){let i=state.selectedTray.pattern;return i!=null?state.trays.pattern[i]?.src:null}function getPattern(i){return state.trays.pattern[i%Math.max(1,state.trays.pattern.length)]?.src||null}
 function loadTray(e,type){[...e.target.files].forEach(file=>{let r=new FileReader();r.onload=ev=>{state.trays[type].push({src:ev.target.result,name:file.name});renderTrays()};r.readAsDataURL(file)});e.target.value=''}
