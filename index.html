@@ -29550,6 +29550,17 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
 
   function selectImage(img){
     clearSelection();
+    // The browser's native "focus the contentEditable host on any
+    // descendant click/tap" behavior already ran by the time this click
+    // handler fires. Undo it immediately (rather than preventDefault-ing
+    // the pointerdown/mousedown that caused it) so the on-screen keyboard
+    // doesn't pop up - preventDefault on a touch-originated pointerdown
+    // can suppress the synthetic click event entirely on iOS Safari, which
+    // would break image selection itself.
+    var editor=img.closest('.documentEditor');
+    if(editor && document.activeElement===editor){
+      try{ editor.blur(); }catch(e){}
+    }
     selectedImg=img;
     img.classList.add('ppDocImgSelected');
     document.body.classList.remove('rightCollapsed');
@@ -29588,19 +29599,6 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     }
     return origDeselect.apply(this,arguments);
   };
-
-  // A tap/click landing on an embedded image is an image-select gesture,
-  // not a text-edit gesture - suppress the browser's native "focus the
-  // contentEditable host on any descendant click" behavior so tapping an
-  // image doesn't also pop the on-screen keyboard.
-  document.addEventListener('pointerdown',function(e){
-    var img=e.target.closest&&e.target.closest('.documentEditor img');
-    if(img) e.preventDefault();
-  },true);
-  document.addEventListener('mousedown',function(e){
-    var img=e.target.closest&&e.target.closest('.documentEditor img');
-    if(img) e.preventDefault();
-  },true);
 
   document.addEventListener('click',function(e){
     var img=e.target.closest&&e.target.closest('.documentEditor img');
