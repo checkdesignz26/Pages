@@ -23857,7 +23857,10 @@ window.addEventListener('DOMContentLoaded',function(){
   window.fixStashZOrder=fixStashZOrder;
   window.addEventListener('DOMContentLoaded',function(){
     document.addEventListener('pointerup',function(){
-      setTimeout(function(){fixStashZOrder(); if(typeof renderPages==='function')renderPages();},40);
+      setTimeout(function(){
+        if(typeof window.__ppDocEditorActive==='function'&&window.__ppDocEditorActive())return;
+        fixStashZOrder(); if(typeof renderPages==='function')renderPages();
+      },40);
     },true);
     document.addEventListener('click',function(){setTimeout(fixStashZOrder,40);},true);
   });
@@ -31116,6 +31119,12 @@ else install();
     document.querySelectorAll('.pageBlock').forEach((block)=>{
       const i=+block.dataset.page,p=pages()[i];if(!isDoc(p))return;ensureDocProps(p);
       const st=block.querySelector('.stage');if(!st)return;
+      const existingEd=!p.docTOC?st.querySelector(`.documentEditor[data-page-index="${i}"]`):null;
+      if(existingEd&&existingEd.innerHTML===(p.docHtml||'<p><br></p>')){
+        const num=st.querySelector('.documentPageNumber');if(num)num.textContent=docPageNumber(i);
+        const title=block.querySelector('.pageTitle');if(title)title.textContent=`${i+1}. Document · A4`;
+        return;
+      }
       st.className='stage documentStage';st.style.aspectRatio='210/297';st.innerHTML='';
       const paper=document.createElement('div');paper.className='documentPaper';
       if(p.docTOC){
@@ -34368,6 +34377,7 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     try{document.execCommand('formatBlock',false,tag)}catch(e){}
     rememberRange();saveEditor(activeEditor,false);return true;
   };
+  window.__ppDocEditorActive=function(){return !!(activeEditor&&document.contains(activeEditor));};
   window.setTextAlign=function(where){
     if(!activeEditor)return;
     exec(where==='center'?'justifyCenter':where==='right'?'justifyRight':'justifyLeft');
