@@ -34482,7 +34482,136 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
 })();
 </script>
 
+<style id="pp-document-image-adjust-css">
+.documentEditor img.ppDocImgSelected{outline:3px solid #7b3f91;outline-offset:2px;cursor:pointer!important;}
+</style>
+<script id="pp-document-image-adjust-js">
+(function(){
+  'use strict';
+  if(window.__PP_DOC_IMAGE_ADJUST__) return;
+  window.__PP_DOC_IMAGE_ADJUST__=true;
 
+  function $(id){return document.getElementById(id);}
+  function editAdjustBox(){return Array.from(document.querySelectorAll('.box')).find(function(b){var h=b.querySelector('h2');return h&&(h.textContent||'').trim().toLowerCase()==='edit & adjust';});}
+
+  var selectedImg=null;
+  var origApplyControls=window.applyControls;
+  var origDeleteSelected=window.deleteSelected;
+  var origDeselect=window.deselect;
+
+  function clearSelection(){
+    if(selectedImg)selectedImg.classList.remove('ppDocImgSelected');
+    selectedImg=null;
+    var btn=$('ppDocImgDeleteBtn');
+    if(btn)btn.style.display='none';
+  }
+
+  function deleteSelectedImage(){
+    if(!selectedImg||!document.contains(selectedImg))return false;
+    var img=selectedImg;
+    clearSelection();
+    var editor=img.closest('.documentEditor');
+    img.remove();
+    if(editor)editor.dispatchEvent(new Event('input',{bubbles:true}));
+    if($('selectedHint'))$('selectedHint').textContent='Nothing selected';
+    return true;
+  }
+
+  function ensureDeleteButton(){
+    var btn=$('ppDocImgDeleteBtn');
+    if(btn)return btn;
+    var box=editAdjustBox();
+    if(!box)return null;
+    btn=document.createElement('button');
+    btn.id='ppDocImgDeleteBtn';
+    btn.className='full';
+    btn.textContent='delete image';
+    btn.style.marginTop='8px';
+    btn.onclick=function(e){e.preventDefault();deleteSelectedImage();};
+    box.appendChild(btn);
+    return btn;
+  }
+
+  function notifyEditor(img){
+    var editor=img&&img.closest('.documentEditor');
+    if(editor)editor.dispatchEvent(new Event('input',{bubbles:true}));
+  }
+
+  function syncPanelFromImage(){
+    if(!selectedImg)return;
+    var editor=selectedImg.closest('.documentEditor');
+    var editorWidth=editor?editor.getBoundingClientRect().width:0;
+    var w=parseFloat(selectedImg.style.width);
+    if(!w||isNaN(w)){
+      w=editorWidth?Math.round((selectedImg.getBoundingClientRect().width/editorWidth)*100):100;
+    }
+    var op=selectedImg.style.opacity!==''?Math.round(parseFloat(selectedImg.style.opacity)*100):100;
+    if(isNaN(op))op=100;
+    var rot=0;
+    var m=/rotate\(([-\d.]+)deg\)/.exec(selectedImg.style.transform||'');
+    if(m)rot=parseFloat(m[1]);
+    if($('scale'))$('scale').value=Math.max(20,Math.min(250,w));
+    if($('opacity'))$('opacity').value=op;
+    if($('rotate'))$('rotate').value=rot;
+    if($('selectedHint'))$('selectedHint').textContent='Document image selected';
+  }
+
+  function selectImage(img){
+    clearSelection();
+    selectedImg=img;
+    img.classList.add('ppDocImgSelected');
+    document.body.classList.remove('rightCollapsed');
+    var box=editAdjustBox();
+    if(box)box.classList.remove('collapsed');
+    var btn=ensureDeleteButton();
+    if(btn)btn.style.display='';
+    syncPanelFromImage();
+  }
+
+  window.applyControls=function(){
+    if(selectedImg&&document.contains(selectedImg)){
+      var w=Math.max(5,Math.min(250,+($('scale')?$('scale').value:100)));
+      var op=Math.max(0,Math.min(100,+($('opacity')?$('opacity').value:100)))/100;
+      var rot=+($('rotate')?$('rotate').value:0)||0;
+      selectedImg.style.width=w+'%';
+      selectedImg.style.height='auto';
+      selectedImg.style.opacity=String(op);
+      selectedImg.style.transform=rot?('rotate('+rot+'deg)'):'';
+      notifyEditor(selectedImg);
+      return;
+    }
+    return origApplyControls.apply(this,arguments);
+  };
+
+  window.deleteSelected=function(){
+    if(deleteSelectedImage())return;
+    return origDeleteSelected.apply(this,arguments);
+  };
+
+  window.deselect=function(){
+    if(selectedImg){
+      clearSelection();
+      if($('selectedHint'))$('selectedHint').textContent='Nothing selected';
+      return;
+    }
+    return origDeselect.apply(this,arguments);
+  };
+
+  document.addEventListener('click',function(e){
+    var img=e.target.closest&&e.target.closest('.documentEditor img');
+    if(img){
+      e.preventDefault();
+      e.stopPropagation();
+      selectImage(img);
+      return;
+    }
+    if(selectedImg && e.target!==selectedImg){
+      var insideSidePanel=e.target.closest&&e.target.closest('.side');
+      if(!insideSidePanel)clearSelection();
+    }
+  },true);
+})();
+</script>
 
 
 
