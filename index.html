@@ -15061,9 +15061,34 @@ document.addEventListener('click', function(e){
     if(!n){n=document.createElement('div'); n.id='autosaveNotice'; n.className='autosaveNotice'; document.body.appendChild(n);} 
     n.textContent=msg; n.classList.add('show'); clearTimeout(n._t); n._t=setTimeout(()=>n.classList.remove('show'),1600);
   }
+  // NOTE(consolidation): auto-save used to retry a full localStorage write
+  // every ~4.5s (plus on every click/input) forever, even after it had
+  // already failed with QuotaExceededError - burning CPU/battery and
+  // spamming the console on any large project. Now backs off for a while
+  // after a failure (retrying the write itself is pointless until the
+  // project shrinks) and only notifies the user once per backoff window
+  // instead of on every silent retry.
+  let autoSaveBackoffUntil=0;
+  let autoSaveNotifiedQuotaFull=false;
+  const AUTOSAVE_BACKOFF_MS=60000;
   window.saveAutoSaveNow=function(silent){
-    try{ localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(makeProjectSnapshot())); if(!silent) showAutoSaveNotice('auto-saved'); return true; }
-    catch(err){ console.warn('Auto-save failed',err); if(!silent) setStatus('Auto-save could not save. Large images may be filling browser storage.'); return false; }
+    if(Date.now()<autoSaveBackoffUntil){ return false; }
+    try{
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(makeProjectSnapshot()));
+      autoSaveNotifiedQuotaFull=false;
+      if(!silent) showAutoSaveNotice('auto-saved');
+      return true;
+    }catch(err){
+      console.warn('Auto-save failed',err);
+      autoSaveBackoffUntil=Date.now()+AUTOSAVE_BACKOFF_MS;
+      if(!silent){
+        setStatus('Auto-save could not save. Large images may be filling browser storage.');
+      }else if(!autoSaveNotifiedQuotaFull){
+        autoSaveNotifiedQuotaFull=true;
+        setStatus('Auto-save is full - your project is too large for browser storage. Use "save .ppages" to back up your work.');
+      }
+      return false;
+    }
   };
   window.restoreAutoSave=function(){
     try{ const raw=localStorage.getItem(AUTOSAVE_KEY); if(!raw){alert('No auto-save found yet.');return false;} return applyProjectSnapshot(JSON.parse(raw),'Auto-save'); }
@@ -23277,7 +23302,7 @@ window.addEventListener('DOMContentLoaded',function(){
       const row=document.createElement('div');row.className='templateGrid';
       row.innerHTML='<button type="button" onclick="downloadPatternPagesTemplate()">update open template</button><button type="button" id="ppTemplateSaveAsBtn" onclick="savePatternPagesTemplateAs()">save as new</button>';
       const note=body.querySelector('.templateNote');
-      if(note&&note.nextSibling) body.insertBefore(row,note.nextSibling); else body.prepend(row);
+      if(note&&note.nextSibling&&note.nextSibling.parentNode===body) body.insertBefore(row,note.nextSibling); else body.prepend(row);
     }
     const toolbar=document.querySelector('.projectGroup');
     if(toolbar&&!byId('ppTemplateToolbarSaveAs')){
@@ -23771,7 +23796,7 @@ window.addEventListener('DOMContentLoaded',function(){
     if(gen){gen.id='showcaseGenerateBtn';gen.onclick=window.generateSelectedShowcaseLayout;}
     if(!byId('showcaseDeleteBtn')){
       var del=document.createElement('button');del.id='showcaseDeleteBtn';del.type='button';del.className='showcaseDeleteBtn';del.textContent='delete showcase';del.onclick=window.deletePatternShowcase;
-      if(gen&&gen.nextSibling)body.insertBefore(del,gen.nextSibling);else body.appendChild(del);
+      if(gen&&gen.nextSibling&&gen.nextSibling.parentNode===body)body.insertBefore(del,gen.nextSibling);else body.appendChild(del);
     }
     syncUI();
   }
