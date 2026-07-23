@@ -14831,7 +14831,7 @@ aside:last-of-type .shadowSliderBox{
   // Allow normal iPad paste directly onto the workspace/text area to create instruction blocks.
   document.addEventListener('paste',function(e){
     const active=document.activeElement;
-    if(active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA'))return;
+    if(active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA' || active.isContentEditable))return;
     const txt=(e.clipboardData && e.clipboardData.getData('text/plain')||'').trim();
     if(!txt)return;
     const area=safe$('pasteTextArea');
@@ -31082,11 +31082,45 @@ else install();
     const html=(editor.innerHTML||'').replace(/\s|<br>|<div><br><\/div>|<p><br><\/p>/gi,'');
     return !html;
   }
+  function splitOverflowingBlock(editor){
+    const el=editor.lastElementChild;
+    if(!el||!el.textContent)return null;
+    const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);
+    const textNode=walker.nextNode();
+    if(!textNode||walker.nextNode())return null;
+    const full=textNode.textContent;
+    if(!full||!full.trim())return null;
+    editor.scrollTop=0;
+    const limitBottom=editor.getBoundingClientRect().bottom;
+    const range=document.createRange();
+    let lo=0,hi=full.length,best=0;
+    while(lo<=hi){
+      const mid=(lo+hi)>>1;
+      range.setStart(textNode,0);range.setEnd(textNode,mid);
+      if(range.getBoundingClientRect().bottom<=limitBottom){best=mid;lo=mid+1}else{hi=mid-1}
+    }
+    if(best<=0||best>=full.length)return null;
+    let cut=best;
+    while(cut>0&&full[cut-1]!==' '&&full[cut-1]!=='\n')cut--;
+    if(cut<=0)cut=best;
+    const keep=full.slice(0,cut).replace(/\s+$/,'');
+    const overflow=full.slice(cut).replace(/^\s+/,'');
+    if(!keep||!overflow)return null;
+    textNode.textContent=keep;
+    const clone=document.createElement(el.tagName);
+    clone.textContent=overflow;
+    return clone.outerHTML;
+  }
   function moveOverflow(index,editor){
     const paper=editor.closest('.documentPaper');
     let guard=0,moved=[];
     while(editor.scrollHeight>editor.clientHeight+2&&editor.lastElementChild&&guard++<100){
-      const n=editor.lastElementChild;if(editor.children.length===1)break;moved.unshift(n.outerHTML);n.remove();
+      if(editor.children.length===1){
+        const splitHtml=splitOverflowingBlock(editor);
+        if(splitHtml){moved.unshift(splitHtml);continue}
+        break;
+      }
+      const n=editor.lastElementChild;moved.unshift(n.outerHTML);n.remove();
     }
     paper.classList.toggle('hasOverflow',editor.scrollHeight>editor.clientHeight+2);
     pages()[index].docHtml=editor.innerHTML;
@@ -34403,12 +34437,24 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
 
     editor.addEventListener('focus',function(){activate(editor)},true);
     editor.addEventListener('input',function(e){
-      e.stopImmediatePropagation();
       saveEditor(editor,false);
       rememberRange();
     },true);
     editor.addEventListener('blur',function(){
       saveEditor(editor,true);
+    },true);
+    editor.addEventListener('paste',function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      var text=(e.clipboardData||window.clipboardData).getData('text/plain')||'';
+      if(!text)return;
+      var lines=text.split(/\r\n|\r|\n/);
+      lines.forEach(function(line,i){
+        if(i>0)document.execCommand('insertParagraph');
+        if(line)document.execCommand('insertText',false,line);
+      });
+      saveEditor(editor,false);
+      rememberRange();
     },true);
     ['keyup','mouseup','touchend','pointerup'].forEach(function(type){
       editor.addEventListener(type,function(){activate(editor);setTimeout(rememberRange,0)},true);
