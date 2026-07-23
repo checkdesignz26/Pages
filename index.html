@@ -17075,27 +17075,12 @@ function makeNumberedList(){
     $('ppClearSlotInsideShowcase').onclick=function(e){e.preventDefault();window.clearSelectedSlot();};
   }
 
-  /* Strengthen generated layout labels and z-order after generation without changing geometry. */
-  var oldGenerate=window.generatePatternShowcaseLayout;
-  if(typeof oldGenerate==='function'){
-    window.generatePatternShowcaseLayout=function(){
-      oldGenerate.apply(this,arguments);
-      setTimeout(function(){
-        var p=getCurrentPage();
-        if(p && p.layers){
-          p.layers.forEach(function(l){
-            if(l.generatedPatternLayout || l.patternSlot){
-              l.opacity = l.opacity == null ? 1 : l.opacity;
-              if(l.type==='strip'){l.patternSlot=true;l.slotShape='strip';}
-              if(l.type==='card' && !l.slotShape){l.slotShape='square';}
-              if(!l.name || /^pattern slot/i.test(l.name)) l.name = (l.slotShape||'pattern')+' slot';
-            }
-          });
-        }
-        try{render();}catch(e){}
-      },30);
-    };
-  }
+  // NOTE(consolidation): this block used to capture window.generatePatternShowcaseLayout
+  // as oldGenerate and wrap it. It was already fully superseded by later
+  // generatePatternShowcaseLayout generations (which replace, not wrap, this
+  // one), and became a guaranteed no-op once the base generatePatternShowcaseLayout
+  // definition was removed as dead code (oldGenerate resolves to undefined,
+  // so the `typeof oldGenerate==='function'` guard never passes) - removed.
 
   setTimeout(addShowcaseFillTools,80);
   setTimeout(addShowcaseFillTools,600);
