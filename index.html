@@ -2789,117 +2789,16 @@ function generateSelectedShowcaseLayout(){
   }
 }
 
-function generatePatternShowcaseLayout(){
- const p=currentPage();
- if(!p) return;
- const n=Math.max(1,Math.min(20,parseInt(($('cardCount')&&$('cardCount').value)||'1',10)||1));
- const s=showcaseLayoutType||'strips';
-
- // remove previous generated pattern showcase slots only
- p.layers=p.layers.filter(l=>!l.generatedPatternLayout);
-
- const slotName=i=>`pattern slot ${i+1}`;
- const zBase=nextZ();
-
- if(s==='strips'){
-   const count=Math.max(1,n);
-
-   if(isHorizontalStashSelected()){
-     // TRUE HORIZONTAL FABRIC STASH:
-     // full-width separated strips with background visible between them.
-     const marginX = 7;
-     const marginY = 8;
-     const gap = count <= 1 ? 0 : Math.min(4.5, Math.max(2.0, 14 / count));
-     const stripH = count <= 1 ? 84 : Math.max(5.5, (100 - marginY*2 - gap*(count-1)) / count);
-     const totalH = stripH*count + gap*(count-1);
-     const startY = Math.max(4, (100-totalH)/2);
-
-     for(let i=0;i<count;i++){
-       p.layers.push(layer('strip',{
-         name:`fabric stash ${i+1}`,
-         x:marginX,
-         y:startY + i*step,
-         w:100 - marginX*2,
-         h:stripH,
-         z:zBase+(count-i),
-         src:null,
-         fit:'cover',
-         patternSlot:true,
-         slotShape:'strip',
-         stripDirection:'horizontal',
-         generatedPatternLayout:true,
-         locked:true,
-         lockedStrip:true,
-         noResize:true,
-         noDelete:true,
-         stackIndex:i
-       }));
-     }
-   }else{
-     // VERTICAL SWATCH STRIPS:
-     // stacked side-by-side with more even high-count distribution.
-     const stripW=count===1?100:Math.min(42, Math.max(18, 100/count + 10));
-     const visibleStep=count===1?0:(100-stripW)/(count-1);
-     for(let i=count-1;i>=0;i--){
-       p.layers.push(layer('strip',{
-         name:slotName(i),
-         x:i*visibleStep,
-         y:0,
-         w:stripW,
-         h:100,
-         z:zBase+(count-i),
-         src:null,
-         fit:'cover',
-         patternSlot:true,
-         slotShape:'strip',
-         stripDirection:'vertical',
-         generatedPatternLayout:true,
-         locked:true,
-         lockedStrip:true,
-         noResize:true,
-         noDelete:true,
-         stackIndex:i
-       }));
-     }
-   }
- }else if(s==='rectangles'){
-   const cols=n<=2?n:Math.min(3,Math.ceil(Math.sqrt(n)));
-   const rows=Math.ceil(n/cols);
-   const gap=4;
-   const cellW=(100-gap*(cols+1))/cols;
-   const cellH=(100-gap*(rows+1))/rows;
-   for(let i=0;i<n;i++){
-     const c=i%cols,r=Math.floor(i/cols);
-     p.layers.push(layer('card',{name:slotName(i),x:gap+c*(cellW+gap),y:gap+r*(cellH+gap),w:cellW,h:cellH,z:nextZ(),src:null,fit:'cover',patternSlot:true,slotShape:'rectangle',generatedPatternLayout:true}));
-   }
- }else if(s==='circles'){
-   const cols=n<=2?n:Math.min(4,Math.ceil(Math.sqrt(n)));
-   const rows=Math.ceil(n/cols);
-   const gap=5;
-   const cellW=(100-gap*(cols+1))/cols;
-   const cellH=(100-gap*(rows+1))/rows;
-   const size=Math.min(cellW,cellH);
-   for(let i=0;i<n;i++){
-     const c=i%cols,r=Math.floor(i/cols);
-     p.layers.push(layer('card',{name:slotName(i),x:gap+c*(cellW+gap)+(cellW-size)/2,y:gap+r*(cellH+gap)+(cellH-size)/2,w:size,h:size,z:nextZ(),src:null,fit:'cover',patternSlot:true,slotShape:'circle',generatedPatternLayout:true}));
-   }
- }else{
-   const cols=n<=2?n:Math.min(4,Math.ceil(Math.sqrt(n)));
-   const rows=Math.ceil(n/cols);
-   const gap=4;
-   const size=Math.min((100-gap*(cols+1))/cols,(100-gap*(rows+1))/rows);
-   const totalW=cols*size+(cols-1)*gap;
-   const startX=(100-totalW)/2;
-   for(let i=0;i<n;i++){
-     const c=i%cols,r=Math.floor(i/cols);
-     p.layers.push(layer('card',{name:slotName(i),x:startX+c*(size+gap),y:gap+r*(size+gap),w:size,h:size,z:nextZ(),src:null,fit:'cover',patternSlot:true,slotShape:'square',generatedPatternLayout:true}));
-   }
- }
-
- selectedLayerId=null;
- renderAll();
- autosaveSoon();
-}
+// NOTE(consolidation): the original function generatePatternShowcaseLayout(){...}
+// used to be defined here. Confirmed dead: window.generatePatternShowcaseLayout
+// is fully replaced (not wrapped) by the ppages-stacked-showcase-no-pink-js
+// script synchronously during initial page load, before any user interaction
+// is possible, so this base definition was never reachable again - removed
+// as dead code. (It also referenced an undefined `step` variable in its
+// horizontal-strip branch, a latent ReferenceError that independently
+// confirms this branch was never actually executed.) Later
+// generatePatternShowcaseLayout generations do wrap each other in a live
+// chain and were left untouched.
 // NOTE(consolidation): the original function setCards(n,style){...} used to
 // be defined here. Confirmed dead: window.setCards is fully replaced (not
 // wrapped) by the ppages-stacked-showcase-no-pink-js script synchronously
