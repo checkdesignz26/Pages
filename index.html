@@ -22669,71 +22669,11 @@ renderAutoGroupOverlay(st,pi);
     if(typeof deleteLayerById==='function') deleteLayerById(id,state.selectedPage);
   };
 
-  window.rowForLayer=function(l, mode='all'){
-    const row=document.createElement('div');
-    row.className='layerItem ppLayerRow '+(l.id===state.selected?'active ':'')+(l.hidden?'isHidden ':'');
-    row.draggable=true;
-    row.dataset.id=l.id;
-    row.dataset.mode=mode;
-
-    const grip=document.createElement('span');
-    grip.className='dragGrip';
-    grip.title='drag to reorder';
-    grip.textContent='⋮⋮';
-
-    const eye=document.createElement('button');
-    eye.type='button';
-    eye.className='visibilityBtn '+(l.hidden?'layerHidden':'');
-    eye.title=l.hidden?'show layer':'hide layer';
-    eye.textContent=l.hidden?'🚫':'👁';
-    eye.onclick=(e)=>{e.stopPropagation();toggleLayerVisibility(l.id);};
-
-    const name=document.createElement('span');
-    name.className='layerName';
-    name.textContent=l.name || l.type || 'layer';
-    name.title='tap ✎ to rename';
-    name.onclick=(e)=>{e.stopPropagation();selectLayer(l.id);};
-    name.ondblclick=(e)=>{e.stopPropagation();renameLayerById(l.id);};
-
-    const rename=document.createElement('button');
-    rename.type='button';
-    rename.className='renameLayerBtn';
-    rename.title='rename layer';
-    rename.textContent='✎';
-    rename.onclick=(e)=>{e.stopPropagation();renameLayerById(l.id);};
-
-    const del=document.createElement('button');
-    del.type='button';
-    del.className='deleteLayerBtn';
-    del.title='delete layer';
-    del.textContent='×';
-    del.onclick=(e)=>{e.stopPropagation();deleteLayerFromPanel(l.id);};
-
-    row.appendChild(grip); row.appendChild(eye); row.appendChild(name); row.appendChild(rename); row.appendChild(del);
-    row.onclick=()=>selectLayer(l.id);
-    row.addEventListener('dragstart',e=>{row.classList.add('dragging'); e.dataTransfer.setData('text/plain', JSON.stringify({id:l.id,mode}));});
-    row.addEventListener('dragend',()=>row.classList.remove('dragging'));
-    row.addEventListener('dragover',e=>e.preventDefault());
-    row.addEventListener('drop',e=>{e.preventDefault();e.stopPropagation();try{let data=JSON.parse(e.dataTransfer.getData('text/plain'));reorderLayerByDrop(data.id,l.id,mode)}catch(err){}});
-    return row;
-  };
-
-  window.renderLayers=function(){
-    const el=document.getElementById('layerList'); if(!el)return;
-    el.innerHTML='';
-    const p=page(); const layers=p?(p.layers||[]).slice().sort((a,b)=>(b.z||0)-(a.z||0)):[];
-    if(!layers.length){el.innerHTML='<div class="smallText">No layers yet. Add a pattern frame, banner, label or shape.</div>';return;}
-    layers.forEach(l=>el.appendChild(rowForLayer(l,'all')));
-  };
-
-  window.renderFrameList=function(){
-    const el=document.getElementById('frameList'); if(!el)return;
-    el.innerHTML='';
-    const p=page();
-    const frames=p?(p.layers||[]).filter(l=>['strip','card','pattern','frame'].includes(l.type)).sort((a,b)=>(b.z||0)-(a.z||0)):[];
-    if(!frames.length){el.innerHTML='<div class="smallText">No pattern frames yet. Add strips, cards or frames above.</div>';return;}
-    frames.forEach(l=>el.appendChild(rowForLayer(l,'frames')));
-  };
+  // NOTE(consolidation): this used to also define window.rowForLayer,
+  // window.renderLayers and window.renderFrameList here, all fully
+  // superseded by later generations (renderPages below is NOT superseded -
+  // it remains the live base the render() wrap chain calls into, so it and
+  // everything else in this block stays untouched). Removed as dead code.
 
   function stageTapHandlers(st,pi){
     let stageTap=null;
