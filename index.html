@@ -26197,122 +26197,22 @@ window.addEventListener('DOMContentLoaded',function(){
   function layers(p){return p&&Array.isArray(p.layers)?p.layers:[];}
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];});}
   function short(s,n){s=String(s==null?'':s).replace(/\s+/g,' ').trim();return s.length>n?s.slice(0,n-1).trim()+'…':s;}
-  function isGroup(l){try{return typeof isGroupLayer==='function'&&isGroupLayer(l);}catch(e){return false;}}
-  function preferredName(l){
-    if(!l) return 'Layer';
-    if(l.name) return l.name;
-    if(l.disclosureBadge) return 'AI Badge';
-    if(l.customMockup) return 'Custom Mock-up';
-    if(l.type==='text') return short(l.text||'Text',24);
-    if(l.type==='label') return short(l.text||'Label',22);
-    if(l.type==='frame') return ((l.frameShape||'Frame')+' Frame').replace(/\b\w/g,function(c){return c.toUpperCase();});
-    if(l.patternSlot) return 'Pattern Slot';
-    return (l.type||'Layer').replace(/\b\w/g,function(c){return c.toUpperCase();});
-  }
-  function srcCandidate(l){
-    if(!l) return '';
-    return l._frozenThumbSrc || l.thumbSrc || l.previewSrc || l.src || l.maskSrc || '';
-  }
-  function getFrozenSrc(l){
-    if(!l) return '';
-    if(l._frozenThumbSrc) return l._frozenThumbSrc;
-    var src=srcCandidate(l);
-    if(src){
-      // Freeze once. Moving, scaling, rotating, opacity and slider changes must not regenerate this.
-      try{ l._frozenThumbSrc=src; }catch(e){}
-      return src;
-    }
-    return '';
-  }
   window.ppRefreshLayerThumbnailOnce=function(layerId){
     var p=page(); var l=layers(p).find(function(x){return x&&x.id===layerId;});
     if(l){ delete l._frozenThumbSrc; if(l.thumbSrc||l.src) l._frozenThumbSrc=(l.thumbSrc||l.src); }
     try{renderLayers();}catch(e){}
   };
-  function thumbFor(l){
-    var t=document.createElement('span');
-    t.className='ppFrozenLayerThumb';
-    t.title='frozen layer preview';
-    if(l&&l.hidden)t.classList.add('hiddenThumb');
-    if(l&&(l.slotShape==='circle'||l.type==='circle'))t.classList.add('circleThumb');
-    if(l&&(l.fit==='contain'||l.type==='mockup'||l.customMockup))t.classList.add('containThumb');
-    var src=getFrozenSrc(l);
-    if(src){
-      var im=document.createElement('img');
-      im.alt=''; im.loading='lazy'; im.decoding='async'; im.src=src;
-      t.appendChild(im);
-      if(l&&(l.type==='frame'||l.frameShape))t.classList.add('frameThumb');
-      if(l&&l.slotShape==='strip')t.classList.add('stripThumb');
-      return t;
-    }
-    if(l&&l.disclosureBadge){t.classList.add('badgeThumb');t.textContent='AI';return t;}
-    if(l&&(l.type==='text'||l.type==='label')){t.classList.add(l.type==='label'?'badgeThumb':'textThumb');var sp=document.createElement('span');sp.textContent=short(l.text||l.name||'T',7)||'T';t.appendChild(sp);return t;}
-    if(l&&l.patternSlot){if(l.slotShape==='strip')t.classList.add('stripThumb');t.textContent=l.slotShape==='circle'?'○':'▧';return t;}
-    if(isGroup(l)){t.textContent='▣';return t;}
-    t.textContent=short((l&&l.type)||'layer',4);
-    return t;
-  }
-  function toggleVisible(id){
-    if(typeof toggleLayerVisibility==='function'){toggleLayerVisibility(id);return;}
-    var p=page(); var l=layers(p).find(function(x){return x.id===id;}); if(!l)return;
-    try{save();}catch(e){} l.hidden=!l.hidden; try{render();}catch(e){try{renderPages();renderLayers();}catch(_){}}
-  }
-  function deleteOne(id){
-    if(!confirm('Delete this layer?'))return;
-    if(typeof deleteLayerById==='function'){deleteLayerById(id,st().selectedPage);return;}
-    var p=page(); if(!p)return; try{save();}catch(e){} p.layers=layers(p).filter(function(x){return x.id!==id;}); if(st().selected===id)st().selected=null; try{render();}catch(e){}
-  }
-  function rowFor(l,mode){
-    mode=mode||'all';
-    var s=st()||{};
-    var group=isGroup(l);
-    var row=document.createElement('div');
-    row.className='layerItem ppFrozenThumbRow '+(!l.customMockup&&l.id===s.selected?'active ':'')+(l.hidden?'isHidden ':'')+(group?'groupRow ':'')+(l.customMockup?'customMockupRow ':'');
-    row.dataset.id=l.id; row.dataset.mode=mode; row.draggable=!group;
-    var grip=document.createElement('span'); grip.className='dragGrip'; grip.title='drag to reorder'; grip.textContent=group?(s.collapsedGroups&&s.collapsedGroups[l.id]?'▶':'▼'):'⋮⋮';
-    var thumb=thumbFor(l);
-    var eye=document.createElement('button'); eye.type='button'; eye.className='visibilityBtn '+(l.hidden?'layerHidden':''); eye.title=l.hidden?'show layer':'hide layer'; eye.textContent=l.hidden?'🚫':'👁'; eye.onclick=function(e){e.stopPropagation();toggleVisible(l.id);};
-    var name=document.createElement('span'); name.className='layerName'; name.textContent=preferredName(l); name.title='tap to select · double-tap to rename';
-    name.onclick=function(e){e.stopPropagation(); if(l.customMockup){s.selected=null; try{renderLayers();syncControls();}catch(_){}} else if(typeof selectLayer==='function')selectLayer(l.id);};
-    name.ondblclick=function(e){e.stopPropagation(); if(typeof renameLayerById==='function')renameLayerById(l.id);};
-    var del=document.createElement('button'); del.type='button'; del.className='deleteLayerBtn'; del.title='delete layer'; del.textContent='×'; del.onclick=function(e){e.stopPropagation();deleteOne(l.id);};
-    row.appendChild(grip); row.appendChild(thumb); row.appendChild(eye); row.appendChild(name); row.appendChild(del);
-    row.onclick=function(){ if(l.customMockup){s.selected=null; try{renderLayers();syncControls();}catch(e){}} else if(typeof selectLayer==='function')selectLayer(l.id); };
-    if(!group){
-      row.addEventListener('dragstart',function(e){row.classList.add('dragging');try{e.dataTransfer.setData('text/plain',JSON.stringify({id:l.id,mode:mode}));}catch(_){}});
-      row.addEventListener('dragend',function(){row.classList.remove('dragging');});
-      row.addEventListener('dragover',function(e){e.preventDefault();});
-      row.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();try{var data=JSON.parse(e.dataTransfer.getData('text/plain'));if(typeof reorderLayerByDrop==='function')reorderLayerByDrop(data.id,l.id,mode);}catch(err){}});
-    }else{
-      grip.onclick=function(e){e.stopPropagation(); if(typeof toggleGroupExpanded==='function')toggleGroupExpanded(l.id);};
-    }
-    return row;
-  }
-  window.rowForLayer=rowFor; try{rowForLayer=rowFor;}catch(e){}
-  window.renderLayers=function(){
-    var el=document.getElementById('layerList'); if(!el)return;
-    var p=page(); el.innerHTML='';
-    var list=layers(p).slice().sort(function(a,b){return (b.z||0)-(a.z||0);});
-    if(!list.length){el.innerHTML='<div class="smallText">No layers yet. Add a pattern frame, banner, label or shape.</div>';return;}
-    list.forEach(function(l){ if(l && !l.groupId) el.appendChild(rowFor(l,'all')); });
-  };
-  try{renderLayers=window.renderLayers;}catch(e){}
-  window.renderFrameList=function(){
-    var el=document.getElementById('frameList'); if(!el)return;
-    var p=page(); el.innerHTML='';
-    var list=layers(p).filter(function(l){return l&&(['strip','card','pattern','frame'].indexOf(l.type)>=0||l.patternSlot);}).sort(function(a,b){return (b.z||0)-(a.z||0);});
-    if(!list.length){el.innerHTML='<div class="smallText">No pattern frames yet. Add strips, cards or frames above.</div>';return;}
-    list.forEach(function(l){el.appendChild(rowFor(l,'frames'));});
-  };
-  try{renderFrameList=window.renderFrameList;}catch(e){}
+  // NOTE(consolidation): this used to also define thumbFor/toggleVisible/
+  // deleteOne/rowFor/window.rowForLayer/window.renderLayers/
+  // window.renderFrameList here, all fully superseded by later generations
+  // and only reachable from each other, plus a window.fillSelectedFrame wrap
+  // that later full-replacements of fillSelectedFrame made permanently
+  // unreachable regardless. Removed all of it as dead code. The
+  // window.placePatternOnPage wrap below is NOT superseded by anything later
+  // and remains live - kept as-is.
 
   // Clear the frozen thumbnail only when the user deliberately replaces image content.
   function afterContentChange(layer){ if(layer){ delete layer._frozenThumbSrc; if(layer.thumbSrc||layer.src) layer._frozenThumbSrc=layer.thumbSrc||layer.src; } }
-  var oldFill=window.fillSelectedFrame;
-  if(typeof oldFill==='function'){
-    window.fillSelectedFrame=function(){ var r=oldFill.apply(this,arguments); try{afterContentChange((typeof getLayer==='function')?getLayer():null);renderLayers();renderFrameList();}catch(e){} return r; };
-    try{fillSelectedFrame=window.fillSelectedFrame;}catch(e){}
-  }
   var oldPlace=window.placePatternOnPage;
   if(typeof oldPlace==='function'){
     window.placePatternOnPage=function(){ var r=oldPlace.apply(this,arguments); try{var l=(typeof getLayer==='function')?getLayer():null; afterContentChange(l); renderLayers();}catch(e){} return r; };
