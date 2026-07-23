@@ -2443,7 +2443,7 @@ body.autoGroupEditing .layer.collectionGrouped{
   <div class="rangeRow"><label>letter gap</label><input id="letterSpacing" type="range" min="-3" max="12" value="0" step="0.5"></div>
   <div class="rangeRow"><label>padding</label><input id="textPadding" type="range" min="0" max="35" value="10"></div>
   <div class="grid2"><button id="boldBtn">bold</button><button id="italicBtn">italic</button></div>
-  <div class="grid3"><button>text left</button><button>text centre</button><button>text right</button></div>
+  <div class="grid3"><button onclick="setTextAlign('left')">text left</button><button onclick="setTextAlign('center')">text centre</button><button onclick="setTextAlign('right')">text right</button></div>
   <div class="colorRow"><label class="smallText">font colour</label><input id="textColor" type="color" value="#111111"></div>
   <div class="textSectionTitle">effects</div>
   <div class="rangeRow"><label>shadow</label><input id="textShadow" type="range" min="0" max="20" value="0"></div>
@@ -31049,8 +31049,8 @@ else install();
 
 <!-- DOCUMENT MODE LITE v155 -->
 <style id="pp-document-lite-v155">
-.stage.documentStage{width:min(100%,620px)!important;aspect-ratio:210/297!important;background:#f8f4ec!important;overflow:hidden!important;touch-action:pan-y!important;color:#26212b!important}
-.documentPaper{position:absolute;inset:0;background:#f8f4ec;color:#26212b;padding:8.7% 8.3% 8.5%;text-align:left;font-family:Georgia,serif;overflow:hidden}
+.stage.documentStage{width:min(100%,620px)!important;aspect-ratio:210/297!important;background:#fff!important;overflow:hidden!important;touch-action:pan-y!important;color:#26212b!important}
+.documentPaper{position:absolute;inset:0;background:#fff;color:#26212b;padding:8.7% 8.3% 8.5%;text-align:left;font-family:Georgia,serif;overflow:hidden}
 .documentEditor{height:100%;min-height:0;outline:none;overflow:hidden;white-space:normal;word-break:break-word;font-size:18px;line-height:1.55;-webkit-user-select:text;user-select:text;touch-action:pan-y;caret-color:#7a43cf}
 .documentEditor p{margin:0 0 .8em}.documentEditor h1{font-size:2em;line-height:1.12;margin:.15em 0 .55em}.documentEditor h2{font-size:1.45em;line-height:1.2;margin:1em 0 .45em}.documentEditor img{display:block;max-width:100%;max-height:42%;object-fit:contain;margin:1em auto;border-radius:4px}
 .documentEditor a{color:#6b42bb;text-decoration:underline}.documentEditor:empty:before{content:'Start writing your manual…';color:#a397a8}
@@ -34168,9 +34168,9 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   height:100%!important;
   min-height:0!important;
   overflow:hidden!important;
-  padding:92px 88px 82px!important;
+  padding:0!important;
   color:#26212b!important;
-  background:#fff!important;
+  background:transparent!important;
   outline:none!important;
   text-align:left!important;
   white-space:normal!important;
@@ -34187,12 +34187,12 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   margin:0 0 .55em!important;
   font:800 48px/1.12 Georgia,serif!important;
   letter-spacing:-.025em!important;
-  text-align:left!important;
+  text-align:left;
 }
 .documentEditor.ppPersistentDoc183 h2{
   margin:1em 0 .42em!important;
   font:750 32px/1.2 Georgia,serif!important;
-  text-align:left!important;
+  text-align:left;
 }
 .documentEditor.ppPersistentDoc183 p,
 .documentEditor.ppPersistentDoc183 div{
@@ -34217,6 +34217,7 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   if(window.__PP_PERSISTENT_DOCUMENT_ENGINE_183__) return;
   window.__PP_PERSISTENT_DOCUMENT_ENGINE_183__=true;
 
+  var layerSetTextAlign=window.setTextAlign;
   var activeEditor=null;
   var savedRange=null;
   var saveTimer=0;
@@ -34379,7 +34380,10 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   };
   window.__ppDocEditorActive=function(){return !!(activeEditor&&document.contains(activeEditor));};
   window.setTextAlign=function(where){
-    if(!activeEditor)return;
+    if(!activeEditor||!document.contains(activeEditor)){
+      if(typeof layerSetTextAlign==='function')layerSetTextAlign(where);
+      return;
+    }
     exec(where==='center'?'justifyCenter':where==='right'?'justifyRight':'justifyLeft');
   };
   window.toggleBold=function(){if(activeEditor)exec('bold')};
