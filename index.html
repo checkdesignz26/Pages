@@ -23172,27 +23172,6 @@ renderAutoGroupOverlay(st,pi);
     }
   }
   function imgSrcFor(l){return l&&(l.customMockup?(l.customMockupPatternSrc||l.thumbSrc||''):(l.thumbSrc||l.src||l.previewSrc||l.maskSrc||''));}
-  function thumbFor(l){
-    var t=document.createElement('span');
-    t.className='layerThumb';
-    t.title='layer preview';
-    if(l&&l.hidden)t.classList.add('hiddenThumb');
-    if(l&&(l.slotShape==='circle'||l.type==='circle'))t.classList.add('circleThumb');
-    if(l&&(l.fit==='contain'||l.type==='mockup'))t.classList.add('containThumb');
-    var src=imgSrcFor(l);
-    if(src){
-      var im=document.createElement('img');
-      im.loading='lazy'; im.decoding='async'; im.alt=''; im.src=src;
-      t.appendChild(im);
-      if(l&&(l.type==='frame'||l.frameShape))t.classList.add('frameThumb');
-      return t;
-    }
-    if(l&&l.disclosureBadge){t.classList.add('badgeThumb');t.textContent='AI';return t;}
-    if(l&&(l.type==='text'||l.type==='label')){t.classList.add(l.type==='label'?'badgeThumb':'textThumb');var sp=document.createElement('span');sp.textContent=short(l.text||l.name||'T',7)||'T';t.appendChild(sp);return t;}
-    if(l&&l.patternSlot){if(l.slotShape==='strip')t.classList.add('stripThumb');t.textContent=l.slotShape==='circle'?'○':'▧';return t;}
-    t.textContent=short((l&&l.type)||'layer',4);
-    return t;
-  }
   window.ppNameLayerFromFile=function(l,name,force){if(!l)return;l.sourceName=name||l.sourceName||l.fileName||'';ensureName(l,page(),!!force);};
   window.ppAutoNamePage=function(p){arr(p||page()).forEach(function(l){ensureName(l,p||page(),false);});};
 
@@ -23207,42 +23186,11 @@ renderAutoGroupOverlay(st,pi);
     try{render();}catch(e){try{renderLayers();renderFrameList();}catch(_){}}
   };
 
-  window.rowForLayer=function(l,mode){
-    mode=mode||'all'; ensureName(l,page(),false);
-    var row=document.createElement('div');
-    row.className='layerItem ppLayerRow '+(l.id===st().selected?'active ':'')+(l.hidden?'isHidden ':'');
-    row.draggable=true; row.dataset.id=l.id; row.dataset.mode=mode;
-    var grip=document.createElement('span');grip.className='dragGrip';grip.title='drag to reorder';grip.textContent='⋮⋮';
-    var thumb=thumbFor(l);
-    var eye=document.createElement('button');eye.type='button';eye.className='visibilityBtn '+(l.hidden?'layerHidden':'');eye.title=l.hidden?'show layer':'hide layer';eye.textContent=l.hidden?'🚫':'👁';eye.onclick=function(e){e.stopPropagation();if(typeof toggleLayerVisibility==='function')toggleLayerVisibility(l.id);};
-    var name=document.createElement('span');name.className='layerName';name.textContent=l.name||preferredNameFor(l);name.title='tap to select · double-tap to rename';name.onclick=function(e){e.stopPropagation();if(typeof selectLayer==='function')selectLayer(l.id);};name.ondblclick=function(e){e.stopPropagation();window.renameLayerById(l.id);};
-    var del=document.createElement('button');del.type='button';del.className='deleteLayerBtn';del.title='delete layer';del.textContent='×';del.onclick=function(e){e.stopPropagation();if(!confirm('Delete this layer?'))return;if(typeof deleteLayerById==='function')deleteLayerById(l.id,st().selectedPage);};
-    row.appendChild(grip);row.appendChild(thumb);row.appendChild(eye);row.appendChild(name);row.appendChild(del);
-    row.onclick=function(){if(typeof selectLayer==='function')selectLayer(l.id);};
-    row.addEventListener('dragstart',function(e){row.classList.add('dragging');e.dataTransfer.setData('text/plain',JSON.stringify({id:l.id,mode:mode}));});
-    row.addEventListener('dragend',function(){row.classList.remove('dragging');});
-    row.addEventListener('dragover',function(e){e.preventDefault();});
-    row.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();try{var data=JSON.parse(e.dataTransfer.getData('text/plain'));if(typeof reorderLayerByDrop==='function')reorderLayerByDrop(data.id,l.id,mode);}catch(err){}});
-    return row;
-  };
-  try{rowForLayer=window.rowForLayer;}catch(e){}
-
-  window.renderLayers=function(){
-    var el=document.getElementById('layerList'); if(!el)return;
-    var p=page(); window.ppAutoNamePage(p);
-    el.innerHTML=''; var list=arr(p).slice().sort(function(a,b){return (b.z||0)-(a.z||0);});
-    if(!list.length){el.innerHTML='<div class="smallText">No layers yet. Add a pattern frame, banner, label or shape.</div>';return;}
-    list.forEach(function(l){el.appendChild(window.rowForLayer(l,'all'));});
-  };
-  try{renderLayers=window.renderLayers;}catch(e){}
-  window.renderFrameList=function(){
-    var el=document.getElementById('frameList'); if(!el)return;
-    var p=page(); window.ppAutoNamePage(p);
-    el.innerHTML=''; var list=arr(p).filter(function(l){return ['strip','card','pattern','frame'].indexOf(l.type)>=0 || l.patternSlot;}).sort(function(a,b){return (b.z||0)-(a.z||0);});
-    if(!list.length){el.innerHTML='<div class="smallText">No pattern frames yet. Add strips, cards or frames above.</div>';return;}
-    list.forEach(function(l){el.appendChild(window.rowForLayer(l,'frames'));});
-  };
-  try{renderFrameList=window.renderFrameList;}catch(e){}
+  // NOTE(consolidation): this used to also define window.rowForLayer,
+  // window.renderLayers and window.renderFrameList here, all fully
+  // superseded by later generations. Removed as dead code. boot() below
+  // still calls them by property access, which correctly resolves to
+  // whichever generation is currently live.
 
   window.fillSelectedFrame=function(){
     var l=(typeof getLayer==='function')?getLayer():null;
