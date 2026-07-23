@@ -21941,72 +21941,12 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
     };
   }
 
-  function pp95StageTapHandlers(st,pi){
-    let stageTap=null;
-    st.addEventListener('pointerdown',e=>{
-      if(e.target!==st)return;
-      stageTap={x:e.clientX,y:e.clientY,pi,moved:false};
-    }, {passive:true});
-    st.addEventListener('pointermove',e=>{
-      if(!stageTap)return;
-      if(Math.hypot(e.clientX-stageTap.x,e.clientY-stageTap.y)>10) stageTap.moved=true;
-    }, {passive:true});
-    st.addEventListener('pointerup',e=>{
-      if(!stageTap || e.target!==st)return;
-      const isTap=!stageTap.moved && Math.hypot(e.clientX-stageTap.x,e.clientY-stageTap.y)<=10;
-      const tappedPage=stageTap.pi;
-      stageTap=null;
-      if(!isTap)return;
-      state.selectedPage=tappedPage;
-      if(state.selected){
-        state.lastDeselected=state.selected;
-        state.selected=null;
-        render();
-        setTimeout(()=>{state.lastDeselected=null;renderPages()},700);
-      }else{
-        renderPageList();renderLayers();renderFrameList();syncControls();
-      }
-      e.preventDefault();
-    }, {passive:false});
-    st.addEventListener('pointercancel',()=>{stageTap=null;}, {passive:true});
-  }
-
-  window.renderPages=function(){
-    const wrap=$('pageWrap');
-    if(!wrap) return;
-    wrap.innerHTML='';
-    state.pages.forEach((p,pi)=>{
-      const block=document.createElement('div');
-      block.className='pageBlock';
-      block.dataset.page=pi;
-      block.innerHTML=`<div class="pageTitle">${pi+1}. ${p.type==='mockup'?'Mock-up':p.type} · ${p.w}×${p.h}${Math.abs(pi-state.selectedPage)>PP95_VISIBLE_RADIUS?' · parked':''}</div>`;
-      const st=document.createElement('div');
-      st.className='stage '+(p.type==='pattern'?'pattern':p.type==='mockup'?'mockup':(p.w===p.h?'social':'listing'));
-      st.dataset.page=pi;
-      st.style.aspectRatio=`${p.w}/${p.h}`;
-      st.style.transform=`scale(${state.zoom})`;
-      st.style.transformOrigin='top center';
-      st.style.marginBottom=((state.zoom-1)*260)+'px';
-      pp95StageTapHandlers(st,pi);
-      const isHot=Math.abs(pi-state.selectedPage)<=PP95_VISIBLE_RADIUS;
-      if(isHot){
-        ensureSnapGuides(st);
-        p.layers.slice().sort((a,b)=>(a.z||0)-(b.z||0)).forEach(l=>st.appendChild(renderLayer(l,pi)));
-renderAutoGroupOverlay(st,pi);
-      }else{
-        st.classList.add('pp95ParkedPage');
-        const msg=document.createElement('div');
-        msg.className='blankHint';
-        msg.style.fontSize='clamp(24px,4vw,48px)';
-        msg.style.opacity='.32';
-        msg.textContent='page parked';
-        st.appendChild(msg);
-        st.onclick=()=>selectPage(pi);
-      }
-      block.appendChild(st);
-      wrap.appendChild(block);
-    });
-  };
+  // NOTE(consolidation): this used to also define pp95StageTapHandlers and
+  // window.renderPages here (an early "virtualized rendering" full
+  // replacement), both fully superseded by the live renderPages generation
+  // later in the file (confirmed nothing else in this block depends on
+  // them). Removed as dead code. save/pp95MaybeShrinkDataUrl/
+  // pp95DrawMaskGuide above are NOT superseded and remain live.
 
   function pp95DrawMaskGuide(ctx,maskCanvas,w,h){
     try{
@@ -22036,50 +21976,9 @@ renderAutoGroupOverlay(st,pi);
   }
   window.pp95DrawMaskGuide=pp95DrawMaskGuide;
 
-  window.createCustomMockupFromMask=async function(){
-    const patternSrc=customMockupSelectedPatternSrc();
-    if(!customMockupState.bg){alert('Upload a mock-up background first.');return;}
-    if(!customMockupState.mask){alert('Upload a white mask image first.');return;}
-    if(!patternSrc){alert('Upload or choose a pattern from the Pattern Tray first.');return;}
-    try{
-      if(typeof save==='function')save();
-      updateCustomMockupStatus('creating custom mock-up…');
-      const bg=await loadCustomMockupImage(customMockupState.bg);
-      const mask=await loadCustomMockupImage(customMockupState.mask);
-      const pattern=await loadCustomMockupImage(patternSrc);
-      const sourceW=bg.naturalWidth||bg.width, sourceH=bg.naturalHeight||bg.height;
-      const scale=Math.min(1, PP95_MAX_MOCKUP_SIDE/Math.max(sourceW,sourceH));
-      const w=Math.max(1,Math.round(sourceW*scale)), h=Math.max(1,Math.round(sourceH*scale));
-
-      const fill=document.createElement('canvas');fill.width=w;fill.height=h;
-      const fctx=fill.getContext('2d');fctx.imageSmoothingEnabled=true;fctx.imageSmoothingQuality='high';
-      drawRepeatedPatternCover(fctx,pattern,w,h,cmEl('customMockupRepeat')?.value||100);
-      const maskAlpha=makeWhiteMaskAlpha(mask,w,h);
-      fctx.globalCompositeOperation='destination-in';
-      fctx.drawImage(maskAlpha,0,0,w,h);
-
-      const out=document.createElement('canvas');out.width=w;out.height=h;
-      const ctx=out.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-      ctx.drawImage(bg,0,0,w,h);
-      ctx.globalAlpha=.97;
-      ctx.drawImage(fill,0,0,w,h);
-      ctx.globalAlpha=1;
-      pp95DrawMaskGuide(ctx,maskAlpha,w,h);
-
-      const result=out.toDataURL('image/png');
-      const box=usefulMockupLayerBox({naturalWidth:w,naturalHeight:h,width:w,height:h});
-      const newLayer=layer('image',{name:'custom mock-up',src:result,fit:'contain',x:box.x,y:box.y,w:box.w,h:box.h,z:nextZ(),customMockup:true,aspect:w/Math.max(1,h)});
-      current().layers.push(newLayer);
-      state.selected=newLayer.id;
-      render();
-      updateCustomMockupStatus('custom mock-up created · mask guide visible ✨');
-      setTimeout(()=>updateCustomMockupStatus(),2200);
-    }catch(err){
-      console.error(err);
-      updateCustomMockupStatus('mock-up could not be created');
-      alert('Could not create the custom mock-up. Try normal PNG/JPG files and make sure the mask is black/transparent outside the white cover area.');
-    }
-  };
+  // NOTE(consolidation): window.createCustomMockupFromMask used to also be
+  // defined here, fully superseded by the v163/createClean generation later
+  // in the file - removed as dead code.
 
   const style=document.createElement('style');
   style.textContent=`
