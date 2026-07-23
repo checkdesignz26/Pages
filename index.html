@@ -20223,60 +20223,10 @@ function makeNumberedList(){
 <script>
 /* DOGGY DIRECTOR SAFE TRAY DELETE FINAL OVERRIDE */
 (function(){
-  function ensureTrayDeleteButton(type){
-    const tray = document.getElementById(type === "pattern" ? "patternTray" : "assetTray");
-    if(!tray || !tray.parentElement) return;
-    const id = type === "pattern" ? "deleteSelectedPatternBtn" : "deleteSelectedAssetBtn";
-    if(document.getElementById(id)) return;
-    const btn = document.createElement("button");
-    btn.id = id;
-    btn.type = "button";
-    btn.className = "full trayDeleteBtn";
-    btn.textContent = type === "pattern" ? "Delete Selected Pattern" : "Delete Selected Asset";
-    btn.onclick = function(e){
-      e.preventDefault();
-      e.stopPropagation();
-      const i = state.selectedTray[type];
-      if(i == null){
-        alert(type === "pattern" ? "Select a pattern first." : "Select an asset first.");
-        return false;
-      }
-      const label = type === "pattern" ? "pattern" : "asset";
-      if(!confirm("Delete selected " + label + "?")) return false;
-      state.trays[type].splice(i,1);
-      state.selectedTray[type] = null;
-      renderTrays();
-      return false;
-    };
-    tray.parentElement.appendChild(btn);
-  }
-
-  const oldRenderTrays = typeof renderTrays === "function" ? renderTrays : null;
-  window.renderTrays = function(){
-    ["pattern","asset"].forEach(type=>{
-      const tray = document.getElementById(type === "pattern" ? "patternTray" : "assetTray");
-      if(!tray) return;
-      tray.innerHTML = "";
-      state.trays[type].forEach((it,i)=>{
-        const d = document.createElement("div");
-        d.className = "thumb " + (state.selectedTray[type] === i ? "selected" : "");
-        d.draggable = type === "pattern";
-        d.innerHTML = '<img src="'+it.src+'">';
-        d.onclick = function(){
-          state.selectedTray[type] = i;
-          renderTrays();
-        };
-        if(type === "pattern"){
-          d.addEventListener("dragstart", e=>{
-            e.dataTransfer.setData("text/plain", JSON.stringify({type:"pattern", index:i}));
-          });
-        }
-        tray.appendChild(d);
-      });
-      ensureTrayDeleteButton(type);
-    });
-  };
-
+  // NOTE(consolidation): this block used to also reassign window.renderTrays
+  // and define a local ensureTrayDeleteButton, both fully superseded by the
+  // safeRenderTrays version installed later in the file. Removed as dead code;
+  // removeTray/deleteSelectedTrayItem below remain the live implementations.
   window.removeTray = function(type,i){
     if(i == null || !state.trays[type] || !state.trays[type][i]) return;
     const label = type === "pattern" ? "pattern" : "asset";
@@ -21755,25 +21705,10 @@ function makeNumberedList(){
   };
   function queueTrim(){ clearTimeout(trimTimer); trimTimer=setTimeout(function(){ window.ppMemoryTrimState(true); },1500); }
 
-  window.renderTrays=function(){
-    var s=st(); if(!s) return;
-    ['pattern','asset'].forEach(function(type){
-      var el=document.getElementById(type==='pattern'?'patternTray':'assetTray'); if(!el) return;
-      el.innerHTML='';
-      (s.trays[type]||[]).forEach(function(it,i){
-        var d=document.createElement('div');
-        d.className='thumb '+(s.selectedTray&&s.selectedTray[type]===i?'selected':'');
-        d.draggable=type==='pattern';
-        var img=document.createElement('img');
-        img.loading='lazy'; img.decoding='async'; img.src=it.thumbSrc||it.src||'';
-        d.appendChild(img);
-        d.onclick=function(){ s.selectedTray[type]=i; window.renderTrays(); };
-        if(type==='pattern') d.addEventListener('dragstart',function(e){ e.dataTransfer.setData('text/plain',JSON.stringify({type:'pattern',index:i})); });
-        el.appendChild(d);
-      });
-      try{ if(typeof ensureTrayDeleteButton==='function') ensureTrayDeleteButton(type); }catch(e){}
-    });
-  };
+  // NOTE(consolidation): window.renderTrays used to be reassigned here too,
+  // fully superseded by safeRenderTrays later in the file (which preserves
+  // the thumbSrc lazy-thumbnail behavior this version added). Removed as
+  // dead code.
 
   window.getSelectedPattern=function(){ var s=st(); var i=s&&s.selectedTray?s.selectedTray.pattern:null; return i!=null && s.trays && s.trays.pattern[i] ? s.trays.pattern[i].src : null; };
   window.getPattern=function(i){ var s=st(); var tray=s&&s.trays?s.trays.pattern:[]; return tray && tray.length ? tray[i%tray.length].src : null; };
