@@ -15262,8 +15262,11 @@ document.addEventListener('click', function(e){
       const blob=new Blob([json],{type:'application/x-ppages'});
       const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='pattern-pages-project.ppages'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
       const mb=(blob.size/1024/1024).toFixed(1);
-      showAutoSaveNotice('Saved pattern-pages-project.ppages ('+mb+' MB)');
-      setStatus('Project saved to your Downloads · '+mb+' MB');
+      // Safari may prompt to confirm the save location instead of saving
+      // straight to Downloads, especially for a larger file - flag that so
+      // it doesn't look like nothing happened while waiting on that prompt.
+      showAutoSaveNotice('Saved ('+mb+' MB) · check for a Safari download prompt');
+      setStatus('Project saved · '+mb+' MB. If Safari asks where to save it, confirm there to finish.');
     }catch(err){
       console.error('downloadPstudio failed',err);
       alert('Could not save the .ppages file: '+(err&&err.message||err));
