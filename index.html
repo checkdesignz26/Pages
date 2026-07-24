@@ -29245,3 +29245,88 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   }
 })();
 </script>
+
+<!-- BUGFIX: restore memory-safe image capping on upload.
+     ppages-memory-safe-v3-js originally capped every uploaded pattern/asset/mock-up image to a
+     sane max edge (so a phone photo doesn't sit in the project at full multi-megapixel size),
+     but its window.loadTray/addUploadedImageLayer/createMockupPage were each later replaced by
+     newer generations elsewhere in the file that dropped the capping step - uploads have been
+     stored at full original size/resolution ever since, which is very likely a real contributor
+     to the "save file too large" symptom. This wraps the current live versions of those three
+     entry points so every upload is capped again before it reaches them, without touching how
+     they store/render what they're given. -->
+<script id="pp-memory-safe-upload-cap-js">
+(function(){
+  'use strict';
+  if(window.__PP_MEMORY_SAFE_UPLOAD_CAP__) return;
+  window.__PP_MEMORY_SAFE_UPLOAD_CAP__=true;
+
+  var LIVE_EDGE=1250, MOCKUP_EDGE=1400, LARGE_BYTES=Math.round(900000*0.75);
+
+  function loadImage(src){
+    return new Promise(function(resolve,reject){
+      var img=new Image(); img.decoding='async';
+      img.onload=function(){resolve(img);}; img.onerror=function(){reject(new Error('image load failed'));};
+      img.src=src;
+    });
+  }
+  function fileToDataURL(file){
+    return new Promise(function(resolve,reject){var r=new FileReader();r.onload=function(e){resolve(e.target.result);};r.onerror=reject;r.readAsDataURL(file);});
+  }
+  function canvasToBest(c,quality){
+    quality=quality||.84;
+    try{ var webp=c.toDataURL('image/webp',quality); if(webp&&webp.indexOf('data:image/webp')===0) return webp; }catch(e){}
+    try{ return c.toDataURL('image/png',quality); }catch(e){ return c.toDataURL('image/png'); }
+  }
+  async function capFile(file,maxEdge){
+    if(!file || !/^image\//.test(file.type||'') || /svg/.test(file.type||'')) return file;
+    if(file.size < LARGE_BYTES) return file;
+    try{
+      var src=await fileToDataURL(file);
+      var img=await loadImage(src);
+      var w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
+      if(!w||!h) return file;
+      var scale=Math.min(1,(maxEdge||LIVE_EDGE)/Math.max(w,h));
+      if(scale>=.98) return file;
+      var c=document.createElement('canvas');
+      c.width=Math.max(1,Math.round(w*scale)); c.height=Math.max(1,Math.round(h*scale));
+      var ctx=c.getContext('2d',{alpha:true});
+      ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='medium';
+      ctx.drawImage(img,0,0,c.width,c.height);
+      var out=canvasToBest(c,.84);
+      var blob=await (await fetch(out)).blob();
+      if(!blob || blob.size>=file.size) return file;
+      return new File([blob], file.name, {type:blob.type});
+    }catch(err){ console.warn('Memory-safe upload cap skipped:',err); return file; }
+  }
+  function capFiles(fileList,maxEdge){
+    var files=Array.prototype.slice.call(fileList||[]);
+    return Promise.all(files.map(function(f){return capFile(f,maxEdge);}));
+  }
+  function wrapOne(name,maxEdge){
+    var original=window[name];
+    if(typeof original!=='function' || original.__ppMemSafeCapWrapped) return null;
+    var wrapped=function(e){
+      var input=e&&e.target;
+      if(!input || !input.files || !input.files.length) return original.apply(this,arguments);
+      var self=this, outerArgs=arguments, extraArgs=Array.prototype.slice.call(arguments,1);
+      capFiles(input.files,maxEdge).then(function(capped){
+        var synthetic={target:{files:capped, value:''}};
+        original.apply(self,[synthetic].concat(extraArgs));
+      }).catch(function(){
+        original.apply(self,outerArgs);
+      });
+    };
+    wrapped.__ppMemSafeCapWrapped=true;
+    window[name]=wrapped;
+    return wrapped;
+  }
+  function install(){
+    var w1=wrapOne('loadTray',LIVE_EDGE); if(w1){ try{loadTray=w1;}catch(e){} }
+    var w2=wrapOne('addUploadedImageLayer',LIVE_EDGE); if(w2){ try{addUploadedImageLayer=w2;}catch(e){} }
+    var w3=wrapOne('createMockupPage',MOCKUP_EDGE); if(w3){ try{createMockupPage=w3;}catch(e){} }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',install,{once:true}); else install();
+})();
+</script>
+
