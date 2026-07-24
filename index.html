@@ -20721,92 +20721,13 @@ window.addEventListener('DOMContentLoaded',function(){
    - Copy + Paste to Page = headers/footers/logos across listing pages.
    Koder, please remain calm. */
 (function(){
-  var clipboardLayer=null;
   function $id(id){return document.getElementById(id);}
-  function st(){return window.state||{};}
-  function pages(){return (st().pages||[]);}
-  function currentPage(){
-    if(typeof page==='function') return page();
-    return pages()[st().selectedPage||0];
-  }
-  function layerArray(p){return (p&&(p.layers||p.elements))||[];}
-  function selectedLayer(){
-    if(typeof getLayer==='function') return getLayer();
-    var p=currentPage(); return layerArray(p).find(function(l){return l.id===st().selected;});
-  }
-  function uidSafe(){return (typeof uid==='function')?uid():('l'+Date.now()+Math.floor(Math.random()*999));}
-  function nextZSafe(p){
-    if(typeof nextZ==='function') return nextZ();
-    var max=0; layerArray(p||currentPage()).forEach(function(l){max=Math.max(max,+l.z||0);}); return max+1;
-  }
-  function redraw(){
-    try{ if(typeof render==='function') return render(); }catch(e){}
-    try{ if(typeof renderPages==='function') renderPages(); if(typeof renderLayers==='function') renderLayers(); if(typeof renderFrameList==='function') renderFrameList(); if(typeof syncControls==='function') syncControls(); }catch(e){}
-  }
-  function copyObject(obj){return JSON.parse(JSON.stringify(obj));}
-  function baseName(n){return String(n||'Layer').replace(/\s+copy(\s+\d+)?$/i,'').trim()||'Layer';}
-  function copyName(n,p){
-    var base=baseName(n);
-    var count=0; layerArray(p).forEach(function(l){ if(String(l.name||'').replace(/\s+copy(\s+\d+)?$/i,'').trim()===base) count++; });
-    return base+' copy'+(count>1?' '+count:'');
-  }
-  function insertCopyIntoPage(source,p,pageIndex,opts){
-    opts=opts||{};
-    var c=copyObject(source);
-    c.id=uidSafe();
-    c.name=opts.name || copyName(source.name||source.type,p);
-    c.z=nextZSafe(p);
-    c._manualName=true;
-    if(opts.offset){ c.x=(+c.x||0)+3; c.y=(+c.y||0)+3; }
-    layerArray(p).push(c);
-    return c;
-  }
-  window.ppCopySelectedLayer=function(){
-    var l=selectedLayer();
-    if(!l){ alert('Select a layer first.'); return false; }
-    clipboardLayer=copyObject(l);
-    window.ppLayerClipboard=clipboardLayer;
-    var note=$id('ppLayerClipboardNote');
-    if(note) note.textContent='copied: '+(l.name||l.type||'layer')+' · ready to paste to another page';
-    var stn=$id('customMockupStatus'); if(stn) stn.textContent='layer copied · use Paste to Page for headers/footers';
-    return false;
-  };
-  window.ppDuplicateSelectedLayer=function(){
-    var l=selectedLayer(); if(!l){ alert('Select a layer first.'); return false; }
-    try{ if(typeof save==='function') save(); }catch(e){}
-    var p=currentPage(); var c=insertCopyIntoPage(l,p,st().selectedPage,{offset:true});
-    st().selected=c.id;
-    redraw();
-    return false;
-  };
-  window.ppPasteLayerToPage=function(){
-    var src=clipboardLayer||window.ppLayerClipboard;
-    if(!src){
-      var l=selectedLayer();
-      if(!l){ alert('Select and copy a layer first.'); return false; }
-      src=copyObject(l); clipboardLayer=src; window.ppLayerClipboard=src;
-    }
-    var list=pages(); if(!list.length){ alert('No pages found.'); return false; }
-    var promptText='Paste "'+(src.name||src.type||'layer')+'" to which page?\n\nType a page number, for example 2.\nType all to paste to every other page.';
-    var answer=prompt(promptText, String(Math.min((st().selectedPage||0)+2, list.length)));
-    if(answer==null) return false;
-    answer=String(answer).trim().toLowerCase();
-    try{ if(typeof save==='function') save(); }catch(e){}
-    var pasted=[];
-    if(answer==='all' || answer==='all pages'){
-      list.forEach(function(p,i){ if(i!==(st().selectedPage||0)) pasted.push({layer:insertCopyIntoPage(src,p,i,{name:src.name||src.type||'Layer'}),index:i}); });
-    }else{
-      var num=parseInt(answer,10);
-      if(!num || num<1 || num>list.length){ alert('Page not found. Use 1 to '+list.length+'.'); return false; }
-      var idx=num-1;
-      pasted.push({layer:insertCopyIntoPage(src,list[idx],idx,{name:src.name||src.type||'Layer',offset:idx===(st().selectedPage||0)}),index:idx});
-    }
-    if(pasted.length){
-      var last=pasted[pasted.length-1]; st().selectedPage=last.index; st().selected=last.layer.id;
-    }
-    redraw();
-    return false;
-  };
+  // NOTE(consolidation): clipboardLayer and the ppCopySelectedLayer/ppDuplicateSelectedLayer/
+  // ppPasteLayerToPage generations that lived here (plus their private st/pages/currentPage/
+  // layerArray/selectedLayer/uidSafe/nextZSafe/redraw/copyObject/baseName/copyName/
+  // insertCopyIntoPage helpers, used only by them) were removed - each function fully
+  // superseded by a later generation (confirmed via a fresh scan: the final generation of
+  // each fully replaces with no fallback to a previous version), so all of it was dead code.
   function addControls(){
     var list=$id('layerList'); if(!list) return;
     var body=list.closest('.panelBody'); if(!body || body.querySelector('#ppLayerReuseBar')) return;
@@ -22608,15 +22529,10 @@ window.addEventListener('DOMContentLoaded',function(){
     document.body.appendChild(a);a.click();
     setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},700);
   }
-  window.downloadPatternPagesTemplate=function(){
-    // Important: this only clones state. It never edits the open page, so your current images cannot be swallowed.
-    const data=makeTemplateSnapshotSafe();
-    const filename=baseTemplateName();
-    localStorage.setItem(ACTIVE_KEY,filename);
-    localStorage.setItem(ACTIVE_TIME_KEY,data.savedAt);
-    downloadBlob(data,filename);
-    updateTemplateStatus();
-  };
+  // NOTE(consolidation): window.downloadPatternPagesTemplate had an earlier generation here;
+  // it's superseded by templateExtensionScript's final generation, so only the shared
+  // makeTemplateSnapshotSafe/baseTemplateName/downloadBlob/updateTemplateStatus helpers remain,
+  // still used by the live savePatternPagesTemplateAs below.
   window.savePatternPagesTemplateAs=function(){
     const current=baseTemplateName();
     const name=prompt('Template file name',current);
@@ -22629,13 +22545,12 @@ window.addEventListener('DOMContentLoaded',function(){
     downloadBlob(data,finalName);
     updateTemplateStatus();
   };
-  const originalOpen=window.openPatternPagesTemplateLoader;
-  window.openPatternPagesTemplateLoader=function(){
-    let input=byId('ppTemplateLoader');
-    if(!input){ input=document.createElement('input'); input.id='ppTemplateLoader'; input.type='file'; input.style.display='none'; document.body.appendChild(input); }
-    input.removeAttribute('accept'); input.value=''; input.onchange=loadTemplateSafe; input.click();
-  };
-  window.loadPatternPagesTemplate=loadTemplateSafe;
+  // NOTE(consolidation): window.openPatternPagesTemplateLoader and window.loadPatternPagesTemplate
+  // had earlier generations here; both are superseded by templateExtensionScript's final
+  // generation. loadTemplateSafe is kept because install()/addUpdateButtons() below still
+  // reference it (practically inert once the live openPatternPagesTemplateLoader has run at
+  // least once, since it always rebinds the file input's onchange, but left in place rather
+  // than touching install()).
   function loadTemplateSafe(event){
     const file=event.target.files&&event.target.files[0]; if(!file)return;
     const lower=(file.name||'').toLowerCase();
@@ -22808,7 +22723,12 @@ window.addEventListener('DOMContentLoaded',function(){
   window.ppRecolorAutoDetect=function(){var R=window.PPRecolorPNG; if(!R.img){alert('Select a PNG from Design Assets or the canvas first.');return;} var img=R.img; var m=maxPreviewSize(img); var c=document.createElement('canvas'); c.width=m.w; c.height=m.h; var ctx=c.getContext('2d',{willReadFrequently:true}); ctx.drawImage(img,0,0,m.w,m.h); var d=ctx.getImageData(0,0,m.w,m.h).data; var bins=new Map(); for(var i=0;i<d.length;i+=4){var a=d[i+3]; if(a<18) continue; var r=d[i],g=d[i+1],b=d[i+2]; var brightness=(r+g+b)/3; if(brightness>246) continue; var key=[r>>4,g>>4,b>>4].join(','); var old=bins.get(key)||{n:0,r:0,g:0,b:0}; old.n++; old.r+=r; old.g+=g; old.b+=b; bins.set(key,old);} var best=null; bins.forEach(v=>{if(!best||v.n>best.n)best=v;}); if(!best){status('Could not auto detect a colour. Try choosing it manually.');return;} var hex=rgbToHex(best.r/best.n,best.g/best.n,best.b/best.n); if($('recolorFromColor')) $('recolorFromColor').value=hex; status('Detected '+hex+' as the colour to replace.'); window.ppRecolorRender();}
   window.ppRecolorSwapColours=function(){var a=$('recolorFromColor'),b=$('recolorToColor'); if(!a||!b)return; var t=a.value; a.value=b.value; b.value=t; window.ppRecolorRender();}
   window.ppRecolorAddToAssets=function(){var R=window.PPRecolorPNG; if(!R.result){alert('Recolour a PNG first.');return;} if(typeof state==='undefined'){alert('Pattern Pages state is not ready.');return;} state.trays=state.trays||{pattern:[],asset:[]}; state.trays.asset=state.trays.asset||[]; state.trays.asset.push({src:R.result,name:R.name||'recoloured.png'}); state.selectedTray=state.selectedTray||{}; state.selectedTray.asset=state.trays.asset.length-1; if(typeof renderTrays==='function') renderTrays(); status('Added recoloured PNG to Design Assets.');}
-  window.ppRecolorReplaceSelected=function(){var R=window.PPRecolorPNG; if(!R.result){alert('Recolour a PNG first.');return;} var p=(typeof current==='function'?current():null); var l=p&&p.layers&&p.layers.find(x=>x.id===state.selected); if(!l||!('src' in l)){alert('Select an image/logo/overlay layer first.');return;} if(typeof save==='function') save(); l.src=R.result; l.name=(l.name||'image')+' recoloured'; if(typeof render==='function') render(); status('Live recolour kept on canvas.');}
+  // NOTE(consolidation): a window.ppRecolorReplaceSelected assignment that lived here was
+  // removed - fully superseded by a later generation (confirmed via a fresh scan: the final
+  // generation fully replaces with no fallback to a previous version), so it was dead code.
+  // Not a functional loss: by the time this ran, ppRecolorRender() (above) already applies
+  // the recolor live to the tracked layer (R.liveLayerId) as the user picks colors, which is
+  // exactly why the surviving generation is just a status message confirming that.
   window.ppRecolorDownload=function(){var R=window.PPRecolorPNG; if(!R.result){alert('Recolour a PNG first.');return;} var a=document.createElement('a'); a.href=R.result; a.download=R.name||'recoloured.png'; document.body.appendChild(a); a.click(); a.remove(); status('Downloaded recoloured PNG.');}
 
   // Integrated UX: when the user opens/taps the recolour panel, refresh from the current selection.
@@ -23143,58 +23063,13 @@ window.addEventListener('DOMContentLoaded',function(){
   function byId(id){return document.getElementById(id);}
   function page(){try{return typeof current==='function'?current():state.pages[state.selectedPage];}catch(e){return null;}}
   function slots(){var p=page();return p&&Array.isArray(p.layers)?p.layers.filter(function(l){return !!l.generatedPatternLayout;}):[];}
-  function count(){var el=byId('cardCount');return Math.max(1,Math.min(25,parseInt(el&&el.value||'1',10)||1));}
   function type(){return window.showcaseLayoutType||((typeof showcaseLayoutType!=='undefined'&&showcaseLayoutType)||'strips');}
   function direction(){return window.stripDirection==='horizontal'?'horizontal':'vertical';}
-  function redraw(){try{if(typeof render==='function')render();else if(typeof renderAll==='function')renderAll();}catch(e){console.error(e);}}
-  function saveOnce(){try{if(typeof save==='function')save();}catch(e){}}
-  function zNext(i){try{return (typeof nextZ==='function'?nextZ():100)+i;}catch(e){return 100+i;}}
-  function make(typeName,props){try{return layer(typeName,props);}catch(e){return Object.assign({id:'l'+Math.random().toString(36).slice(2),type:typeName},props);}}
-  function orderedExisting(){return slots().slice().sort(function(a,b){return (a.stackIndex||0)-(b.stackIndex||0)||(a.y-b.y)||(a.x-b.x);});}
-  function slotShapeFor(t){return t==='strips'?'strip':(t==='rectangles'?'rectangle':(t==='circles'?'circle':'square'));}
-  function makeOrReuse(old,i,t,props){
-    var expected=slotShapeFor(t), l=old&&old.slotShape===expected?old:null;
-    if(!l) l=make(t==='strips'?'strip':'card',{});
-    var keep={src:l.src||null,fit:l.fit||'cover'};
-    Object.keys(l).forEach(function(k){if(k==='id'||k==='src'||k==='fit')return;delete l[k];});
-    Object.assign(l,{type:t==='strips'?'strip':'card',name:(t==='strips'&&direction()==='horizontal'?'fabric stash ':'pattern slot ')+(i+1),src:keep.src,fit:keep.fit,patternSlot:true,slotShape:expected,generatedPatternLayout:true,stackIndex:i},props);
-    return l;
-  }
-  function buildLayout(n,t,preserve){
-    var p=page();if(!p)return;
-    var old=preserve?orderedExisting():[];
-    p.layers=p.layers.filter(function(l){return !l.generatedPatternLayout;});
-    var made=[],i;
-    if(t==='strips'){
-      if(direction()==='horizontal'){
-        var mx=7,my=8,g=n<=1?0:Math.min(3.8,Math.max(1.8,13/n));
-        var h=n<=1?84:Math.max(5.5,(100-my*2-g*(n-1))/n);
-        var total=h*n+g*(n-1), sy=(100-total)/2;
-        for(i=0;i<n;i++) made.push(makeOrReuse(old[i],i,t,{x:mx,y:sy+i*(h+g),w:100-mx*2,h:h,z:zNext(n-i),stripDirection:'horizontal',horizontalStash:true,locked:true,lockedStrip:true,noResize:true,noDelete:true}));
-      }else{
-        var w=n===1?100:Math.min(42,Math.max(18,100/n+10));
-        var step=n===1?0:(100-w)/(n-1);
-        for(i=0;i<n;i++) made.push(makeOrReuse(old[i],i,t,{x:i*step,y:0,w:w,h:100,z:zNext(n-i),stripDirection:'vertical',horizontalStash:false,locked:true,lockedStrip:true,noResize:true,noDelete:true}));
-      }
-    }else if(t==='rectangles'){
-      var cols=Math.min(n,Math.max(1,Math.ceil(Math.sqrt(n*1.35)))),rows=Math.ceil(n/cols),gap=3;
-      var tw=(88-gap*(cols-1))/cols,th=Math.min(24,(78-gap*(rows-1))/rows);
-      var sx=(100-(cols*tw+(cols-1)*gap))/2,sy2=(100-(rows*th+(rows-1)*gap))/2;
-      for(i=0;i<n;i++){var r=Math.floor(i/cols),c=i%cols;made.push(makeOrReuse(old[i],i,t,{x:sx+c*(tw+gap),y:sy2+r*(th+gap),w:tw,h:th,z:zNext(i)}));}
-    }else{
-      var ccols=Math.ceil(Math.sqrt(n)),rrows=Math.ceil(n/ccols),cgap=3;
-      var aw=86,ah=78,ratio=(p.h&&p.w)?p.w/p.h:1;
-      var sw=Math.min((aw-cgap*(ccols-1))/ccols,((ah-cgap*(rrows-1))/rrows)/ratio);
-      var sh=sw*ratio;
-      var csx=(100-(ccols*sw+(ccols-1)*cgap))/2,csy=(100-(rrows*sh+(rrows-1)*cgap))/2;
-      for(i=0;i<n;i++){var rr=Math.floor(i/ccols),cc=i%ccols;made.push(makeOrReuse(old[i],i,t,{x:csx+cc*(sw+cgap),y:csy+rr*(sh+cgap),w:sw,h:sh,z:zNext(i)}));}
-    }
-    p.layers=p.layers.concat(made);
-    try{state.selected=null;}catch(e){}
-    redraw();
-    try{if(typeof autosaveSoon==='function')autosaveSoon();}catch(e){}
-    syncUI();
-  }
+  // NOTE(consolidation): count/redraw/saveOnce/zNext/make/orderedExisting/slotShapeFor/makeOrReuse/
+  // buildLayout used to live here to back this block's own generate/remove/changeCount/direction
+  // handlers; all of those are superseded by ppages-v180c-showcase-fix-js's final generations
+  // further down, which reimplement the same layout math independently. Only syncUI/hasShowcase/
+  // install and the still-live chooseShowcaseLayout remain from this generation.
   function hasShowcase(){return slots().length>0;}
   function syncUI(){
     var t=type(),stripBox=byId('stripDirectionControls');
@@ -23205,30 +23080,14 @@ window.addEventListener('DOMContentLoaded',function(){
     var gen=byId('showcaseGenerateBtn');if(gen)gen.textContent=hasShowcase()?'update layout':'generate layout';
     var del=byId('showcaseDeleteBtn');if(del)del.disabled=!hasShowcase();
   }
-  window.deletePatternShowcase=function(){
-    var p=page();if(!p||!hasShowcase())return;
-    saveOnce();p.layers=p.layers.filter(function(l){return !l.generatedPatternLayout;});
-    try{state.selected=null;}catch(e){}
-    redraw();try{if(typeof autosaveSoon==='function')autosaveSoon();}catch(e){}syncUI();
-  };
-  window.changeFrameCount=function(delta){
-    var n=Math.max(1,Math.min(25,count()+(Number(delta)||0))),input=byId('cardCount'),display=byId('cardCountDisplay');
-    if(input)input.value=n;if(display)display.textContent=n;
-    if(hasShowcase()){saveOnce();buildLayout(n,type(),true);}else syncUI();
-  };
-  window.generateSelectedShowcaseLayout=function(){saveOnce();buildLayout(count(),type(),true);};
-  var originalChoose=window.chooseShowcaseLayout;
+  // NOTE(consolidation): deletePatternShowcase/changeFrameCount/generateSelectedShowcaseLayout/
+  // chooseStripDirection had earlier generations here; all are superseded further down the file.
+  // chooseShowcaseLayout has no later generation, so it's still the live one.
   window.chooseShowcaseLayout=function(t){
     t=['strips','squares','rectangles','circles'].indexOf(t)>=0?t:'strips';
     try{showcaseLayoutType=t;}catch(e){}window.showcaseLayoutType=t;
     ['Strips','Squares','Rectangles','Circles'].forEach(function(name){var b=byId('showcase'+name+'Btn');if(b)b.classList.toggle('active',name.toLowerCase()===t);});
     syncUI();
-  };
-  var originalDirection=window.chooseStripDirection;
-  window.chooseStripDirection=function(d){
-    d=d==='horizontal'?'horizontal':'vertical';
-    try{stripDirection=d;}catch(e){}window.stripDirection=d;syncUI();
-    if(hasShowcase()&&type()==='strips'){saveOnce();buildLayout(count(),'strips',true);}
   };
   function install(){
     var panel=null;
@@ -25640,7 +25499,10 @@ else install();
     });
   }
   function selectedEditor(){return document.querySelector(`.documentEditor[data-page-index="${state.selectedPage}"]`)}
-  window.ppDocStyle=function(tag){const ed=selectedEditor();if(!ed){alert('Select a document page first.');return}ed.focus();document.execCommand('formatBlock',false,tag);ed.dispatchEvent(new Event('input',{bubbles:true}));}
+  // NOTE(consolidation): a window.ppDocStyle assignment that lived here was removed - fully
+  // superseded by a later generation (confirmed via a fresh scan: the final ppDocStyle
+  // generation fully replaces with no fallback to a previous version), so it was dead code.
+  // selectedEditor stays live - ppDocInsertLink/ppDocInsertImage below still use it.
   window.ppDocInsertLink=function(){const ed=selectedEditor();if(!ed){alert('Select a document page first.');return}const url=prompt('Paste the download or website link:');if(!url)return;ed.focus();document.execCommand('createLink',false,url);ed.dispatchEvent(new Event('input',{bubbles:true}));}
   window.ppDocChooseImage=function(){const f=document.getElementById('ppDocImageInput');if(f)f.click()}
   window.ppDocInsertImage=function(input){const file=input.files&&input.files[0];if(!file)return;const ed=selectedEditor();if(!ed)return;const r=new FileReader();r.onload=()=>{ed.focus();document.execCommand('insertHTML',false,`<img src="${r.result}" alt="manual image"><p><br></p>`);ed.dispatchEvent(new Event('input',{bubbles:true}));input.value=''};r.readAsDataURL(file)}
