@@ -2530,8 +2530,9 @@ function placeInUsefulSize(kind, img){
  return {x:(100-sz.w)/2, y:14, w:sz.w, h:sz.h};
 }
 function save(){state.history.push(JSON.stringify({pages:state.pages,selectedPage:state.selectedPage,selected:state.selected}));state.redoStack=[];if(state.history.length>35)state.history.shift()}
-function undo(){let s=state.history.pop();if(!s)return;state.redoStack.push(JSON.stringify({pages:state.pages,selectedPage:state.selectedPage,selected:state.selected}));let o=JSON.parse(s);state.pages=o.pages;state.selectedPage=o.selectedPage;state.selected=o.selected;render()}
-function redo(){let s=state.redoStack.pop();if(!s)return;state.history.push(JSON.stringify({pages:state.pages,selectedPage:state.selectedPage,selected:state.selected}));let o=JSON.parse(s);state.pages=o.pages;state.selectedPage=o.selectedPage;state.selected=o.selected;render()}
+function ppUndoRedoHint(msg){let h=document.getElementById('selectedHint');if(h)h.textContent=msg;}
+function undo(){let s=state.history.pop();if(!s){ppUndoRedoHint('Nothing to undo.');return;}state.redoStack.push(JSON.stringify({pages:state.pages,selectedPage:state.selectedPage,selected:state.selected}));let o=JSON.parse(s);state.pages=o.pages;state.selectedPage=o.selectedPage;state.selected=o.selected;render();ppUndoRedoHint('Undid last action.')}
+function redo(){let s=state.redoStack.pop();if(!s){ppUndoRedoHint('Nothing to redo.');return;}state.history.push(JSON.stringify({pages:state.pages,selectedPage:state.selectedPage,selected:state.selected}));let o=JSON.parse(s);state.pages=o.pages;state.selectedPage=o.selectedPage;state.selected=o.selected;render();ppUndoRedoHint('Redid last action.')}
 function init(){if($('cardCount')) {$('cardCount').value=1; if($('cardCountDisplay')) $('cardCountDisplay').textContent='1';}state.pages=[newPage('listing')];window.selectedFriendlyPresetLabel='Etsy listing image';render();setTimeout(()=>{updateChosenSizePill();let first=document.querySelector('.presetMiniGroup button');if(first)first.classList.add('activePreset')},0)}
 function addPage(t){save();state.pages.push(newPage(t));state.selectedPage=state.pages.length-1;state.selected=null;render();scrollSel()}
 function selectPage(i){state.selectedPage=i;state.selected=null;render();scrollSel()}
@@ -15248,9 +15249,25 @@ document.addEventListener('click', function(e){
   };
   const oldDownloadPstudio=window.downloadPstudio;
   window.downloadPstudio=function(){
-    const projectData=makeProjectSnapshot();
-    const blob=new Blob([JSON.stringify(projectData,null,2)],{type:'application/x-ppages'});
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='pattern-pages-project.ppages'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    // NOTE(consolidation): this used to give zero feedback on success -
+    // for a large project (tens of MB is common with several full-size
+    // images) the actual browser download can take a moment and Safari's
+    // download indicator is easy to miss, so it silently looked like
+    // nothing happened even though the file saved correctly. Now confirms
+    // with the file size, and warns loudly if building the file itself
+    // fails instead of failing silently.
+    try{
+      const projectData=makeProjectSnapshot();
+      const json=JSON.stringify(projectData,null,2);
+      const blob=new Blob([json],{type:'application/x-ppages'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='pattern-pages-project.ppages'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+      const mb=(blob.size/1024/1024).toFixed(1);
+      showAutoSaveNotice('Saved pattern-pages-project.ppages ('+mb+' MB)');
+      setStatus('Project saved to your Downloads · '+mb+' MB');
+    }catch(err){
+      console.error('downloadPstudio failed',err);
+      alert('Could not save the .ppages file: '+(err&&err.message||err));
+    }
   };
   const oldLoadPstudioFile=window.loadPstudioFile;
   window.loadPstudioFile=function(event){
