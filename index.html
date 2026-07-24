@@ -21551,7 +21551,7 @@ window.addEventListener('DOMContentLoaded',function(){
   }
   async function createClean(e){
     if(e){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
-    if(cage.busy){ status('already catching paparazzi…'); return false; }
+    if(cage.busy){ status('already creating a mock-up…'); return false; }
     cage.busy=true;
     try{
       cage.bg=cage.bg||await readFile('customMockupBgInput'); cage.mask=cage.mask||await readFile('customMockupMaskInput');
@@ -21560,7 +21560,7 @@ window.addEventListener('DOMContentLoaded',function(){
       if(!rec.mask){ alert('Upload a white mask first.'); return false; }
       if(!rec.pattern){ alert('Upload or select a pattern from the Pattern Tray first.'); return false; }
       try{ if(typeof save==='function')save(); }catch(e){}
-      status('catching mock-up paparazzi…'); const r=await renderCropped(rec); buildPage(r); redraw(); status('paparazzi caught · clean mock-up created ✨');
+      status('creating mock-up…'); const r=await renderCropped(rec); buildPage(r); redraw(); status('mock-up created ✨');
     }catch(err){ console.error(err); status('mock-up failed'); alert('Could not create the clean mock-up. Try PNG/JPG files and a clear white mask.'); }
     finally{ setTimeout(()=>{cage.busy=false;},500); }
     return false;
@@ -21584,9 +21584,9 @@ window.addEventListener('DOMContentLoaded',function(){
     const mask=cloneBind($('customMockupMaskInput')); if(mask)mask.addEventListener('change',e=>loadPart(e,'mask'),true);
     ['customMockupRepeat','customMockupOffsetX','customMockupOffsetY','customMockupTexture','customMockupBlendMode'].forEach(id=>{ const n=cloneBind($(id)); if(!n)return; if(id==='customMockupBlendMode'){ n.value='multiply'; const row=n.closest('.rangeRow'); if(row)row.style.display='none'; } n.addEventListener('input',schedule,true); n.addEventListener('change',schedule,true); });
     const old=[...document.querySelectorAll('.customMockupBox button,button')].find(b=>/create/i.test(b.textContent||'')&&/mock-up/i.test(b.textContent||'')) || document.querySelector('[onclick*="createCustomMockupFromMask"]');
-    const btn=cloneBind(old); if(btn){ btn.id='createCustomMockupBtnV163'; btn.textContent='catch mock-up paparazzi ✨'; btn.addEventListener('click',createClean,true); }
+    const btn=cloneBind(old); if(btn){ btn.id='createCustomMockupBtnV163'; btn.textContent='create mock-up ✨'; btn.addEventListener('click',createClean,true); }
     window.createCustomMockupFromMask=createClean; window.createOrUpdateCustomMockup=createClean; window.loadCustomMockupPart=loadPart; window.regenerateSelectedCustomMockupV163=schedule;
-    status('v163 paparazzi cage ready · pattern tools untouched');
+    status('mock-up tools ready · pattern tools untouched');
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind); else bind();
   setTimeout(bind,900);
