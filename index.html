@@ -15320,12 +15320,10 @@ document.addEventListener('click', function(e){
       }
     });
   };
-  const oldLoadPstudioFile=window.loadPstudioFile;
-  window.loadPstudioFile=function(event){
-    const file=event.target.files[0]; if(!file)return; const reader=new FileReader();
-    reader.onload=e=>{ try{ applyProjectSnapshot(JSON.parse(e.target.result),'Project'); alert('Project loaded successfully.'); }catch(err){ alert('Could not load .ppages file'); console.error(err);} };
-    reader.readAsText(file);
-  };
+  // NOTE(consolidation): a window.loadPstudioFile assignment that lived here was removed -
+  // fully superseded by a later generation (confirmed via a fresh scan: the final
+  // loadPstudioFile generation fully replaces with no fallback to a previous version), so it
+  // was dead code.
   function registerPWA(){
     const link=safe$('patternPagesManifest'); if(link && !link.getAttribute('href')) link.setAttribute('href','manifest.json');
     if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')){
@@ -27081,122 +27079,16 @@ else install();
   'use strict';
   var PATCH_NAME='v182 safe paparazzi eviction + import fix';
   function $(id){return document.getElementById(id);}
-  function notice(msg){
-    try{
-      var old=document.querySelector('.ppagesImportNotice'); if(old) old.remove();
-      var n=document.createElement('div'); n.className='ppagesImportNotice'; n.textContent=msg;
-      document.body.appendChild(n); setTimeout(function(){try{n.remove();}catch(e){}},2400);
-    }catch(e){ console.log(msg); }
-  }
-  function uidSafe(){
-    try{ if(typeof uid==='function') return uid(); }catch(e){}
-    return 'v182_'+Math.random().toString(36).slice(2)+Date.now().toString(36);
-  }
   function arr(v){return Array.isArray(v)?v:[];}
-  function templatePage(){
-    try{ if(typeof newPage==='function') return newPage('listing'); }catch(e){}
-    return {type:'listing',w:3000,h:2250,layers:[]};
-  }
-  function cleanLayerForImport(raw,index){
-    var l=(raw && typeof raw==='object')?Object.assign({},raw):{};
-    if(!l.id) l.id=uidSafe();
-    if(!l.type) l.type=l.text?'text':(l.src||l.img||l.image?'image':'image');
-    if(!l.src && (l.img||l.image)) l.src=l.img||l.image;
-    if(!l.name) l.name=l.type==='text'?'plain text':(l.type+' '+(index+1));
-    var defaults={x:10,y:10,w:40,h:25,r:0,z:index+1};
-    Object.keys(defaults).forEach(function(k){
-      var n=Number(l[k]); l[k]=isFinite(n)?n:defaults[k];
-    });
-    if(!isFinite(Number(l.opacity))) l.opacity=1;
-    l.opacity=Math.max(0,Math.min(1,Number(l.opacity)));
-    if(!isFinite(Number(l.scale))) l.scale=1;
-    if(!l.fit) l.fit='cover';
 
-    if(l.type==='text' || l.type==='label'){
-      if(l.text==null) l.text=l.name||'Text';
-      if(!l.font) l.font='Georgia';
-      if(!l.color) l.color='#111111';
-      if(!l.fill) l.fill='transparent';
-      if(!l.border) l.border='#111111';
-      if(!isFinite(Number(l.borderW))) l.borderW=0;
-      if(!isFinite(Number(l.fontSize))) l.fontSize=36;
-      if(!isFinite(Number(l.lineHeight))) l.lineHeight=1.05;
-      if(!isFinite(Number(l.letterSpacing))) l.letterSpacing=0;
-      if(!isFinite(Number(l.textPadding))) l.textPadding=10;
-    }
-
-    /* The safe paparazzi rule:
-       - Do NOT change l.src. That is the real visible canvas image.
-       - Only remove stale/frozen thumbnails that can make masks or old redraws reappear.
-       - Keep customMockupPatternSrc when available so the row can show the pattern thumbnail. */
-    if(l.customMockup || l.type==='customMockup' || /mock.?up/i.test(l.name||'')){
-      if(!l.customMockupPatternSrc && l.thumbSrc && l.thumbSrc!==l.src) l.customMockupPatternSrc=l.thumbSrc;
-      if(l.thumbSrc===l.src || (l.thumbSrc && l.thumbSrc.length>1500000)) l.thumbSrc='';
-      l._frozenThumbSrc='';
-      l.fit='contain';
-      l.opacity=1;
-    }else{
-      if(l._frozenThumbSrc && l._frozenThumbSrc!==l.src) l._frozenThumbSrc='';
-    }
-    return l;
-  }
-  function cleanPageForImport(raw,index){
-    var p=(raw && typeof raw==='object')?Object.assign({},raw):{};
-    var t=templatePage();
-    p.type=p.type||t.type||'listing';
-    p.w=Number(p.w||p.width||t.w||3000); if(!isFinite(p.w)||p.w<50) p.w=3000;
-    p.h=Number(p.h||p.height||t.h||2250); if(!isFinite(p.h)||p.h<50) p.h=2250;
-    p.layers=arr(p.layers||p.elements||p.items).map(cleanLayerForImport).filter(Boolean);
-    p.layers.forEach(function(l,i){ if(!isFinite(Number(l.z))) l.z=i+1; });
-    return p;
-  }
-  function getPages(data){
-    if(Array.isArray(data)) return data;
-    if(data && Array.isArray(data.pages)) return data.pages;
-    if(data && data.project && Array.isArray(data.project.pages)) return data.project.pages;
-    if(data && data.state && Array.isArray(data.state.pages)) return data.state.pages;
-    if(data && data.patternPages && Array.isArray(data.patternPages.pages)) return data.patternPages.pages;
-    return null;
-  }
-  function cleanProject(data){
-    if(typeof window.ppExpandAssetsFromLoad==='function') data=window.ppExpandAssetsFromLoad(data);
-    var pages=getPages(data);
-    if(!pages) throw new Error('No pages were found in this project file.');
-    pages=pages.map(cleanPageForImport).filter(Boolean);
-    if(!pages.length) pages=[templatePage()];
-    var root=(data&&data.state)?data.state:data;
-    var selected=Number((root&&root.selectedPage)); if(!isFinite(selected)) selected=0;
-    selected=Math.max(0,Math.min(pages.length-1,selected));
-    return {
-      pages:pages,
-      selectedPage:selected,
-      trays:(root && root.trays) || (data && data.trays) || (window.state&&state.trays) || {pattern:[],asset:[]},
-      zoom:Number((root&&root.zoom)||(data&&data.zoom)||(window.state&&state.zoom)||1)||1,
-      leftHanded:!!(root&&root.leftHanded),
-      leftCollapsed:!!(root&&root.leftCollapsed),
-      rightCollapsed:!!(root&&root.rightCollapsed)
-    };
-  }
-  function applyProject(project){
-    if(!window.state) throw new Error('Pattern Pages state is not ready.');
-    state.pages=project.pages;
-    state.selectedPage=project.selectedPage;
-    state.selected=null;
-    state.lastDeselected=null;
-    state.trays=project.trays || state.trays || {pattern:[],asset:[]};
-    state.zoom=project.zoom || 1;
-    state.leftHanded=!!project.leftHanded;
-    state.leftCollapsed=!!project.leftCollapsed;
-    state.rightCollapsed=!!project.rightCollapsed;
-    document.body.classList.toggle('leftHanded',state.leftHanded);
-    document.body.classList.toggle('leftCollapsed',state.leftCollapsed);
-    document.body.classList.toggle('rightCollapsed',state.rightCollapsed);
-    var hand=$('handModeBtn'); if(hand) hand.textContent=state.leftHanded?'right-handed layout':'left-handed layout';
-    document.querySelectorAll('.side').forEach(function(p){p.scrollTop=0;});
-    if(typeof render==='function') render();
-    setTimeout(function(){safeThumbnailEviction();},0);
-    try{ if(typeof autosaveSoon==='function') autosaveSoon(); }catch(e){}
-  }
+  // NOTE(consolidation): notice, uidSafe, templatePage, cleanLayerForImport,
+  // cleanPageForImport, getPages, cleanProject, applyProject, and a window.loadPstudioFile
+  // assignment that lived here were removed - fully superseded by a later loadPstudioFile
+  // generation (confirmed via a fresh scan: the final generation fully replaces with no
+  // fallback to a previous version, and none of these helpers were used anywhere else), so
+  // they were dead code. $/arr/safeThumbnailEviction/install below stay live - install()
+  // still fixes the file picker's accept attribute and runs a one-time thumbnail cleanup on
+  // boot regardless of loadPstudioFile's fate.
   function safeThumbnailEviction(){
     try{
       /* Never remove .layer, canvas, or img from the stage. Only clean layer-panel thumbnail plumbing. */
@@ -27218,39 +27110,8 @@ else install();
     }catch(e){ console.warn(PATCH_NAME,'thumbnail cleanup skipped',e); }
   }
 
-  window.ppagesV182CleanProject=cleanProject;
   window.ppagesV182SafeThumbnailEviction=safeThumbnailEviction;
   window.ppagesV181EvictPaparazzi=safeThumbnailEviction; /* neutralise the old public broom if present */
-
-  window.loadPstudioFile=function(event){
-    var input=event && event.target;
-    var file=input && input.files && input.files[0];
-    if(!file) return;
-    var lower=(file.name||'').toLowerCase();
-    if(!(/\.(ppages|pstudio|json)$/.test(lower))){
-      notice('Please choose a .ppages or .json project file.');
-      if(input) input.value='';
-      return;
-    }
-    var reader=new FileReader();
-    reader.onload=function(e){
-      try{
-        var text=String(e.target.result||'').trim();
-        if(!text) throw new Error('The file is empty.');
-        var data=JSON.parse(text);
-        var project=cleanProject(data);
-        applyProject(project);
-        notice('Project loaded · '+project.pages.length+' page'+(project.pages.length===1?'':'s'));
-      }catch(err){
-        console.error(PATCH_NAME,err);
-        alert('Could not load this project file: '+(err&&err.message?err.message:err));
-      }finally{
-        if(input) input.value='';
-      }
-    };
-    reader.onerror=function(){ alert('Could not read this project file.'); if(input) input.value=''; };
-    reader.readAsText(file);
-  };
 
   function install(){
     var loader=$('pstudioLoader');
