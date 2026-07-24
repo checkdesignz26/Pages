@@ -28251,15 +28251,14 @@ else install();
     if(row)row.classList.toggle('active',selectedIsShowcaseSlot());
   }
 
-  var oldRenderLayers=window.renderLayers;
-  if(typeof oldRenderLayers==='function'){
-    window.renderLayers=function(){
-      var result=oldRenderLayers.apply(this,arguments);
-      requestAnimationFrame(syncHighlight);
-      return result;
-    };
-    try{renderLayers=window.renderLayers;}catch(e){}
-  }
+  // NOTE(consolidation): a window.renderLayers wrap that lived here was removed - confirmed
+  // via a live timing probe that a later generation (installRenderLayers, in
+  // ppages-v182i-showcase-layer-group-js) reinstalls window.renderLayers from scratch on a
+  // repeating boot() timer (180ms/700ms/1600ms after load) with no fallback to a previous
+  // version, so this wrap was already being silently discarded within ~2s of every page load.
+  // syncHighlight still runs correctly via the MutationObserver below (which reacts to any
+  // #layerList DOM change, including ones from renderLayers) plus the click/pointerup
+  // listeners and periodic setTimeouts in boot(), so no functionality was lost.
 
   var observer=new MutationObserver(function(){requestAnimationFrame(syncHighlight);});
   function boot(){
