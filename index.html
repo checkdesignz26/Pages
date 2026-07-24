@@ -15257,10 +15257,16 @@ document.addEventListener('click', function(e){
     // with the file size, and warns loudly if building the file itself
     // fails instead of failing silently.
     try{
+      const defaultName=(window.ppLastSavedName||'pattern-pages-project');
+      let name=prompt('Save as:',defaultName);
+      if(name===null)return; // cancelled
+      name=name.trim().replace(/[\\/:*?"<>|]/g,'').replace(/\.ppages$/i,'');
+      if(!name)name='pattern-pages-project';
+      window.ppLastSavedName=name;
       const projectData=makeProjectSnapshot();
       const json=JSON.stringify(projectData,null,2);
       const blob=new Blob([json],{type:'application/x-ppages'});
-      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='pattern-pages-project.ppages'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+'.ppages'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
       const mb=(blob.size/1024/1024).toFixed(1);
       // Safari may prompt to confirm the save location instead of saving
       // straight to Downloads, especially for a larger file - flag that so
