@@ -15171,13 +15171,10 @@ document.addEventListener('click', function(e){
       if(tex.size) st.style.backgroundSize=tex.size;
     });
   }
-  window.applyTextureChoice=function(){
-    const sel=safe$('textureSelect'); if(!sel||!window.state)return; const p=state.pages[state.selectedPage]; if(!p)return;
-    if(typeof window.save==='function') save();
-    p.backgroundTexture=sel.value; p.backgroundColor=(findTexture(sel.value).color||'#ffffff');
-    render(); setStatus('Background texture applied to this page.');
-  };
-  window.clearTextureChoice=function(){ const sel=safe$('textureSelect'); if(sel)sel.value='none'; window.applyTextureChoice(); };
+  // NOTE(consolidation): window.applyTextureChoice and window.clearTextureChoice
+  // assignments that lived here were removed - each fully superseded by a later generation
+  // (confirmed via a fresh scan: the final generation of each fully replaces with no
+  // fallback to a previous version), so they were dead code.
   function populateTextureSelect(){
     const sel=safe$('textureSelect'); if(!sel)return;
     const old=sel.value||'none'; sel.innerHTML='';
@@ -23882,55 +23879,12 @@ window.addEventListener('DOMContentLoaded',function(){
     });
   }
 
-  /*
-   * The original function incorrectly checked window.state.
-   * Pattern Pages keeps state in the page's global lexical scope, so this
-   * replacement uses state directly.
-   */
-  window.applyTextureChoice = function(){
-    const select = document.getElementById("textureSelect");
-    const page = getCurrentPage();
-    if(!select || !page) return;
-
-    const texture = textureById(select.value);
-    if(!texture) return;
-
-    try{
-      if(typeof save === "function") save();
-    }catch(error){}
-
-    page.backgroundTexture = texture.id;
-    page.backgroundColor = texture.color || "#ffffff";
-
-    /* Show the result immediately. */
-    paintCurrentStage(texture);
-    syncTextureCards(texture.id);
-
-    try{
-      if(typeof render === "function") render();
-    }catch(error){}
-
-    /* render() rebuilds the stage, so paint the newly-created stage too. */
-    requestAnimationFrame(function(){
-      paintCurrentStage(texture);
-      syncTextureCards(texture.id);
-    });
-    setTimeout(function(){
-      paintCurrentStage(texture);
-      syncTextureCards(texture.id);
-    }, 60);
-
-    try{
-      if(typeof saveAutoSaveNow === "function"){
-        saveAutoSaveNow(true);
-      }
-    }catch(error){}
-
-    const status = document.getElementById("selectedHint");
-    if(status){
-      status.textContent = texture.name + " background applied.";
-    }
-  };
+  // NOTE(consolidation): a window.applyTextureChoice assignment that lived here was removed
+  // - fully superseded by a later generation (confirmed via a fresh scan: the final
+  // applyTextureChoice generation fully replaces with no fallback to a previous version), so
+  // it was dead code. textureById/getCurrentPage/getCurrentStage/paintCurrentStage/
+  // syncTextureCards stay live regardless - the window.render wrap below still uses them to
+  // repaint the chosen texture after every render.
 
   window.clearTextureChoice = function(){
     const select = document.getElementById("textureSelect");
