@@ -3174,51 +3174,15 @@ function toggleFramePicker(){
  if(!p)return;
  p.classList.toggle('hidden');
 }
-function framePath(shape){
- if(shape==='heart') return '<path d="M50 88 C18 63 7 45 12 27 C17 9 40 8 50 25 C60 8 83 9 88 27 C93 45 82 63 50 88 Z"/>';
- if(shape==='star') return '<polygon points="50,6 61,36 94,36 67,55 78,88 50,68 22,88 33,55 6,36 39,36"/>';
- if(shape==='circle') return '<circle cx="50" cy="50" r="45"/>';
- if(shape==='arch') return '<path d="M15 92 L15 44 C15 20 31 8 50 8 C69 8 85 20 85 44 L85 92 Z"/>';
- if(shape==='label') return '<path d="M8 24 Q8 14 18 14 L82 14 Q92 14 92 24 L92 76 Q92 86 82 86 L18 86 Q8 86 8 76 Z"/>';
- // flower: five broad rounded petals with a generous centre
- return '<ellipse cx="50" cy="25" rx="20" ry="27"/>'+
-        '<ellipse cx="50" cy="25" rx="20" ry="27" transform="rotate(72 50 50)"/>'+
-        '<ellipse cx="50" cy="25" rx="20" ry="27" transform="rotate(144 50 50)"/>'+
-        '<ellipse cx="50" cy="25" rx="20" ry="27" transform="rotate(216 50 50)"/>'+
-        '<ellipse cx="50" cy="25" rx="20" ry="27" transform="rotate(288 50 50)"/>'+
-        '<circle cx="50" cy="50" r="27"/>';
-}
-function svgMaskUrlForFrameShape(shape){
- const body=framePath(shape||'flower');
- const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${body}</svg>`;
- return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
-}
-function escapeAttr(v){
- return String(v||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-function frameSvgMarkup(l){
- const shape=l.frameShape||'flower';
- const safe=String(l.id||Math.random()).replace(/[^a-zA-Z0-9_]/g,'_');
- const clipId='frameClip_'+safe;
- const body=framePath(shape);
-
- // Safari-safe SVG: draw the geometry directly.
- // No <use> references, so an empty frame is immediately visible.
- const patternImage=l.src
-   ? `<image href="${escapeAttr(l.src)}" x="0" y="0" width="100" height="100"
-        preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"></image>`
-   : '';
-
- return `<svg class="realFrameSvg trueShapeFrame" viewBox="0 0 100 100"
-          preserveAspectRatio="none" overflow="visible"
-          aria-label="${escapeAttr(shape)} pattern frame">
-   <defs>
-     <clipPath id="${clipId}" clipPathUnits="userSpaceOnUse">${body}</clipPath>
-   </defs>
-   <g class="emptyFrameShape" fill="#ffffff">${body}</g>
-   ${patternImage}
- </svg>`;
-}
+// NOTE(consolidation): the original function framePath(shape){...},
+// svgMaskUrlForFrameShape(shape){...} (which had zero callers anywhere in
+// the file), escapeAttr(v){...} (only ever called from the dead
+// frameSvgMarkup below), and function frameSvgMarkup(l){...} used to be
+// defined here. window.framePath/window.frameSvgMarkup are both fully
+// superseded by the v181e-final-frame-engine generation later in the file,
+// and confirmed nothing calls the bare framePath/frameSvgMarkup identifiers
+// before that generation's synchronous page-load reassignment - removed as
+// dead code.
 function addPatternFrame(shape='flower'){
  save();
  const p=current();
