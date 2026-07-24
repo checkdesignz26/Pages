@@ -18546,16 +18546,10 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
     render();
   };
 
-  window.renameLayerById=function(id){
-    const l=findLayerById(id); if(!l)return;
-    const next=prompt('Rename layer', l.name || l.type || 'layer');
-    if(next==null)return;
-    const clean=String(next).trim();
-    if(!clean)return;
-    save();
-    l.name=clean;
-    render();
-  };
+  // NOTE(consolidation): a window.renameLayerById assignment that lived here was removed -
+  // fully superseded by a later generation (confirmed via a fresh scan: the final
+  // renameLayerById generation fully replaces with no fallback to a previous version), so it
+  // was dead code.
 
   window.deleteLayerFromPanel=function(id){
     const l=findLayerById(id); if(!l)return;
@@ -18917,15 +18911,10 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
     try{render();}catch(e){try{renderPages();renderLayers();syncControls();}catch(_){}}
   };
 
-  function findLayerById(id){ var p=page(); return layers(p).find(function(l){return l.id===id;}); }
-  window.renameLayerById=function(id){
-    var l=findLayerById(id); if(!l)return;
-    var next=prompt('Rename layer', l.name || baseNameFor(l));
-    if(next==null)return; next=clean(next); if(!next)return;
-    try{save();}catch(e){}
-    l.name=next; l._manualName=true; l._autoNamed=false;
-    try{render();}catch(e){try{renderPages();renderLayers();syncControls();}catch(_){}}
-  };
+  // NOTE(consolidation): findLayerById and a window.renameLayerById assignment that lived
+  // here were removed - fully superseded by a later generation (confirmed via a fresh scan:
+  // the final renameLayerById generation fully replaces with no fallback to a previous
+  // version), so they were dead code.
 
   // NOTE(consolidation): this used to also define makeThumb, window.rowForLayer,
   // window.renderLayers and window.renderFrameList here, all fully superseded
