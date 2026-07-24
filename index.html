@@ -28593,11 +28593,26 @@ else install();
       var list=normalLayers().slice().sort(function(a,b){return (b.z||0)-(a.z||0);});
       var showcase=slots().slice().sort(function(a,b){return (b.z||0)-(a.z||0);});
       el.innerHTML='';
-      if(showcase.length)el.appendChild(makeGroupRow(showcase));
-      list.forEach(function(l){
-        if(l&&l.groupId)return;
-        if(typeof window.rowForLayer==='function')el.appendChild(window.rowForLayer(l,'all'));
-      });
+      if(showcase.length){
+        // NOTE(consolidation): used to always append the showcase group row
+        // FIRST regardless of its actual z-order, so a layer legitimately
+        // stacked above the showcase (e.g. a banner, correctly rendering on
+        // top on the canvas) would still list below the showcase group here
+        // in the panel. Insert it at its real z-sorted position instead.
+        var showcaseZ=Math.max.apply(null,showcase.map(function(l){return l.z||0;}));
+        var inserted=false;
+        list.forEach(function(l){
+          if(l&&l.groupId)return;
+          if(!inserted && (l.z||0)<showcaseZ){el.appendChild(makeGroupRow(showcase));inserted=true;}
+          if(typeof window.rowForLayer==='function')el.appendChild(window.rowForLayer(l,'all'));
+        });
+        if(!inserted)el.appendChild(makeGroupRow(showcase));
+      }else{
+        list.forEach(function(l){
+          if(l&&l.groupId)return;
+          if(typeof window.rowForLayer==='function')el.appendChild(window.rowForLayer(l,'all'));
+        });
+      }
       if(!showcase.length&&!list.length)el.innerHTML='<div class="smallText">No layers yet. Add a pattern frame, banner, label or shape.</div>';
     };
     try{renderLayers=window.renderLayers;}catch(e){}
