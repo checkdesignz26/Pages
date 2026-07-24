@@ -16210,12 +16210,10 @@ function makeNumberedList(){
       const node = window.__ddStripLockRenderLayer(l,pi);
       if(l && l.generatedPatternLayout && l.slotShape === "strip"){
         node.classList.add("lockedStrip");
-        node.onpointerdown = function(e){
-          e.stopPropagation();
-          state.selectedPage=pi;
-          state.selected=l.id;
-          render();
-        };
+        // NOTE: node.onpointerdown used to force a full render() here on every touch-down.
+        // makeDraggable() (called inside the wrapped renderLayer) already selects on
+        // pointerdown for every layer type without a disruptive full render, and this was
+        // rebuilding the DOM node mid-gesture - it made strips impossible to drag-reposition.
       }
       return node;
     };
@@ -16385,12 +16383,10 @@ function makeNumberedList(){
       if(l && l.generatedPatternLayout && l.slotShape === "strip"){
         node.classList.add("lockedStrip");
         node.style.cursor = "pointer";
-        node.onpointerdown = function(e){
-          e.stopPropagation();
-          state.selectedPage=pi;
-          state.selected=l.id;
-          render();
-        };
+        // NOTE: node.onpointerdown used to force a full render() here on every touch-down.
+        // makeDraggable() (called inside the wrapped renderLayer) already selects on
+        // pointerdown for every layer type without a disruptive full render, and this was
+        // rebuilding the DOM node mid-gesture - it made strips impossible to drag-reposition.
       }
       return node;
     };
@@ -16453,19 +16449,12 @@ function makeNumberedList(){
           el.style.display = "none";
         });
 
-        node.onpointerdown = function(e){
-          e.stopPropagation();
-          state.selectedPage = pi;
-          state.selected = l.id;
-          render();
-        };
-
-        node.onclick = function(e){
-          e.stopPropagation();
-          state.selectedPage = pi;
-          state.selected = l.id;
-          render();
-        };
+        // NOTE: this used to also set node.onpointerdown/node.onclick to force a full render()
+        // on every touch-down, to select the strip immediately. makeDraggable() (called inside
+        // the wrapped renderLayer above) already selects on pointerdown for every layer type,
+        // strips included, without a disruptive full render - and that forced render() was
+        // rebuilding this exact DOM node mid-gesture, which silently discarded the pointer
+        // capture makeDraggable had just set up and made strips impossible to drag-reposition.
       }
       return node;
     };

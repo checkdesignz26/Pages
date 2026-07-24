@@ -135,3 +135,40 @@ test('normalizing showcase z-order preserves the strips own relative stacking or
   expect(result.afterStackIndexes).toEqual(result.before);
   expect(result.zsAscendWithStackIndex).toBe(true);
 });
+
+test('a generated strip can be dragged to reposition it', async ({ page }) => {
+  // Three separate "DOGGY DIRECTOR" renderLayer wraps each set node.onpointerdown to force a
+  // full render() on every touch-down for generated strips (to select them), which rebuilt the
+  // exact DOM node makeDraggable() had just started tracking mid-gesture and silently discarded
+  // the pointer capture - strips could be selected but never actually dragged. Fixed by dropping
+  // those onpointerdown overrides; makeDraggable() already selects on pointerdown for every
+  // layer type without a disruptive re-render.
+  await page.evaluate(() => {
+    window.showcaseLayoutType = 'strips';
+    window.stripDirection = 'vertical';
+    window.generateSelectedShowcaseLayout();
+  });
+  await page.waitForTimeout(300);
+
+  const before = await page.evaluate(() => {
+    const l = state.pages[state.selectedPage].layers.find((x) => x.generatedPatternLayout);
+    return { id: l.id, x: l.x, y: l.y };
+  });
+
+  const box = await page.locator(`.layer[data-id="${before.id}"]`).boundingBox();
+  const sx = box.x + box.width / 2, sy = box.y + box.height / 2;
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) {
+    await page.mouse.move(sx + i * 15, sy + i * 8, { steps: 3 });
+    await page.waitForTimeout(20);
+  }
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+
+  const after = await page.evaluate(() => {
+    const l = state.pages[state.selectedPage].layers.find((x) => x.generatedPatternLayout);
+    return { x: l.x, y: l.y };
+  });
+  expect(Math.abs(after.x - before.x) > 0.5 || Math.abs(after.y - before.y) > 0.5).toBe(true);
+});
