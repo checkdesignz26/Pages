@@ -23652,8 +23652,24 @@ window.addEventListener('DOMContentLoaded',function(){
     if(!list || list.dataset.ppTouchDragInstalled==='1') return;
     list.dataset.ppTouchDragInstalled='1';
     var drag=null;
+    var GRIP_TOLERANCE=14; // px - the visible grip icon is small (~20px), so
+    // forgive near-misses instead of requiring a pixel-perfect finger tap.
+    function findGripNear(e){
+      var direct=e.target && e.target.closest && e.target.closest('.dragGrip');
+      if(direct) return direct;
+      var row=closestRow(e.target);
+      if(!row) return null;
+      var grip=row.querySelector('.dragGrip');
+      if(!grip) return null;
+      var r=grip.getBoundingClientRect();
+      if(e.clientX>=r.left-GRIP_TOLERANCE && e.clientX<=r.right+GRIP_TOLERANCE &&
+         e.clientY>=r.top-GRIP_TOLERANCE && e.clientY<=r.bottom+GRIP_TOLERANCE){
+        return grip;
+      }
+      return null;
+    }
     function start(e){
-      var grip=e.target && e.target.closest && e.target.closest('.dragGrip');
+      var grip=findGripNear(e);
       if(!grip) return;
       var row=closestRow(grip);
       if(!row || !row.dataset.id) return;
@@ -23669,12 +23685,42 @@ window.addEventListener('DOMContentLoaded',function(){
       row.classList.add('ppRowDragging');
       try{row.setPointerCapture && row.setPointerCapture(e.pointerId);}catch(_){ }
       drag={id:row.dataset.id,mode:row.dataset.mode||'all',row:row,ghost:ghost,dx:e.clientX-rect.left,dy:e.clientY-rect.top,pointerId:e.pointerId,target:null};
+      startAutoScroll();
+    }
+    // Auto-scroll the layer list while dragging near its top/bottom edge -
+    // without this, a list longer than the visible panel makes it
+    // impossible to drag a layer past whatever's currently on screen.
+    var AUTOSCROLL_ZONE=36, AUTOSCROLL_MAX_SPEED=14;
+    var lastPointerY=null, autoScrollRAF=null;
+    function autoScrollTick(){
+      autoScrollRAF=null;
+      if(!drag || lastPointerY==null) return;
+      var rect=list.getBoundingClientRect();
+      var speed=0;
+      if(lastPointerY<rect.top+AUTOSCROLL_ZONE){
+        speed=-AUTOSCROLL_MAX_SPEED*(1-Math.max(0,(lastPointerY-rect.top))/AUTOSCROLL_ZONE);
+      }else if(lastPointerY>rect.bottom-AUTOSCROLL_ZONE){
+        speed=AUTOSCROLL_MAX_SPEED*(1-Math.max(0,(rect.bottom-lastPointerY))/AUTOSCROLL_ZONE);
+      }
+      if(speed){
+        list.scrollTop+=speed;
+        autoScrollRAF=requestAnimationFrame(autoScrollTick);
+      }
+    }
+    function startAutoScroll(){
+      if(autoScrollRAF==null) autoScrollRAF=requestAnimationFrame(autoScrollTick);
+    }
+    function stopAutoScroll(){
+      if(autoScrollRAF!=null){ cancelAnimationFrame(autoScrollRAF); autoScrollRAF=null; }
+      lastPointerY=null;
     }
     function move(e){
       if(!drag) return;
       e.preventDefault();
       var x=e.clientX-drag.dx, y=e.clientY-drag.dy;
       drag.ghost.style.transform='translate3d('+x+'px,'+y+'px,0)';
+      lastPointerY=e.clientY;
+      startAutoScroll();
       drag.ghost.style.visibility='hidden';
       var under=document.elementFromPoint(e.clientX,e.clientY);
       drag.ghost.style.visibility='visible';
@@ -23692,6 +23738,7 @@ window.addEventListener('DOMContentLoaded',function(){
       e.preventDefault();
       var d=drag;
       drag=null;
+      stopAutoScroll();
       clearTargets();
       if(d.row) d.row.classList.remove('ppRowDragging');
       if(d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
