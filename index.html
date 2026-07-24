@@ -28892,18 +28892,41 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   if(window.__PPAGES_V183D_VISIBLE_SHADOW__) return;
   window.__PPAGES_V183D_VISIBLE_SHADOW__=true;
 
+  // NOTE(consolidation): this used to hardcode strip z-index to a constant
+  // 7000+ range, which permanently put every strip above ANY other layer on
+  // the page (including ones added afterward with a legitimately higher
+  // z), regardless of actual stacking intent. Anchored to the strips' own
+  // real data z-index instead, so the shadow order among strips themselves
+  // is preserved without the whole group hijacking the entire page's stack.
+  function stripBaseZ(stage,strips){
+    var baseZ=0;
+    try{
+      var block=stage.closest('.pageBlock');
+      var pi=block?+block.dataset.page:NaN;
+      var st=(typeof state!=='undefined'?state:window.state);
+      var p=st&&st.pages?st.pages[pi]:null;
+      if(p && Array.isArray(p.layers)){
+        strips.forEach(function(el){
+          var l=p.layers.find(function(x){return x&&String(x.id)===String(el.dataset.id);});
+          if(l && typeof l.z==='number' && l.z>baseZ) baseZ=l.z;
+        });
+      }
+    }catch(e){}
+    return baseZ;
+  }
   function arrangeShadowStack(){
     document.querySelectorAll('.stage').forEach(function(stage){
       var strips=Array.from(stage.querySelectorAll('.layer.patternSlot.stripSlot, .layer.strip.patternSlot'));
       if(!strips.length) return;
+      var baseZ=stripBaseZ(stage,strips);
       var vertical=strips.filter(function(el){return !el.classList.contains('horizontalStash');});
       var horizontal=strips.filter(function(el){return el.classList.contains('horizontalStash');});
 
       /* Left/top pieces paint above the following pieces, allowing their shadow to remain visible. */
       vertical.sort(function(a,b){return (parseFloat(a.style.left)||0)-(parseFloat(b.style.left)||0);});
-      vertical.forEach(function(el,i){el.style.zIndex=String(7000 + vertical.length - i);});
+      vertical.forEach(function(el,i){el.style.zIndex=String(baseZ - i);});
       horizontal.sort(function(a,b){return (parseFloat(a.style.top)||0)-(parseFloat(b.style.top)||0);});
-      horizontal.forEach(function(el,i){el.style.zIndex=String(7000 + horizontal.length - i);});
+      horizontal.forEach(function(el,i){el.style.zIndex=String(baseZ - i);});
     });
   }
 
@@ -28959,9 +28982,30 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   if(window.__PPAGES_V183E_OVERLAP_SHADOW__) return;
   window.__PPAGES_V183E_OVERLAP_SHADOW__=true;
 
+  // NOTE(consolidation): see the matching fix in ppages-v183d-visible-strip-
+  // shadow-js - this had the same bug, hardcoding strip z-index to a
+  // constant 8200+ range instead of anchoring to the strips' real data z,
+  // permanently putting strips above any other layer on the page.
+  function stripBaseZ(stage,strips){
+    var baseZ=0;
+    try{
+      var block=stage.closest('.pageBlock');
+      var pi=block?+block.dataset.page:NaN;
+      var st=(typeof state!=='undefined'?state:window.state);
+      var p=st&&st.pages?st.pages[pi]:null;
+      if(p && Array.isArray(p.layers)){
+        strips.forEach(function(el){
+          var l=p.layers.find(function(x){return x&&String(x.id)===String(el.dataset.id);});
+          if(l && typeof l.z==='number' && l.z>baseZ) baseZ=l.z;
+        });
+      }
+    }catch(e){}
+    return baseZ;
+  }
   function applyOverlap(){
     document.querySelectorAll('.stage').forEach(function(stage){
       var all=Array.from(stage.querySelectorAll('.layer.patternSlot.stripSlot, .layer.strip.patternSlot'));
+      var baseZ=stripBaseZ(stage,all);
       var vertical=all.filter(function(el){return !el.classList.contains('horizontalStash');})
         .sort(function(a,b){return (parseFloat(a.style.left)||0)-(parseFloat(b.style.left)||0);});
       var horizontal=all.filter(function(el){return el.classList.contains('horizontalStash');})
@@ -28979,7 +29023,7 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
           el.classList.add('ppOverlapVertical');
         }
         /* Left pieces sit above the following pieces so their cast edge is visible. */
-        el.style.zIndex=String(8200 + vertical.length - i);
+        el.style.zIndex=String(baseZ - i);
       });
 
       horizontal.forEach(function(el,i){
@@ -28993,7 +29037,7 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
           }
           el.classList.add('ppOverlapHorizontal');
         }
-        el.style.zIndex=String(8200 + horizontal.length - i);
+        el.style.zIndex=String(baseZ - i);
       });
     });
   }
