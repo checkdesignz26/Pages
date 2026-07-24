@@ -15306,36 +15306,65 @@ document.addEventListener('click', function(e){
     if(txt && !txt.includes('No Etsy Assistant text generated yet.')) files.push({name:'EtsyAssistant.txt', blob:new Blob([txt],{type:'text/plain;charset=utf-8'})});
     const zip=await makeZip(files); const a=document.createElement('a'); a.href=URL.createObjectURL(zip); a.download='pattern-pages-export.zip'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   };
+  // NOTE(consolidation): downloadPstudio used to ask for a filename via the
+  // native prompt() before triggering the download. On iOS/iPadOS Safari, a
+  // blocking native dialog (prompt/confirm/alert) shown mid-click-handler
+  // can invalidate the "trusted user gesture" the original tap established,
+  // so the a.click() download that follows can be SILENTLY dropped - no
+  // error, the code runs fine, the file just never actually saves. This
+  // matches exactly what was reported (renamed save "disappearing"). Fixed
+  // by using a custom in-page dialog instead of prompt(): its own "Save"
+  // button click is a fresh, genuine user gesture, so the download it
+  // triggers is never at risk of being downgraded.
+  function ppShowSaveAsDialog(defaultName, onConfirm){
+    const old=document.getElementById('ppSaveAsOverlay'); if(old)old.remove();
+    const overlay=document.createElement('div');
+    overlay.id='ppSaveAsOverlay';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(10,8,18,.55);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:20px;';
+    const box=document.createElement('div');
+    box.style.cssText='background:#1c1626;border:1px solid rgba(255,232,248,.18);border-radius:16px;padding:20px;max-width:360px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.5);';
+    box.innerHTML='<div style="color:#fff8fb;font:900 15px system-ui;margin-bottom:10px;">Save as</div>'+
+      '<input id="ppSaveAsInput" type="text" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,232,248,.24);background:rgba(255,255,255,.06);color:#fff8fb;font-size:15px;margin-bottom:14px;" />'+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
+      '<button type="button" id="ppSaveAsCancel" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:#fff8fb;font-weight:700;">Cancel</button>'+
+      '<button type="button" id="ppSaveAsConfirm" style="padding:9px 16px;border-radius:10px;border:0;background:linear-gradient(135deg,#9b6bff,#ff8ed6);color:#fff;font-weight:800;">Save</button>'+
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    const input=box.querySelector('#ppSaveAsInput');
+    input.value=defaultName;
+    input.focus();
+    input.select();
+    function close(){ overlay.remove(); }
+    box.querySelector('#ppSaveAsCancel').addEventListener('click',close);
+    overlay.addEventListener('click',e=>{ if(e.target===overlay)close(); });
+    function confirm(){ const v=input.value; close(); onConfirm(v); }
+    box.querySelector('#ppSaveAsConfirm').addEventListener('click',confirm);
+    input.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();confirm();} else if(e.key==='Escape'){close();} });
+  }
   const oldDownloadPstudio=window.downloadPstudio;
   window.downloadPstudio=function(){
-    // NOTE(consolidation): this used to give zero feedback on success -
-    // for a large project (tens of MB is common with several full-size
-    // images) the actual browser download can take a moment and Safari's
-    // download indicator is easy to miss, so it silently looked like
-    // nothing happened even though the file saved correctly. Now confirms
-    // with the file size, and warns loudly if building the file itself
-    // fails instead of failing silently.
-    try{
-      const defaultName=(window.ppLastSavedName||'pattern-pages-project');
-      let name=prompt('Save as:',defaultName);
-      if(name===null)return; // cancelled
-      name=name.trim().replace(/[\\/:*?"<>|]/g,'').replace(/\.ppages$/i,'');
-      if(!name)name='pattern-pages-project';
-      window.ppLastSavedName=name;
-      const projectData=ppDedupeAssetsForSave(makeProjectSnapshot());
-      const json=JSON.stringify(projectData,null,2);
-      const blob=new Blob([json],{type:'application/x-ppages'});
-      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+'.ppages'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-      const mb=(blob.size/1024/1024).toFixed(1);
-      // Safari may prompt to confirm the save location instead of saving
-      // straight to Downloads, especially for a larger file - flag that so
-      // it doesn't look like nothing happened while waiting on that prompt.
-      showAutoSaveNotice('Saved ('+mb+' MB) · check for a Safari download prompt');
-      setStatus('Project saved · '+mb+' MB. If Safari asks where to save it, confirm there to finish.');
-    }catch(err){
-      console.error('downloadPstudio failed',err);
-      alert('Could not save the .ppages file: '+(err&&err.message||err));
-    }
+    const defaultName=(window.ppLastSavedName||'pattern-pages-project');
+    ppShowSaveAsDialog(defaultName,function(rawName){
+      try{
+        let name=String(rawName||'').trim().replace(/[\\/:*?"<>|]/g,'').replace(/\.ppages$/i,'');
+        if(!name)name='pattern-pages-project';
+        window.ppLastSavedName=name;
+        const projectData=ppDedupeAssetsForSave(makeProjectSnapshot());
+        const json=JSON.stringify(projectData,null,2);
+        const blob=new Blob([json],{type:'application/x-ppages'});
+        const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+'.ppages'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+        const mb=(blob.size/1024/1024).toFixed(1);
+        // Safari may prompt to confirm the save location instead of saving
+        // straight to Downloads, especially for a larger file - flag that so
+        // it doesn't look like nothing happened while waiting on that prompt.
+        showAutoSaveNotice('Saved ('+mb+' MB) · check for a Safari download prompt');
+        setStatus('Project saved · '+mb+' MB. If Safari asks where to save it, confirm there to finish.');
+      }catch(err){
+        console.error('downloadPstudio failed',err);
+        alert('Could not save the .ppages file: '+(err&&err.message||err));
+      }
+    });
   };
   const oldLoadPstudioFile=window.loadPstudioFile;
   window.loadPstudioFile=function(event){
