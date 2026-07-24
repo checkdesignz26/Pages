@@ -1,0 +1,14 @@
+{
+  "name": "pattern-pages",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pattern Pages - single-file HTML design tool. This package.json exists only for the dev/test tooling; the shipped product is index.html, deployed as-is with no build step.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1"
+  }
+}
