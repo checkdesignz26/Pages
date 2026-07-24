@@ -17028,6 +17028,7 @@ function makeNumberedList(){
         p.layers.push(makeLayer('card',{name:slotName(j),x:startX2+cc*(squareW+gap2),y:startY2+rr*(squareH+gap2),w:squareW,h:squareH,z:z()+j,src:null,fit:'cover',patternSlot:true,slotShape:s==='circles'?'circle':'square',generatedPatternLayout:true}));
       }
     }
+    try{ if(typeof window.ppNormalizeShowcaseZ==='function') window.ppNormalizeShowcaseZ(p); }catch(e){}
     var st=getState(); if(st) st.selected=null;
     redraw();
   };
@@ -24568,6 +24569,7 @@ document.addEventListener('DOMContentLoaded',function(){
         stackIndex:i
       }));
     }
+    try{ if(typeof window.ppNormalizeShowcaseZ==='function') window.ppNormalizeShowcaseZ(p); }catch(e){}
     var s=window.state;
     if(s)s.selected=null;
     var cc=document.getElementById('cardCount'),cd=document.getElementById('cardCountDisplay');
@@ -24689,6 +24691,7 @@ function makeVerticalStack(count,preserved){
       stackIndex:i
     }));
   }
+  try{ if(typeof window.ppNormalizeShowcaseZ==='function') window.ppNormalizeShowcaseZ(p); }catch(e){}
   if(typeof state!=='undefined') state.selected=null;
   if(typeof render==='function') render();
   else if(typeof renderAll==='function') renderAll();
@@ -24726,6 +24729,7 @@ window.relayoutGeneratedStripsPreserveFills=function(){
       var kh=keepH[j]||{};
       p.layers.push(layer('strip',{name:'fabric stash '+(j+1),x:marginX,y:startY+j*step,w:100-marginX*2,h:stripH,z:zBase+(countH-j),src:kh.src||null,fit:kh.fit||'cover',patternSlot:true,slotShape:'strip',stripDirection:'horizontal',horizontalStash:true,generatedPatternLayout:true,locked:true,lockedStrip:true,noResize:true,noDelete:true,stackIndex:j}));
     }
+    try{ if(typeof window.ppNormalizeShowcaseZ==='function') window.ppNormalizeShowcaseZ(p); }catch(e){}
     if(typeof state!=='undefined') state.selected=null;
     if(typeof render==='function') render();
     if(typeof autosaveSoon==='function') autosaveSoon();
@@ -29047,6 +29051,31 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     var w3=wrapOne('createMockupPage',MOCKUP_EDGE); if(w3){ try{createMockupPage=w3;}catch(e){} }
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',install,{once:true}); else install();
+})();
+</script>
+
+<!-- BUGFIX: pattern showcase generation was jumping above pre-existing decoration layers.
+     generatePatternShowcaseLayout/setCards/relayoutGeneratedStripsPreserveFills each compute
+     the new showcase's z from nextZ() (the current highest z + 1), so generating or
+     regenerating a showcase always puts it on top of whatever already exists on the page -
+     including a banner/title added beforehand, which then renders hidden behind the showcase.
+     window.ppNormalizeShowcaseZ() re-numbers z so generatedPatternLayout layers always sort
+     to the bottom, while every other layer keeps its existing relative stacking order shifted
+     above them. Called from each showcase generator right before its own render() call. -->
+<script id="pp-showcase-behind-decorations-fix-js">
+(function(){
+  'use strict';
+  window.ppNormalizeShowcaseZ = function(p){
+    p = p || (typeof current === 'function' ? current() : null);
+    if(!p || !Array.isArray(p.layers)) return;
+    var showcase = [], others = [];
+    p.layers.forEach(function(l){ (l && l.generatedPatternLayout ? showcase : others).push(l); });
+    showcase.sort(function(a,b){ return (a.z||0)-(b.z||0); });
+    others.sort(function(a,b){ return (a.z||0)-(b.z||0); });
+    var z = 1;
+    showcase.forEach(function(l){ l.z = z++; });
+    others.forEach(function(l){ l.z = z++; });
+  };
 })();
 </script>
 
