@@ -27150,6 +27150,20 @@ else install();
     try{renderCleanLayers();renderCleanFrames();}catch(e){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(boot,180);}); else setTimeout(boot,180);
+
+  // NOTE(consolidation): a later generation (v170) needs to reuse this
+  // script's real image-thumbnail generator (thumbFor/ensureCleanThumb) as
+  // its fallback, since v170's own rowForLayer only produces a plain
+  // ▧/T/▣ placeholder glyph with no actual image. v170 used to grab this by
+  // calling the old window.rowForLayer and pulling a thumbnail node back
+  // out of it, but this script never actually exposed itself as
+  // window.rowForLayer (that name only ever pointed at the much older base
+  // rowForLayer, which has a different DOM shape) - so that reuse path
+  // silently always fell through to the no-image placeholder, for every
+  // layer, including mock-up layers. Exposing the real generator directly
+  // fixes it without resurrecting renderCleanLayers/rowFor as page-level
+  // renderers (both fully superseded and correctly left removed).
+  window.__ppV167ThumbFor=thumbFor;
 })();
 </script>
 
@@ -27318,16 +27332,16 @@ else install();
   try{ selectLayer=window.selectLayer; }catch(e){}
 
   function makeThumb(l){
-    if(typeof window.rowForLayer==='function' && window.rowForLayer.__ppV170Internal) return null;
-    // Reuse the v167 clean thumbnail maker indirectly by temporarily asking the old row to build one, if available.
+    // NOTE(consolidation): this used to try reusing the old window.rowForLayer
+    // to fish a thumbnail node back out of it, but window.rowForLayer never
+    // actually pointed at the v167 clean-thumbnail generation (only the
+    // much older base rowForLayer, a different DOM shape) - so it always
+    // silently fell through to the no-image placeholder below, for every
+    // layer. v167 now exposes its real generator directly; use that.
     try{
-      if(window.__PP_CLEAN_THUMBS_V167__ && typeof window.rowForLayer==='function'){
-        var old=window.__ppV170OldRowForLayer || window.rowForLayer;
-        if(old && !old.__ppV170){
-          var tmp=old(l,'all');
-          var th=tmp && tmp.querySelector('.ppCleanLayerThumb');
-          if(th)return th.cloneNode(true);
-        }
+      if(typeof window.__ppV167ThumbFor==='function'){
+        var th=window.__ppV167ThumbFor(l);
+        if(th)return th;
       }
     }catch(e){}
     var span=document.createElement('span');
