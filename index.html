@@ -3183,18 +3183,9 @@ function toggleFramePicker(){
 // and confirmed nothing calls the bare framePath/frameSvgMarkup identifiers
 // before that generation's synchronous page-load reassignment - removed as
 // dead code.
-function addPatternFrame(shape='flower'){
- save();
- const p=current();
- const isTall=shape==='arch';
- const isLabel=shape==='label';
- const w=isLabel?52:(isTall?36:34);
- const h=isLabel?24:(isTall?48:34*(p.w/p.h));
- let l=layer('frame',{name:`${shape} frame`,x:(100-w)/2,y:(100-h)/2,w,h,z:nextZ(),src:getSelectedPattern(),fit:'cover',patternSlot:true,slotShape:'frame',frameShape:shape,generatedPatternLayout:false});
- p.layers.push(l);
- state.selected=l.id;
- render();
-}
+// NOTE(consolidation): the base addPatternFrame(shape) that lived here was removed - fully
+// superseded by later window.addPatternFrame generations (confirmed via a fresh scan: the
+// last generation fully replaces with no fallback to a previous version), so this was dead code.
 function addCustomFrameFromPNG(e){
  const file=e.target.files && e.target.files[0];
  if(!file)return;
@@ -3211,16 +3202,9 @@ function addCustomFrameFromPNG(e){
  r.readAsDataURL(file);
 }
 
-function fillSelectedFrame(){
- let l=getLayer();
- if(!l || !(['strip','card','pattern','frame'].includes(l.type) || l.patternSlot)){alert('Select a layout slot or frame on the canvas first.');return;}
- let src=getSelectedPattern();
- if(!src){alert('Choose a pattern from the Pattern Tray first.');return;}
- save();
- l.src=src;
- l.fit='cover';
- render();
-}
+// NOTE(consolidation): the base fillSelectedFrame() that lived here was removed - fully
+// superseded by later window.fillSelectedFrame generations (confirmed via a fresh scan: the
+// last generation fully replaces with no fallback to a previous version), so this was dead code.
 function fillLayerWithPattern(layerId, patternIndex, pageIndex=state.selectedPage){
  let p=state.pages[pageIndex]; if(!p)return;
  let l=p.layers.find(x=>x.id===layerId); if(!l)return;
@@ -15415,52 +15399,6 @@ function makeNumberedList(){
     return null;
   }
 
-  function renderApp(){ try{ if(typeof render === "function") render(); }catch(e){} }
-  function saveUndo(){ try{ if(typeof save === "function") save(); }catch(e){} }
-
-  function nextZValue(){
-    try{ if(typeof nextZ === "function") return nextZ(); }catch(e){}
-    const p = currentPage();
-    if(!p || !p.layers) return 99;
-    return Math.max(0, ...p.layers.map(l => Number(l.z)||0)) + 1;
-  }
-
-  function makeLayerObj(type, props){
-    try{ if(typeof layer === "function") return layer(type, props); }catch(e){}
-    return Object.assign({
-      id:"l"+Math.random().toString(36).slice(2,10),
-      type:type, name:type, x:20, y:20, w:40, h:40, r:0, opacity:1, z:nextZValue(), src:null, fit:"cover"
-    }, props || {});
-  }
-
-  function selectedPatternSrc(){
-    try{
-      if(typeof getSelectedPattern === "function"){
-        const p = getSelectedPattern();
-        if(p) return p;
-      }
-    }catch(e){}
-
-    try{
-      const s = S();
-      if(s && s.trays && s.trays.pattern && s.trays.pattern.length){
-        const idx = s.selectedTray && Number.isInteger(s.selectedTray.pattern) ? s.selectedTray.pattern : 0;
-        if(s.trays.pattern[idx] && s.trays.pattern[idx].src) return s.trays.pattern[idx].src;
-        if(s.trays.pattern[0] && s.trays.pattern[0].src) return s.trays.pattern[0].src;
-      }
-    }catch(e){}
-
-    const im = document.querySelector("#patternTray .thumb.selected img, #patternTray .thumb img");
-    return im ? im.src : null;
-  }
-
-  function selectedLayer(){
-    const p = currentPage();
-    const s = S();
-    if(!p || !p.layers || !s) return null;
-    return p.layers.find(l => l.id === s.selected) || null;
-  }
-
   function patchHeartDom(id){
     if(!id) return;
     try{
@@ -15473,66 +15411,10 @@ function makeNumberedList(){
     }catch(e){}
   }
 
-  function addHeartFrame(){
-    saveUndo();
-    const p = currentPage();
-    if(!p || !p.layers) return;
-
-    const l = makeLayerObj("image", {
-      name:"heart frame",
-      type:"image",
-      kind:"frame",
-      isFrame:true,
-      frameShape:"heart",
-      src:null,
-      fit:"cover",
-      x:31,
-      y:18,
-      w:38,
-      h:38,
-      z:nextZValue(),
-      className:"heartFrame frame patternSlot"
-    });
-
-    p.layers.push(l);
-    const s = S();
-    if(s) s.selected = l.id;
-    renderApp();
-    setTimeout(function(){ patchHeartDom(l.id); }, 60);
-  }
-
-  if(!window.__heartOldAddPatternFrame && typeof window.addPatternFrame === "function"){
-    window.__heartOldAddPatternFrame = window.addPatternFrame;
-  }
-
-  window.addPatternFrame = function(shape){
-    if(shape === "heart") return addHeartFrame();
-    if(window.__heartOldAddPatternFrame) return window.__heartOldAddPatternFrame(shape);
-  };
-
-  const oldFill = typeof window.fillSelectedFrame === "function" ? window.fillSelectedFrame : null;
-
-  window.fillSelectedFrame = function(){
-    const l = selectedLayer();
-    const src = selectedPatternSrc();
-
-    if(l && (l.frameShape === "heart" || l.isFrame || (l.className && l.className.indexOf("heartFrame") >= 0))){
-      if(!src){
-        alert("Choose a pattern from the Pattern Tray first.");
-        return;
-      }
-      saveUndo();
-      l.src = src;
-      l.fit = "cover";
-      l.filledSlot = true;
-      l.className = ((l.className || "") + " heartFrame frame patternSlot filledSlot").trim();
-      renderApp();
-      setTimeout(function(){ patchHeartDom(l.id); }, 60);
-      return;
-    }
-
-    if(oldFill) return oldFill();
-  };
+  /* NOTE(consolidation): addHeartFrame(), the addPatternFrame wrap, and the fillSelectedFrame
+     wrap that lived here were removed because both window.addPatternFrame and
+     window.fillSelectedFrame are fully replaced later (no fallback to a previous version),
+     so none of this ever ran. */
 
   function patchAll(){
     const p = currentPage();
@@ -16049,32 +15931,6 @@ function makeNumberedList(){
 (function(){
   function S(){ return window.state || null; }
 
-  function currentPage(){
-    try{ if(typeof current === "function") return current(); }catch(e){}
-    const s = S();
-    if(s && s.pages) return s.pages[s.selectedPage || 0];
-    return null;
-  }
-
-  function renderApp(){ try{ if(typeof render === "function") render(); }catch(e){} }
-  function saveUndo(){ try{ if(typeof save === "function") save(); }catch(e){} }
-
-  function nextZValue(){
-    try{ if(typeof nextZ === "function") return nextZ(); }catch(e){}
-    const p = currentPage();
-    if(!p || !p.layers) return 99;
-    return Math.max(0, ...p.layers.map(l => Number(l.z)||0)) + 1;
-  }
-
-  function makeLayerObj(type, props){
-    try{ if(typeof layer === "function") return layer(type, props); }catch(e){}
-    return Object.assign({
-      id:"l"+Math.random().toString(36).slice(2,10),
-      type:type, name:type, src:null, fit:"cover",
-      x:30,y:18,w:38,h:38,r:0,opacity:1,z:nextZValue()
-    }, props || {});
-  }
-
   function classForShape(shape){
     if(shape === "flower") return "builtinFrame flowerFrame frame patternSlot";
     if(shape === "heart") return "builtinFrame heartFrame frame patternSlot";
@@ -16085,50 +15941,9 @@ function makeNumberedList(){
     return "builtinFrame frame patternSlot";
   }
 
-  function shapeLabel(shape){
-    return (shape || "frame") + " frame";
-  }
-
-  function addBuiltinFrame(shape){
-    saveUndo();
-    const p = currentPage();
-    if(!p || !p.layers) return;
-
-    const isLabel = shape === "label";
-    const isArch = shape === "arch";
-    const l = makeLayerObj("image", {
-      name:shapeLabel(shape),
-      type:"image",
-      kind:"frame",
-      isFrame:true,
-      frameShape:shape,
-      src:null,
-      fit:"cover",
-      x:isLabel ? 30 : 34,
-      y:isLabel ? 30 : 18,
-      w:isLabel ? 40 : (isArch ? 32 : 34),
-      h:isLabel ? 14 : (isArch ? 42 : 34),
-      z:nextZValue(),
-      className:classForShape(shape)
-    });
-
-    p.layers.push(l);
-    const s = S();
-    if(s) s.selected = l.id;
-    renderApp();
-    setTimeout(patchFrameDom, 80);
-  }
-
-  if(!window.__builtinFrameOldAddPatternFrame && typeof window.addPatternFrame === "function"){
-    window.__builtinFrameOldAddPatternFrame = window.addPatternFrame;
-  }
-
-  window.addPatternFrame = function(shape){
-    if(["flower","heart","star","circle","arch","label"].includes(shape)){
-      return addBuiltinFrame(shape);
-    }
-    if(window.__builtinFrameOldAddPatternFrame) return window.__builtinFrameOldAddPatternFrame(shape);
-  };
+  /* NOTE(consolidation): addBuiltinFrame() and the addPatternFrame wrap that lived here were
+     removed because window.addPatternFrame is fully replaced later (no fallback to a previous
+     version), so this shape dispatch never ran. */
 
   function patchFrameDom(){
     const s = S();
@@ -16154,55 +15969,9 @@ function makeNumberedList(){
     });
   }
 
-  const oldFill = typeof window.fillSelectedFrame === "function" ? window.fillSelectedFrame : null;
-
-  function selectedPatternSrc(){
-    try{
-      if(typeof getSelectedPattern === "function"){
-        const p = getSelectedPattern();
-        if(p) return p;
-      }
-    }catch(e){}
-    try{
-      const s = S();
-      if(s && s.trays && s.trays.pattern && s.trays.pattern.length){
-        const idx = s.selectedTray && Number.isInteger(s.selectedTray.pattern) ? s.selectedTray.pattern : 0;
-        return (s.trays.pattern[idx] && s.trays.pattern[idx].src) || (s.trays.pattern[0] && s.trays.pattern[0].src);
-      }
-    }catch(e){}
-    const im = document.querySelector("#patternTray .thumb.selected img, #patternTray .thumb img");
-    return im ? im.src : null;
-  }
-
-  function selectedLayer(){
-    const s = S();
-    const p = currentPage();
-    if(!s || !p || !p.layers) return null;
-    return p.layers.find(l => l.id === s.selected);
-  }
-
-  window.fillSelectedFrame = function(){
-    const l = selectedLayer();
-    const src = selectedPatternSrc();
-
-    if(l && (l.isFrame || l.frameShape || (l.className && /builtinFrame|patternSlot|frame/.test(l.className)))){
-      if(!src){
-        alert("Choose a pattern from the Pattern Tray first.");
-        return;
-      }
-      saveUndo();
-      l.src = src;
-      l.fit = "cover";
-      l.filledSlot = true;
-      l.isFrame = true;
-      l.className = ((l.className || "") + " builtinFrame frame patternSlot filledSlot " + (l.frameShape ? l.frameShape+"Frame" : "")).trim();
-      renderApp();
-      setTimeout(patchFrameDom, 80);
-      return;
-    }
-
-    if(oldFill) return oldFill();
-  };
+  /* NOTE(consolidation): the fillSelectedFrame wrap that lived here was removed because
+     window.fillSelectedFrame is fully replaced later (no fallback to a previous version),
+     so this wrap never ran. */
 
   document.addEventListener("click", function(){
     setTimeout(patchFrameDom, 80);
