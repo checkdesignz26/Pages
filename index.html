@@ -15042,7 +15042,66 @@ document.addEventListener('click', function(e){
       savedAt:new Date().toISOString()
     };
   }
+  // NOTE(consolidation): filling several layers with the same uploaded
+  // pattern (a very common workflow) stores that image's full data twice
+  // over - once in the pattern tray, once per layer it's filled into - so
+  // a project reusing patterns across a few layers can be several times
+  // larger than the actual unique image data it contains. These dedupe
+  // identical embedded images down to one copy (referenced by id) when
+  // building a .ppages file, and transparently expand them back on load.
+  // Deliberately NOT applied to the frequent background auto-save (every
+  // ~4.5s) - the deep walk + hashing cost is fine for an explicit,
+  // once-in-a-while user-triggered save, not for a hot background path.
+  function ppDedupeAssetsForSave(snapshot){
+    const poolMap=new Map(); let nextId=1;
+    function walk(node){
+      if(node==null) return node;
+      if(Array.isArray(node)) return node.map(walk);
+      if(typeof node==='object'){
+        const out={};
+        for(const k in node){ if(Object.prototype.hasOwnProperty.call(node,k)) out[k]=walk(node[k]); }
+        return out;
+      }
+      if(typeof node==='string' && node.length>800 && node.slice(0,5)==='data:'){
+        let id=poolMap.get(node);
+        if(id===undefined){ id='a'+(nextId++); poolMap.set(node,id); }
+        return 'ppasset:'+id;
+      }
+      return node;
+    }
+    const deduped=walk(snapshot);
+    const pool={};
+    poolMap.forEach((id,value)=>{ pool[id]=value; });
+    deduped.assetPool=pool;
+    return deduped;
+  }
+  function ppExpandAssetsFromLoad(data){
+    if(!data || !data.assetPool) return data;
+    const pool=data.assetPool;
+    function walk(node){
+      if(node==null) return node;
+      if(Array.isArray(node)) return node.map(walk);
+      if(typeof node==='object'){
+        const out={};
+        for(const k in node){ if(Object.prototype.hasOwnProperty.call(node,k)) out[k]=walk(node[k]); }
+        return out;
+      }
+      if(typeof node==='string' && node.length<40 && node.slice(0,8)==='ppasset:'){
+        const id=node.slice(8);
+        return Object.prototype.hasOwnProperty.call(pool,id) ? pool[id] : node;
+      }
+      return node;
+    }
+    const expanded=walk(data);
+    delete expanded.assetPool;
+    return expanded;
+  }
+  // Exposed globally: later loadPstudioFile generations (full replacements,
+  // not wraps) have their own independent parse/restore pipeline and don't
+  // call applyProjectSnapshot at all, so they need to reach this directly.
+  window.ppExpandAssetsFromLoad=ppExpandAssetsFromLoad;
   function applyProjectSnapshot(data, source){
+    data=ppExpandAssetsFromLoad(data);
     const st = (typeof state !== 'undefined' && state) ? state : (window.state || null);
     if(!data || !data.pages || !st)return false;
     state.pages=data.pages; state.selectedPage=typeof data.selectedPage==='number'?data.selectedPage:0; state.selected=null;
@@ -15263,7 +15322,7 @@ document.addEventListener('click', function(e){
       name=name.trim().replace(/[\\/:*?"<>|]/g,'').replace(/\.ppages$/i,'');
       if(!name)name='pattern-pages-project';
       window.ppLastSavedName=name;
-      const projectData=makeProjectSnapshot();
+      const projectData=ppDedupeAssetsForSave(makeProjectSnapshot());
       const json=JSON.stringify(projectData,null,2);
       const blob=new Blob([json],{type:'application/x-ppages'});
       const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+'.ppages'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
@@ -27951,6 +28010,7 @@ else install();
     return null;
   }
   function cleanProject(data){
+    if(typeof window.ppExpandAssetsFromLoad==='function') data=window.ppExpandAssetsFromLoad(data);
     var pages=getPages(data);
     if(!pages) throw new Error('No pages were found in this project file.');
     pages=pages.map(cleanPageForImport).filter(Boolean);
@@ -28327,6 +28387,7 @@ else install();
     return l;
   }
   function cleanProject(data){
+    if(typeof window.ppExpandAssetsFromLoad==='function') data=window.ppExpandAssetsFromLoad(data);
     var pages=getPages(data); if(!pages) throw new Error('No pages found in this .ppages file.');
     pages=pages.map(function(p,i){var t=basePage(); p=(p&&typeof p==='object')?Object.assign({},p):{}; p.type=p.type||t.type||'listing'; p.w=Number(p.w||p.width||t.w||3000)||3000; p.h=Number(p.h||p.height||t.h||2250)||2250; p.layers=arr(p.layers||p.elements||p.items).map(cleanLayer); return p;});
     if(!pages.length) pages=[basePage()];
