@@ -15352,7 +15352,14 @@ document.addEventListener('click', function(e){
         window.ppLastSavedName=name;
         const projectData=ppDedupeAssetsForSave(makeProjectSnapshot());
         const json=JSON.stringify(projectData,null,2);
-        const blob=new Blob([json],{type:'application/x-ppages'});
+        // NOTE(consolidation): 'application/x-ppages' is a made-up MIME
+        // type Safari/iPadOS has no download handler registered for, so
+        // instead of treating the tap as "save this file" it opens an
+        // interstitial preview/share flow requiring an extra manual "Save
+        // to Files" tap. 'application/octet-stream' is the standard signal
+        // browsers use to mean "generic binary data, don't try to preview
+        // it, just save it" - more consistently triggers a direct download.
+        const blob=new Blob([json],{type:'application/octet-stream'});
         const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+'.ppages'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
         const mb=(blob.size/1024/1024).toFixed(1);
         // Safari may prompt to confirm the save location instead of saving
