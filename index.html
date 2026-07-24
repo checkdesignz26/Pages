@@ -14603,10 +14603,9 @@ aside:last-of-type .shadowSliderBox{
   if(typeof oldSync==='function'){
     window.syncControls=function(){oldSync.apply(this,arguments); updateLinkHint();};
   }
-  const oldSelect=window.selectLayer;
-  if(typeof oldSelect==='function'){
-    window.selectLayer=function(id){oldSelect.apply(this,arguments); setTimeout(updateLinkHint,0);};
-  }
+  // NOTE(consolidation): a selectLayer wrap that lived here was removed - fully superseded
+  // by later generations (confirmed via a fresh scan: the final selectLayer generation fully
+  // replaces with no fallback to a previous version), so this was dead code.
 
   // Better wrapped text renderer for PDF/PNG canvas export, including multi-line instruction sheets.
   function drawWrappedText(ctx,text,x,y,maxWidth,lineHeight){
@@ -21996,75 +21995,13 @@ window.addEventListener('DOMContentLoaded',function(){
      highlights it immediately, syncs controls, and scrolls the selected object into view. -->
 <script>
 (function(){
-  function ppCssEscape(v){
-    v=String(v||'');
-    if(window.CSS && typeof CSS.escape==='function') return CSS.escape(v);
-    return v.replace(/[^a-zA-Z0-9_-]/g,function(ch){return '\\'+ch;});
-  }
-  function ppState(){ return window.state || null; }
-  function ppPages(){ const s=ppState(); return s && Array.isArray(s.pages) ? s.pages : []; }
-  function findLayerPageIndex(id){
-    const pages=ppPages();
-    for(let i=0;i<pages.length;i++){
-      if((pages[i].layers||[]).some(l=>String(l.id)===String(id))) return i;
-    }
-    return -1;
-  }
-  function findLayer(id,pi){
-    const pages=ppPages();
-    const p=pages[pi];
-    return p && (p.layers||[]).find(l=>String(l.id)===String(id));
-  }
-  function paintSelectedLayerNow(id){
-    const esc=ppCssEscape(id);
-    document.querySelectorAll('.layer.selected').forEach(el=>{
-      if(el.dataset.id!==String(id)) el.classList.remove('selected');
-    });
-    document.querySelectorAll('.layerItem.active').forEach(el=>{
-      if(el.dataset.id!==String(id)) el.classList.remove('active');
-    });
-    const layerEl=document.querySelector('.stage .layer[data-id="'+esc+'"]');
-    if(layerEl){
-      layerEl.classList.add('selected');
-      // iPad-friendly: when a layer is selected from the list, bring the canvas object into view.
-      try{ layerEl.scrollIntoView({block:'center',inline:'center',behavior:'smooth'}); }catch(e){ try{layerEl.scrollIntoView(false);}catch(_){} }
-    }
-    const row=document.querySelector('#layerList .layerItem[data-id="'+esc+'"]');
-    if(row) row.classList.add('active');
-  }
-  function refreshAfterSelect(id){
-    if(typeof window.render==='function') window.render();
-    else{
-      if(typeof window.renderPages==='function') window.renderPages();
-      if(typeof window.renderPageList==='function') window.renderPageList();
-      if(typeof window.renderLayers==='function') window.renderLayers();
-      if(typeof window.renderFrameList==='function') window.renderFrameList();
-      if(typeof window.syncControls==='function') window.syncControls();
-    }
-    setTimeout(function(){ paintSelectedLayerNow(id); },0);
-    requestAnimationFrame(function(){ paintSelectedLayerNow(id); });
-  }
-  const previousSelectLayer=window.selectLayer;
-  window.selectLayer=function(id){
-    const s=ppState();
-    if(!s || id==null) return previousSelectLayer ? previousSelectLayer.apply(this,arguments) : undefined;
-    const pi=findLayerPageIndex(id);
-    if(pi<0) return previousSelectLayer ? previousSelectLayer.apply(this,arguments) : undefined;
-    const l=findLayer(id,pi);
-    if(l && l.customMockup){
-      s.selected=null;
-      if(typeof window.renderLayers==='function') window.renderLayers();
-      if(typeof window.syncControls==='function') window.syncControls();
-      return;
-    }
-    s.selectedPage=pi;
-    s.selected=id;
-    s.lastDeselected=null;
-    // A normal row click should be a clean single selection, not leave old multi-select ghosts behind.
-    s.layerMultiSelect=false;
-    s.selectedLayerIds=[];
-    refreshAfterSelect(id);
-  };
+  // NOTE(consolidation): a window.selectLayer wrap and its helper functions (ppCssEscape/
+  // ppState/ppPages/findLayerPageIndex/findLayer/paintSelectedLayerNow/refreshAfterSelect)
+  // that lived here were removed - fully superseded by later generations (confirmed via a
+  // fresh scan: the final selectLayer generation fully replaces with no fallback to a
+  // previous version), so they were dead code. The click listener below still calls
+  // window.selectLayer(id), which now resolves directly to that live final generation, so
+  // it remains a working (if now redundant) safety net and stays untouched.
 
   // Safety net: some older inline buttons/row handlers stop propagation or re-render before CSS catches up.
   // Capture the layer-list tap first and route it through the repaired selector.
@@ -22126,42 +22063,10 @@ window.addEventListener('DOMContentLoaded',function(){
   if(window.__PP_CALM_LAYER_SELECTION_V171__) return;
   window.__PP_CALM_LAYER_SELECTION_V171__=true;
 
-  function S(){try{return state;}catch(e){return window.state||null;}}
-  function P(){try{return current();}catch(e){var s=S();return s&&s.pages?s.pages[s.selectedPage||0]:null;}}
-  function layers(){var p=P();return p&&Array.isArray(p.layers)?p.layers:[];}
-  function nameOf(l){
-    if(!l)return 'Layer';
-    if(l.name)return l.name;
-    if(l.type==='text'||l.type==='label')return String(l.text||l.type).replace(/\s+/g,' ').trim().slice(0,28)||'Text';
-    if(l.customMockup)return 'Custom mock-up';
-    if(l.patternSlot)return 'Pattern slot';
-    if(l.type==='frame')return ((l.frameShape||'frame')+' frame').replace(/\b\w/g,function(c){return c.toUpperCase();});
-    return String(l.type||'Layer').replace(/\b\w/g,function(c){return c.toUpperCase();});
-  }
-  function calmSelectLayer(id){
-    var s=S(), list=layers(), l=list.find(function(x){return x&&x.id===id;});
-    if(!s || !l)return;
-    if(l.customMockup){
-      s.selected=null;
-      try{renderPages();renderLayers();if(typeof renderFrameList==='function')renderFrameList();if(typeof syncControls==='function')syncControls();}catch(e){}
-      return;
-    }
-    s.selected=id;
-    if(Array.isArray(s.selectedLayerIds)) s.selectedLayerIds=[];
-    s.layerMultiSelect=false;
-    try{renderPages();}catch(e){}
-    try{renderLayers();}catch(e){}
-    try{if(typeof renderFrameList==='function')renderFrameList();}catch(e){}
-    try{if(typeof syncControls==='function')syncControls();}catch(e){}
-    /* No selected status message and no scrollIntoView/flash. The row outline + canvas outline are the feedback. */
-    try{
-      var hint=document.getElementById('selectedHint');
-      if(hint) hint.textContent=nameOf(l);
-    }catch(e){}
-  }
-  window.ppSelectLayerFromRow=calmSelectLayer;
-  window.selectLayer=calmSelectLayer;
-  try{selectLayer=calmSelectLayer;}catch(e){}
+  /* NOTE(consolidation): calmSelectLayer() and its selectLayer/ppSelectLayerFromRow
+     assignments that lived here were removed - fully superseded by later generations
+     (confirmed via a fresh scan: the final selectLayer generation fully replaces with no
+     fallback to a previous version), so this was dead code. */
 
   function hideGroupControls(){
     ['multiSelectBtn','groupSelectedBtn','ungroupBtn'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});
@@ -22288,13 +22193,10 @@ window.addEventListener('DOMContentLoaded',function(){
   window.__PP_TIGHT_PNG_BOUNDS_V174__=true;
 
   var trimCache=Object.create(null);
-  var activeJobs=Object.create(null);
-  var IMAGE_LAYER_TYPES={image:1,banner:1,overlay:1};
 
   function S(){try{return state;}catch(e){return window.state||null;}}
   function P(){try{return current();}catch(e){var s=S();return s&&s.pages?s.pages[s.selectedPage||0]:null;}}
   function layers(){var p=P();return p&&Array.isArray(p.layers)?p.layers:[];}
-  function isTightableLayer(l){return !!(l&&l.src&&IMAGE_LAYER_TYPES[l.type]&&!l.patternSlot&&!l.customMockup&&!l.__tightBoundsDone);}
   function renderSoft(){
     try{if(typeof renderPages==='function')renderPages();}catch(e){}
     try{if(typeof renderLayers==='function')renderLayers();}catch(e){}
@@ -22345,32 +22247,6 @@ window.addEventListener('DOMContentLoaded',function(){
     };
     img.onerror=function(){cb({src:src,trimmed:false,error:true});};
     img.src=src;
-  }
-
-  function tightenLayerBounds(l,after){
-    if(!isTightableLayer(l)){if(after)after(false);return;}
-    if(activeJobs[l.id]){if(after)after(false);return;}
-    activeJobs[l.id]=true;
-    var originalSrc=l.src;
-    trimTransparentSource(originalSrc,function(res){
-      delete activeJobs[l.id];
-      if(!res||l.src!==originalSrc){if(after)after(false);return;}
-      l.__tightBoundsDone=true;
-      if(res.trimmed&&res.w&&res.h&&res.bw&&res.bh){
-        // Preserve the visible artwork position on the page while shrinking the layer box.
-        var ox=+l.x||0, oy=+l.y||0, ow=+l.w||0, oh=+l.h||0;
-        l.x=ox + ow*(res.x/res.w);
-        l.y=oy + oh*(res.y/res.h);
-        l.w=Math.max(1, ow*(res.bw/res.w));
-        l.h=Math.max(1, oh*(res.bh/res.h));
-        l.src=res.src;
-        l.tightBounds=true;
-        l.fit='contain';
-        if(after)after(true); else renderSoft();
-      }else{
-        if(after)after(false);
-      }
-    });
   }
 
   function tightSrcForTrayItem(item,cb){
@@ -22488,23 +22364,12 @@ window.addEventListener('DOMContentLoaded',function(){
   };
   try{addUploadedImageLayer=window.addUploadedImageLayer;}catch(e){}
 
-  // When an older existing PNG layer is selected, tighten it once and keep the artwork visually in place.
-  var oldSelect=window.selectLayer;
-  function selectAndTighten(id){
-    var s=S();
-    var l=layers().find(function(x){return x&&String(x.id)===String(id);});
-    if(l&&isTightableLayer(l)){
-      tightenLayerBounds(l,function(changed){
-        if(changed){s.selected=id; renderSoft();}
-        else if(typeof oldSelect==='function')oldSelect(id);
-        else{s.selected=id;renderSoft();}
-      });
-      return;
-    }
-    if(typeof oldSelect==='function')oldSelect(id); else{s.selected=id;renderSoft();}
-  }
-  window.selectLayer=selectAndTighten;
-  try{selectLayer=selectAndTighten;}catch(e){}
+  // NOTE(consolidation): selectAndTighten() and its selectLayer assignment that lived here
+  // were removed - fully superseded by later generations (confirmed via a fresh scan: the
+  // final selectLayer generation fully replaces with no fallback to a previous version), so
+  // they were dead code. isTightableLayer/tightenLayerBounds/activeJobs (only used by
+  // selectAndTighten) were removed too; trimTransparentSource/tightSrcForTrayItem stay, since
+  // loadTray/addImageLayer/addUploadedImageLayer above still use them live.
 
   // Mark tightened DOM nodes for styling/debugging.
   var oldRenderLayer=window.renderLayer;
@@ -22888,21 +22753,11 @@ window.addEventListener('DOMContentLoaded',function(){
     return true;
   }
 
-  /* Replace selectLayer with a version that can find layers on any page, not just current(). */
-  var oldSelect=window.selectLayer;
-  window.selectLayer=function(id){
-    var s=getState();
-    if(s && s.pages){
-      for(var pi=0;pi<s.pages.length;pi++){
-        if(layerById(pi,id)){
-          markSelected(pi,id);
-          try{ if(typeof window.render==='function') window.render(); }catch(e){}
-          return;
-        }
-      }
-    }
-    if(typeof oldSelect==='function') return oldSelect.apply(this,arguments);
-  };
+  // NOTE(consolidation): a window.selectLayer wrap that lived here was removed - fully
+  // superseded by later generations (confirmed via a fresh scan: the final selectLayer
+  // generation fully replaces with no fallback to a previous version), so it was dead code.
+  // markSelected/layerById/pageAt/layerNodeFromPoint stay, since the pointerdown listener
+  // below calls markSelected directly and remains live regardless of selectLayer's fate.
 
   /* Capture stage taps before old code can lose them. This fixes later uploaded images and placeholders. */
   document.addEventListener('pointerdown',function(e){
@@ -27098,53 +26953,12 @@ else install();
     if(l.type==='frame')return ((l.frameShape||'frame')+' frame').replace(/\b\w/g,function(c){return c.toUpperCase();});
     return (l.type||'Layer').replace(/\b\w/g,function(c){return c.toUpperCase();});
   }
-  function setStatus(msg){
-    try{
-      var st=document.getElementById('status')||document.getElementById('layerStatus')||document.querySelector('.status');
-      if(st && msg) st.textContent=msg;
-    }catch(e){}
-  }
-  function findLayerElement(id){
-    return document.querySelector('.stage .layer[data-id="'+CSS.escape(id)+'"]') || document.querySelector('.layer[data-id="'+CSS.escape(id)+'"]');
-  }
-  function flashCanvasLayer(id){
-    setTimeout(function(){
-      var el=findLayerElement(id);
-      if(!el)return;
-      el.classList.remove('ppSelectFlash');
-      void el.offsetWidth;
-      el.classList.add('ppSelectFlash');
-      try{ el.scrollIntoView({block:'center',inline:'center',behavior:'smooth'}); }catch(e){ try{el.scrollIntoView();}catch(_){} }
-      setTimeout(function(){try{el.classList.remove('ppSelectFlash');}catch(e){}},850);
-    },60);
-  }
-  window.ppSelectLayerFromRow=function(id){
-    var s=S(), l=layers().find(function(x){return x&&x.id===id;});
-    if(!s || !l)return;
-    if(l.customMockup){
-      s.selected=null;
-      try{renderLayers(); if(typeof renderFrameList==='function')renderFrameList(); if(typeof syncControls==='function')syncControls();}catch(e){}
-      setStatus('Custom mock-up layer is locked.');
-      return;
-    }
-    s.selected=id;
-    if(Array.isArray(s.selectedLayerIds)) s.selectedLayerIds=[];
-    s.layerMultiSelect=false;
-    try{ renderPages(); }catch(e){}
-    try{ renderLayers(); }catch(e){}
-    try{ if(typeof renderFrameList==='function')renderFrameList(); }catch(e){}
-    try{ if(typeof syncControls==='function')syncControls(); }catch(e){}
-    setStatus('Selected: '+nameOf(l));
-    flashCanvasLayer(id);
-  };
-
-  var originalSelect=window.selectLayer;
-  window.selectLayer=function(id){
-    // Use the robust row selection path everywhere, but keep old behavior as fallback if something exotic happens.
-    try{ window.ppSelectLayerFromRow(id); return; }
-    catch(err){ if(typeof originalSelect==='function') return originalSelect.apply(this,arguments); }
-  };
-  try{ selectLayer=window.selectLayer; }catch(e){}
+  // NOTE(consolidation): a window.ppSelectLayerFromRow generation and a window.selectLayer
+  // wrap that lived here were removed, along with their setStatus/findLayerElement/
+  // flashCanvasLayer helpers (only used by that generation) - fully superseded by later
+  // generations (confirmed via a fresh scan: the final generation of both fully replaces
+  // with no fallback to a previous version), so they were dead code. nameOf above stays,
+  // since rowForLayerV170 below still uses it live.
 
   function makeThumb(l){
     // NOTE(consolidation): this used to try reusing the old window.rowForLayer
