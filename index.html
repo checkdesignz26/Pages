@@ -119,83 +119,6 @@ header{grid-template-columns:270px 1fr;background:linear-gradient(180deg,rgba(13
 .presetGroup{gap:6px}.presetGroup h3{font-size:11px;color:#ffb8e7;margin:5px 0 0}.presetBtn,.fontPairBtn{border-radius:10px;background:rgba(255,255,255,.055);border-color:rgba(255,255,255,.10)}.presetBtn strong,.fontPairBtn strong{font-size:12px}.presetBtn small,.fontPairBtn small{font-size:10.5px}.launchBadge{display:none!important}.thumbGrid{max-height:118px;gap:6px}.thumb{border-radius:9px}.layerItem{border-radius:10px;padding:7px 8px;background:rgba(255,255,255,.045)}.layerBtns button{padding:4px 6px;min-width:28px;border-radius:8px}.rangeRow{grid-template-columns:68px 1fr;margin:6px 0}.rangeRow label{font-size:12px}.status{border-radius:10px;padding:8px 9px;background:rgba(0,0,0,.24)}.panelToggle{width:28px;height:62px;border-radius:0 12px 12px 0;background:rgba(16,22,38,.94)}#toggleRightPanel{border-radius:12px 0 0 12px}
 
 
-/* Warm Pattern Pages refinement: less cold, more Seamless Studio, calmer symmetry */
-:root{
-  --bg:#120d1d;
-  --panel:#211c31;
-  --panel2:#2b253d;
-  --line:rgba(255,230,250,.14);
-  --text:#fff8fb;
-  --muted:#d8cede;
-  --purple:#9b6bff;
-  --pink:#ff8ed6;
-  --accent:#ffb3e4;
-  --warmInk:#100b18;
-}
-html,body{
-  background:
-    radial-gradient(circle at 12% 5%,rgba(255,142,214,.14),transparent 28%),
-    radial-gradient(circle at 85% 12%,rgba(155,107,255,.12),transparent 28%),
-    linear-gradient(135deg,#17101f 0%,#100d1b 45%,#0f1221 100%);
-}
-header{
-  grid-template-columns:360px 1fr;
-  background:linear-gradient(180deg,rgba(27,21,38,.98),rgba(17,14,27,.96));
-  border-bottom:1px solid rgba(255,226,248,.16);
-}
-.brand{align-items:center;gap:12px}.brandText{min-width:0}.brand h1{margin:0;font-size:21px;line-height:1.05}.tagline{font-size:12px;font-weight:850;color:#ffe4f6;line-height:1.25;margin-top:4px}.subtagline{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#cfc3d8;font-weight:850;margin-top:3px;white-space:nowrap}.brandFlower{background:rgba(255,244,252,.07);border-color:rgba(255,232,250,.22);color:#fff0fb;text-shadow:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 8px 18px rgba(0,0,0,.22)}
-.side{background:linear-gradient(180deg,rgba(34,28,48,.94),rgba(18,15,30,.96));}.side.left{border-right:1px solid rgba(255,226,248,.13)}.side.right{border-left:1px solid rgba(255,226,248,.13)}
-.workspace{
-  background:
-    radial-gradient(circle at 20% 10%,rgba(255,142,214,.09),transparent 30%),
-    radial-gradient(circle at 78% 18%,rgba(155,107,255,.08),transparent 28%),
-    linear-gradient(90deg,rgba(255,232,250,.035) 1px,transparent 1px),
-    linear-gradient(rgba(255,232,250,.035) 1px,transparent 1px),
-    linear-gradient(180deg,#161121 0%,#100d1a 55%,#0e1020 100%);
-  background-size:auto,auto,36px 36px,36px 36px,auto;
-}
-.box{background:rgba(255,246,252,.04);border-color:rgba(255,232,250,.11)}.box.trayTop{border-color:rgba(255,142,214,.24);background:rgba(255,248,252,.05)}.box>h2{background:linear-gradient(180deg,rgba(255,248,252,.085),rgba(255,248,252,.035));border-bottom-color:rgba(255,232,250,.10);letter-spacing:.055em}.box.collapsed{background:rgba(255,246,252,.03)}
-button,select,input[type=number],input[type=text],input[type=color]{background:linear-gradient(180deg,rgba(255,248,252,.105),rgba(255,248,252,.045));border-color:rgba(255,232,250,.15)}
-.panelIntro{border:1px solid rgba(255,232,250,.12);background:linear-gradient(180deg,rgba(255,248,252,.06),rgba(255,248,252,.028));border-radius:14px;padding:11px 12px;margin-bottom:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}.panelIntro strong{display:block;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#fff7fb;margin-bottom:5px}.panelIntro span{display:block;font-size:12px;line-height:1.35;color:#d8cede}.rightIntro{border-color:rgba(155,107,255,.18)}.leftIntro{border-color:rgba(255,142,214,.18)}
-.pageTitle{background:rgba(25,20,35,.90);border-color:rgba(255,232,250,.14)}.stage{box-shadow:0 28px 60px rgba(0,0,0,.38),0 0 0 1px rgba(255,232,250,.13)}.blankHint{color:#9a8da8}
-body.leftCollapsed.rightCollapsed main{grid-template-columns:minmax(0,1fr)!important}.leftCollapsed.rightCollapsed .workspace{padding-left:70px;padding-right:70px}.leftCollapsed.rightCollapsed .pageWrap{max-width:1100px;margin:0 auto}
-@media(max-width:1180px){header{grid-template-columns:310px 1fr}.subtagline{white-space:normal}.tagline{font-size:11px}}
-
-
-
-/* Pattern Pages softer Seamless Studio styling pass */
-:root{
-  --bg:#181020; --panel:#21182e; --panel2:#2a2038; --line:rgba(255,232,250,.14);
-  --text:#fff8ff; --muted:#d4c7dc; --purple:#9b6bff; --pink:#ff8ed6; --accent:#ff8ed6;
-}
-html,body{background:
-  radial-gradient(circle at 14% 4%,rgba(255,142,214,.16),transparent 28%),
-  radial-gradient(circle at 86% 8%,rgba(155,107,255,.13),transparent 30%),
-  linear-gradient(135deg,#211527 0%,#17111f 52%,#121522 100%) !important;}
-header{background:linear-gradient(180deg,rgba(34,25,45,.98),rgba(24,18,34,.97)) !important;}
-.brand h1{font-weight:900;letter-spacing:-.02em}.tagline{color:#ffe5f7}.subtagline{text-transform:none;letter-spacing:.02em;color:#d8cbdf}
-.brandFlower{font-size:25px;line-height:1;width:42px;height:42px;display:grid;place-items:center;border-radius:12px;background:rgba(255,246,252,.055);border:1px solid rgba(255,232,250,.20)}
-.side{background:linear-gradient(180deg,rgba(38,29,50,.94),rgba(24,18,35,.97)) !important;}
-.workspace{background:
-  radial-gradient(circle at 25% 8%,rgba(255,142,214,.08),transparent 28%),
-  radial-gradient(circle at 78% 12%,rgba(155,107,255,.07),transparent 30%),
-  linear-gradient(90deg,rgba(255,232,250,.032) 1px,transparent 1px),
-  linear-gradient(rgba(255,232,250,.032) 1px,transparent 1px),
-  linear-gradient(180deg,#1b1425 0%,#16121f 56%,#111521 100%) !important;
-  background-size:auto,auto,36px 36px,36px 36px,auto !important;}
-.box{border-radius:17px;background:rgba(255,248,252,.035);border-color:rgba(255,232,250,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
-.box>h2{font-size:16px !important;text-transform:lowercase !important;letter-spacing:.01em !important;font-weight:850;background:linear-gradient(180deg,rgba(255,248,252,.075),rgba(255,248,252,.035));}
-button,select,input[type=number],input[type=text],input[type=color]{border-radius:13px;background:linear-gradient(180deg,rgba(255,248,252,.09),rgba(255,248,252,.04));border-color:rgba(255,232,250,.15);box-shadow:0 4px 10px rgba(0,0,0,.16)}
-button.primary{background:linear-gradient(90deg,#8f65ff,#ff86d4)}
-.presetGroup{display:none}
-select#sizePreset{width:100%;margin:5px 0 8px}
-.panelIntro strong{text-transform:lowercase;letter-spacing:.02em;font-size:16px}.panelIntro span{font-size:12.5px}
-.pageTitle{background:rgba(29,22,39,.88);color:#fff8ff;border:1px solid rgba(255,232,250,.14);text-transform:none;letter-spacing:.01em}
-.stage{box-shadow:0 25px 55px rgba(0,0,0,.34),0 0 0 1px rgba(255,232,250,.13)}
-.launchBadge{text-transform:none}
-
-
-
 /* PAGE STUDIO PASS — warmer, calmer, Affinity-like but still Pattern Pages */
 :root{
   --studio-plum:#1a1024;
@@ -372,19 +295,6 @@ button.primary{background:linear-gradient(90deg,rgba(155,107,255,.95),rgba(255,1
 
 
 
-/* Presets visible again — compact chips, not button soup */
-.sizePresetSections{display:grid;gap:8px;margin:8px 0 10px}
-.presetMiniGroup{display:grid;grid-template-columns:78px 1fr 1fr;gap:6px;align-items:stretch}
-.presetMiniGroup span{align-self:center;color:#ffb8e7;font-size:11px;font-weight:900;text-transform:lowercase;letter-spacing:.04em;opacity:.95}
-.presetMiniGroup button{font-size:11px!important;padding:7px 7px!important;min-height:32px!important;line-height:1.1!important;text-align:center!important;border-radius:10px!important;background:rgba(255,255,255,.052)!important;white-space:normal!important}
-.presetMiniGroup button.activePreset{outline:2px solid rgba(255,142,214,.75)!important;background:linear-gradient(90deg,rgba(155,107,255,.35),rgba(255,142,214,.28))!important}
-.presetMiniGroup:has(button:nth-of-type(3)){grid-template-columns:78px 1fr 1fr 1fr}
-.chosenSizePill{margin:8px 0 7px;padding:7px 9px;border-radius:999px;border:1px solid rgba(255,142,214,.26);background:rgba(255,142,214,.08);color:#ffe9fb;font-size:11px;font-weight:900;line-height:1.1;text-transform:lowercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#sizePreset{width:100%;font-size:11px!important;margin:4px 0 7px!important;max-width:100%;text-overflow:ellipsis}
-.sizeInputs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:7px;align-items:center;margin-bottom:6px}
-.sizeInputs span{color:rgba(255,232,248,.65);font-weight:900;text-align:center}
-.sizeInputs input{min-width:0;width:100%;font-size:12px!important;text-align:center}
-@media(max-width:1180px){.presetMiniGroup,.presetMiniGroup:has(button:nth-of-type(3)){grid-template-columns:1fr 1fr}.presetMiniGroup span{grid-column:1/-1}.presetMiniGroup button{font-size:10.5px!important;padding:6px!important}}
 
 
 
@@ -429,11 +339,6 @@ button.primary{background:linear-gradient(90deg,rgba(155,107,255,.95),rgba(255,1
 }
 
 
-/* UX pass: clearer pattern frame builder without confusing 3/4/5 shortcut buttons */
-.frameCountRow{display:grid;grid-template-columns:1fr 86px;gap:8px;align-items:center;margin:8px 0 9px}
-.frameCountRow label{font-size:12px!important;color:rgba(216,206,222,.9);font-weight:850;text-transform:lowercase}
-.frameCountRow input{width:100%;text-align:center}
-#frameList{max-height:170px;overflow:auto}
 
 
 /* AI disclosure badge + live canvas alignment guides */
@@ -506,20 +411,6 @@ button.primary{background:linear-gradient(90deg,rgba(155,107,255,.95),rgba(255,1
 #textureSelect{font-size:12px!important}
 
 
-/* Clean Pattern Showcase generator — one simple control, no extra trays */
-.showcaseTypeGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:9px 0 10px}
-.showcaseTypeGrid button{min-height:38px;text-align:center;font-size:12px!important}
-.showcaseTypeGrid button.active{outline:2px solid rgba(255,142,214,.8)!important;background:linear-gradient(90deg,rgba(155,107,255,.34),rgba(255,142,214,.24))!important}
-.frameStepper{display:grid;grid-template-columns:34px 1fr 34px;gap:6px;align-items:center}
-.frameStepper span{display:grid;place-items:center;min-height:34px;border-radius:11px;border:1px solid rgba(255,232,248,.14);background:rgba(255,255,255,.045);font-weight:950;color:#fff8fb}
-.layer.patternSlot{background:#fff;border:2px dashed rgba(80,65,100,.35);box-shadow:0 15px 32px rgba(20,20,50,.16);overflow:hidden}
-.layer.patternSlot .placeholder{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;color:#8f829c;font-size:clamp(11px,1.6vw,18px);font-weight:900;letter-spacing:.01em;background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(250,244,252,.9))}
-.layer.patternSlot.selected{outline:4px solid rgba(255,142,214,.98)!important;outline-offset:5px!important;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 0 0 8px rgba(255,142,214,.24),0 20px 40px rgba(20,20,50,.22)!important}
-.layer.patternSlot.selected .placeholder{color:#7d4fd6;background:linear-gradient(135deg,#fff7fc,#f4edff)}
-.layer.circleSlot{border-radius:50%}.layer.circleSlot img,.layer.circleSlot .placeholder{border-radius:50%}
-.layer.stripSlot .placeholder{writing-mode:vertical-rl;text-orientation:mixed;font-size:13px}
-.layer.patternSlot.filledSlot{border-style:solid;border-color:rgba(255,255,255,.65)}
-.thumb{cursor:pointer}.thumb[draggable="true"]{touch-action:none}
 
 
 /* Unified text panel UX pass */
@@ -619,50 +510,6 @@ button.primary{background:linear-gradient(90deg,rgba(155,107,255,.95),rgba(255,1
 .mockupTinyNote{font-size:11.5px;line-height:1.32;color:rgba(216,206,222,.88);margin:8px 0 0}
 .customMockupBox .status{font-size:12px;line-height:1.25}
 
-
-
-/* FLASH MOP URGENT TEXT PANEL RESTORE */
-#rightPanel .shadowSliderBox,
-.rightPanel .shadowSliderBox,
-#editPanel .shadowSliderBox,
-.editBox .shadowSliderBox,
-aside:last-of-type .shadowSliderBox{
-  display:none!important;
-}
-.textStudioBox,
-#textPanel,
-.textPanel,
-.box:has(.textStudioBox),
-.box:has([onclick*="addText"]),
-.box:has([onclick*="paste"]),
-.box:has([onclick*="bullet"]),
-.box:has([onclick*="numbered"]){
-  display:block!important;
-}
-.frameShadowBox{
-  margin-top:10px;
-  padding:10px;
-  border:1px solid rgba(255,232,248,.13);
-  border-radius:14px;
-  background:rgba(255,255,255,.045);
-}
-.frameShadowBox label{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  color:#ffeaf7;
-  font-size:12px;
-  font-weight:900;
-  margin-bottom:6px;
-}
-.frameShadowBox input[type=range]{
-  width:100%;
-  accent-color:#ff8ed6;
-}
-.layer.frameSlot .frameSvg .frameOutline,
-.layer.frameSlot .frameSvg .frameBg{
-  stroke:transparent!important;
-}
 
 
 
@@ -1427,11 +1274,6 @@ body.autoGroupEditing .layer.collectionGrouped{
   opacity:.85;
 }
 
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 
@@ -3718,171 +3560,13 @@ box-shadow:0 12px 30px rgba(0,0,0,.35);
 backdrop-filter:blur(10px);
 }
 
-/* Warm Pattern Pages refinement: less cold, more Seamless Studio, calmer symmetry */
-:root{
-  --bg:#120d1d;
-  --panel:#211c31;
-  --panel2:#2b253d;
-  --line:rgba(255,230,250,.14);
-  --text:#fff8fb;
-  --muted:#d8cede;
-  --purple:#9b6bff;
-  --pink:#ff8ed6;
-  --accent:#ffb3e4;
-  --warmInk:#100b18;
-}
-html,body{
-  background:
-    radial-gradient(circle at 12% 5%,rgba(255,142,214,.14),transparent 28%),
-    radial-gradient(circle at 85% 12%,rgba(155,107,255,.12),transparent 28%),
-    linear-gradient(135deg,#17101f 0%,#100d1b 45%,#0f1221 100%);
-}
-header{
-  grid-template-columns:360px 1fr;
-  background:linear-gradient(180deg,rgba(27,21,38,.98),rgba(17,14,27,.96));
-  border-bottom:1px solid rgba(255,226,248,.16);
-}
-.brand{align-items:center;gap:12px}.brandText{min-width:0}.brand h1{margin:0;font-size:21px;line-height:1.05}.tagline{font-size:12px;font-weight:850;color:#ffe4f6;line-height:1.25;margin-top:4px}.subtagline{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#cfc3d8;font-weight:850;margin-top:3px;white-space:nowrap}.brandFlower{background:rgba(255,244,252,.07);border-color:rgba(255,232,250,.22);color:#fff0fb;text-shadow:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 8px 18px rgba(0,0,0,.22)}
-.side{background:linear-gradient(180deg,rgba(34,28,48,.94),rgba(18,15,30,.96));}.side.left{border-right:1px solid rgba(255,226,248,.13)}.side.right{border-left:1px solid rgba(255,226,248,.13)}
-.workspace{
-  background:
-    radial-gradient(circle at 20% 10%,rgba(255,142,214,.09),transparent 30%),
-    radial-gradient(circle at 78% 18%,rgba(155,107,255,.08),transparent 28%),
-    linear-gradient(90deg,rgba(255,232,250,.035) 1px,transparent 1px),
-    linear-gradient(rgba(255,232,250,.035) 1px,transparent 1px),
-    linear-gradient(180deg,#161121 0%,#100d1a 55%,#0e1020 100%);
-  background-size:auto,auto,36px 36px,36px 36px,auto;
-}
-.box{background:rgba(255,246,252,.04);border-color:rgba(255,232,250,.11)}.box.trayTop{border-color:rgba(255,142,214,.24);background:rgba(255,248,252,.05)}.box>h2{background:linear-gradient(180deg,rgba(255,248,252,.085),rgba(255,248,252,.035));border-bottom-color:rgba(255,232,250,.10);letter-spacing:.055em}.box.collapsed{background:rgba(255,246,252,.03)}
-button,select,input[type=number],input[type=text],input[type=color]{background:linear-gradient(180deg,rgba(255,248,252,.105),rgba(255,248,252,.045));border-color:rgba(255,232,250,.15)}
-.panelIntro{border:1px solid rgba(255,232,250,.12);background:linear-gradient(180deg,rgba(255,248,252,.06),rgba(255,248,252,.028));border-radius:14px;padding:11px 12px;margin-bottom:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}.panelIntro strong{display:block;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#fff7fb;margin-bottom:5px}.panelIntro span{display:block;font-size:12px;line-height:1.35;color:#d8cede}.rightIntro{border-color:rgba(155,107,255,.18)}.leftIntro{border-color:rgba(255,142,214,.18)}
-.pageTitle{background:rgba(25,20,35,.90);border-color:rgba(255,232,250,.14)}.stage{box-shadow:0 28px 60px rgba(0,0,0,.38),0 0 0 1px rgba(255,232,250,.13)}.blankHint{color:#9a8da8}
-body.leftCollapsed.rightCollapsed main{grid-template-columns:minmax(0,1fr)!important}.leftCollapsed.rightCollapsed .workspace{padding-left:70px;padding-right:70px}.leftCollapsed.rightCollapsed .pageWrap{max-width:1100px;margin:0 auto}
-@media(max-width:1180px){header{grid-template-columns:310px 1fr}.subtagline{white-space:normal}.tagline{font-size:11px}}
 
 
 
-/* Pattern Pages softer Seamless Studio styling pass */
-:root{
-  --bg:#181020; --panel:#21182e; --panel2:#2a2038; --line:rgba(255,232,250,.14);
-  --text:#fff8ff; --muted:#d4c7dc; --purple:#9b6bff; --pink:#ff8ed6; --accent:#ff8ed6;
-}
-html,body{background:
-  radial-gradient(circle at 14% 4%,rgba(255,142,214,.16),transparent 28%),
-  radial-gradient(circle at 86% 8%,rgba(155,107,255,.13),transparent 30%),
-  linear-gradient(135deg,#211527 0%,#17111f 52%,#121522 100%) !important;}
-header{background:linear-gradient(180deg,rgba(34,25,45,.98),rgba(24,18,34,.97)) !important;}
-.brand h1{font-weight:900;letter-spacing:-.02em}.tagline{color:#ffe5f7}.subtagline{text-transform:none;letter-spacing:.02em;color:#d8cbdf}
-.brandFlower{font-size:25px;line-height:1;width:42px;height:42px;display:grid;place-items:center;border-radius:12px;background:rgba(255,246,252,.055);border:1px solid rgba(255,232,250,.20)}
-.side{background:linear-gradient(180deg,rgba(38,29,50,.94),rgba(24,18,35,.97)) !important;}
-.workspace{background:
-  radial-gradient(circle at 25% 8%,rgba(255,142,214,.08),transparent 28%),
-  radial-gradient(circle at 78% 12%,rgba(155,107,255,.07),transparent 30%),
-  linear-gradient(90deg,rgba(255,232,250,.032) 1px,transparent 1px),
-  linear-gradient(rgba(255,232,250,.032) 1px,transparent 1px),
-  linear-gradient(180deg,#1b1425 0%,#16121f 56%,#111521 100%) !important;
-  background-size:auto,auto,36px 36px,36px 36px,auto !important;}
-.box{border-radius:17px;background:rgba(255,248,252,.035);border-color:rgba(255,232,250,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
-.box>h2{font-size:16px !important;text-transform:lowercase !important;letter-spacing:.01em !important;font-weight:850;background:linear-gradient(180deg,rgba(255,248,252,.075),rgba(255,248,252,.035));}
-button,select,input[type=number],input[type=text],input[type=color]{border-radius:13px;background:linear-gradient(180deg,rgba(255,248,252,.09),rgba(255,248,252,.04));border-color:rgba(255,232,250,.15);box-shadow:0 4px 10px rgba(0,0,0,.16)}
-button.primary{background:linear-gradient(90deg,#8f65ff,#ff86d4)}
-.presetGroup{display:none}
-select#sizePreset{width:100%;margin:5px 0 8px}
-.panelIntro strong{text-transform:lowercase;letter-spacing:.02em;font-size:16px}.panelIntro span{font-size:12.5px}
-.pageTitle{background:rgba(29,22,39,.88);color:#fff8ff;border:1px solid rgba(255,232,250,.14);text-transform:none;letter-spacing:.01em}
-.stage{box-shadow:0 25px 55px rgba(0,0,0,.34),0 0 0 1px rgba(255,232,250,.13)}
-.launchBadge{text-transform:none}
 
 
 
-/* Presets visible again — compact chips, not button soup */
-.sizePresetSections{display:grid;gap:8px;margin:8px 0 10px}
-.presetMiniGroup{display:grid;grid-template-columns:78px 1fr 1fr;gap:6px;align-items:stretch}
-.presetMiniGroup span{align-self:center;color:#ffb8e7;font-size:11px;font-weight:900;text-transform:lowercase;letter-spacing:.04em;opacity:.95}
-.presetMiniGroup button{font-size:11px!important;padding:7px 7px!important;min-height:32px!important;line-height:1.1!important;text-align:center!important;border-radius:10px!important;background:rgba(255,255,255,.052)!important;white-space:normal!important}
-.presetMiniGroup button.activePreset{outline:2px solid rgba(255,142,214,.75)!important;background:linear-gradient(90deg,rgba(155,107,255,.35),rgba(255,142,214,.28))!important}
-.presetMiniGroup:has(button:nth-of-type(3)){grid-template-columns:78px 1fr 1fr 1fr}
-.chosenSizePill{margin:8px 0 7px;padding:7px 9px;border-radius:999px;border:1px solid rgba(255,142,214,.26);background:rgba(255,142,214,.08);color:#ffe9fb;font-size:11px;font-weight:900;line-height:1.1;text-transform:lowercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#sizePreset{width:100%;font-size:11px!important;margin:4px 0 7px!important;max-width:100%;text-overflow:ellipsis}
-.sizeInputs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:7px;align-items:center;margin-bottom:6px}
-.sizeInputs span{color:rgba(255,232,248,.65);font-weight:900;text-align:center}
-.sizeInputs input{min-width:0;width:100%;font-size:12px!important;text-align:center}
-@media(max-width:1180px){.presetMiniGroup,.presetMiniGroup:has(button:nth-of-type(3)){grid-template-columns:1fr 1fr}.presetMiniGroup span{grid-column:1/-1}.presetMiniGroup button{font-size:10.5px!important;padding:6px!important}}
 
-
-/* UX pass: clearer pattern frame builder without confusing 3/4/5 shortcut buttons */
-.frameCountRow{display:grid;grid-template-columns:1fr 86px;gap:8px;align-items:center;margin:8px 0 9px}
-.frameCountRow label{font-size:12px!important;color:rgba(216,206,222,.9);font-weight:850;text-transform:lowercase}
-.frameCountRow input{width:100%;text-align:center}
-#frameList{max-height:170px;overflow:auto}
-
-
-
-/* Clean Pattern Showcase generator — one simple control, no extra trays */
-.showcaseTypeGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:9px 0 10px}
-.showcaseTypeGrid button{min-height:38px;text-align:center;font-size:12px!important}
-.showcaseTypeGrid button.active{outline:2px solid rgba(255,142,214,.8)!important;background:linear-gradient(90deg,rgba(155,107,255,.34),rgba(255,142,214,.24))!important}
-.frameStepper{display:grid;grid-template-columns:34px 1fr 34px;gap:6px;align-items:center}
-.frameStepper span{display:grid;place-items:center;min-height:34px;border-radius:11px;border:1px solid rgba(255,232,248,.14);background:rgba(255,255,255,.045);font-weight:950;color:#fff8fb}
-.layer.patternSlot{background:#fff;border:2px dashed rgba(80,65,100,.35);box-shadow:0 15px 32px rgba(20,20,50,.16);overflow:hidden}
-.layer.patternSlot .placeholder{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;color:#8f829c;font-size:clamp(11px,1.6vw,18px);font-weight:900;letter-spacing:.01em;background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(250,244,252,.9))}
-.layer.patternSlot.selected{outline:4px solid rgba(255,142,214,.98)!important;outline-offset:5px!important;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 0 0 8px rgba(255,142,214,.24),0 20px 40px rgba(20,20,50,.22)!important}
-.layer.patternSlot.selected .placeholder{color:#7d4fd6;background:linear-gradient(135deg,#fff7fc,#f4edff)}
-.layer.circleSlot{border-radius:50%}.layer.circleSlot img,.layer.circleSlot .placeholder{border-radius:50%}
-.layer.stripSlot .placeholder{writing-mode:vertical-rl;text-orientation:mixed;font-size:13px}
-.layer.patternSlot.filledSlot{border-style:solid;border-color:rgba(255,255,255,.65)}
-.thumb{cursor:pointer}.thumb[draggable="true"]{touch-action:none}
-
-
-
-/* FLASH MOP URGENT TEXT PANEL RESTORE */
-#rightPanel .shadowSliderBox,
-.rightPanel .shadowSliderBox,
-#editPanel .shadowSliderBox,
-.editBox .shadowSliderBox,
-aside:last-of-type .shadowSliderBox{
-  display:none!important;
-}
-.textStudioBox,
-#textPanel,
-.textPanel,
-.box:has(.textStudioBox),
-.box:has([onclick*="addText"]),
-.box:has([onclick*="paste"]),
-.box:has([onclick*="bullet"]),
-.box:has([onclick*="numbered"]){
-  display:block!important;
-}
-.frameShadowBox{
-  margin-top:10px;
-  padding:10px;
-  border:1px solid rgba(255,232,248,.13);
-  border-radius:14px;
-  background:rgba(255,255,255,.045);
-}
-.frameShadowBox label{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  color:#ffeaf7;
-  font-size:12px;
-  font-weight:900;
-  margin-bottom:6px;
-}
-.frameShadowBox input[type=range]{
-  width:100%;
-  accent-color:#ff8ed6;
-}
-.layer.frameSlot .frameSvg .frameOutline,
-.layer.frameSlot .frameSvg .frameBg{
-  stroke:transparent!important;
-}
-
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 
@@ -4190,94 +3874,13 @@ button,select,input[type=number],input[type=text],input[type=color]{
 }
 
 
-/* Presets visible again — compact chips, not button soup */
-.sizePresetSections{display:grid;gap:8px;margin:8px 0 10px}
-.presetMiniGroup{display:grid;grid-template-columns:78px 1fr 1fr;gap:6px;align-items:stretch}
-.presetMiniGroup span{align-self:center;color:#ffb8e7;font-size:11px;font-weight:900;text-transform:lowercase;letter-spacing:.04em;opacity:.95}
-.presetMiniGroup button{font-size:11px!important;padding:7px 7px!important;min-height:32px!important;line-height:1.1!important;text-align:center!important;border-radius:10px!important;background:rgba(255,255,255,.052)!important;white-space:normal!important}
-.presetMiniGroup button.activePreset{outline:2px solid rgba(255,142,214,.75)!important;background:linear-gradient(90deg,rgba(155,107,255,.35),rgba(255,142,214,.28))!important}
-.presetMiniGroup:has(button:nth-of-type(3)){grid-template-columns:78px 1fr 1fr 1fr}
-.chosenSizePill{margin:8px 0 7px;padding:7px 9px;border-radius:999px;border:1px solid rgba(255,142,214,.26);background:rgba(255,142,214,.08);color:#ffe9fb;font-size:11px;font-weight:900;line-height:1.1;text-transform:lowercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#sizePreset{width:100%;font-size:11px!important;margin:4px 0 7px!important;max-width:100%;text-overflow:ellipsis}
-.sizeInputs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:7px;align-items:center;margin-bottom:6px}
-.sizeInputs span{color:rgba(255,232,248,.65);font-weight:900;text-align:center}
-.sizeInputs input{min-width:0;width:100%;font-size:12px!important;text-align:center}
-@media(max-width:1180px){.presetMiniGroup,.presetMiniGroup:has(button:nth-of-type(3)){grid-template-columns:1fr 1fr}.presetMiniGroup span{grid-column:1/-1}.presetMiniGroup button{font-size:10.5px!important;padding:6px!important}}
-
-
-/* UX pass: clearer pattern frame builder without confusing 3/4/5 shortcut buttons */
-.frameCountRow{display:grid;grid-template-columns:1fr 86px;gap:8px;align-items:center;margin:8px 0 9px}
-.frameCountRow label{font-size:12px!important;color:rgba(216,206,222,.9);font-weight:850;text-transform:lowercase}
-.frameCountRow input{width:100%;text-align:center}
-#frameList{max-height:170px;overflow:auto}
 
 
 
-/* Clean Pattern Showcase generator — one simple control, no extra trays */
-.showcaseTypeGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:9px 0 10px}
-.showcaseTypeGrid button{min-height:38px;text-align:center;font-size:12px!important}
-.showcaseTypeGrid button.active{outline:2px solid rgba(255,142,214,.8)!important;background:linear-gradient(90deg,rgba(155,107,255,.34),rgba(255,142,214,.24))!important}
-.frameStepper{display:grid;grid-template-columns:34px 1fr 34px;gap:6px;align-items:center}
-.frameStepper span{display:grid;place-items:center;min-height:34px;border-radius:11px;border:1px solid rgba(255,232,248,.14);background:rgba(255,255,255,.045);font-weight:950;color:#fff8fb}
-.layer.patternSlot{background:#fff;border:2px dashed rgba(80,65,100,.35);box-shadow:0 15px 32px rgba(20,20,50,.16);overflow:hidden}
-.layer.patternSlot .placeholder{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;color:#8f829c;font-size:clamp(11px,1.6vw,18px);font-weight:900;letter-spacing:.01em;background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(250,244,252,.9))}
-.layer.patternSlot.selected{outline:4px solid rgba(255,142,214,.98)!important;outline-offset:5px!important;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 0 0 8px rgba(255,142,214,.24),0 20px 40px rgba(20,20,50,.22)!important}
-.layer.patternSlot.selected .placeholder{color:#7d4fd6;background:linear-gradient(135deg,#fff7fc,#f4edff)}
-.layer.circleSlot{border-radius:50%}.layer.circleSlot img,.layer.circleSlot .placeholder{border-radius:50%}
-.layer.stripSlot .placeholder{writing-mode:vertical-rl;text-orientation:mixed;font-size:13px}
-.layer.patternSlot.filledSlot{border-style:solid;border-color:rgba(255,255,255,.65)}
-.thumb{cursor:pointer}.thumb[draggable="true"]{touch-action:none}
 
 
 
-/* FLASH MOP URGENT TEXT PANEL RESTORE */
-#rightPanel .shadowSliderBox,
-.rightPanel .shadowSliderBox,
-#editPanel .shadowSliderBox,
-.editBox .shadowSliderBox,
-aside:last-of-type .shadowSliderBox{
-  display:none!important;
-}
-.textStudioBox,
-#textPanel,
-.textPanel,
-.box:has(.textStudioBox),
-.box:has([onclick*="addText"]),
-.box:has([onclick*="paste"]),
-.box:has([onclick*="bullet"]),
-.box:has([onclick*="numbered"]){
-  display:block!important;
-}
-.frameShadowBox{
-  margin-top:10px;
-  padding:10px;
-  border:1px solid rgba(255,232,248,.13);
-  border-radius:14px;
-  background:rgba(255,255,255,.045);
-}
-.frameShadowBox label{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  color:#ffeaf7;
-  font-size:12px;
-  font-weight:900;
-  margin-bottom:6px;
-}
-.frameShadowBox input[type=range]{
-  width:100%;
-  accent-color:#ff8ed6;
-}
-.layer.frameSlot .frameSvg .frameOutline,
-.layer.frameSlot .frameSvg .frameBg{
-  stroke:transparent!important;
-}
 
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 
@@ -4368,94 +3971,13 @@ body.leftCollapsed.rightCollapsed .pageWrap{max-width:none!important;margin-inli
 }
 
 
-/* Presets visible again — compact chips, not button soup */
-.sizePresetSections{display:grid;gap:8px;margin:8px 0 10px}
-.presetMiniGroup{display:grid;grid-template-columns:78px 1fr 1fr;gap:6px;align-items:stretch}
-.presetMiniGroup span{align-self:center;color:#ffb8e7;font-size:11px;font-weight:900;text-transform:lowercase;letter-spacing:.04em;opacity:.95}
-.presetMiniGroup button{font-size:11px!important;padding:7px 7px!important;min-height:32px!important;line-height:1.1!important;text-align:center!important;border-radius:10px!important;background:rgba(255,255,255,.052)!important;white-space:normal!important}
-.presetMiniGroup button.activePreset{outline:2px solid rgba(255,142,214,.75)!important;background:linear-gradient(90deg,rgba(155,107,255,.35),rgba(255,142,214,.28))!important}
-.presetMiniGroup:has(button:nth-of-type(3)){grid-template-columns:78px 1fr 1fr 1fr}
-.chosenSizePill{margin:8px 0 7px;padding:7px 9px;border-radius:999px;border:1px solid rgba(255,142,214,.26);background:rgba(255,142,214,.08);color:#ffe9fb;font-size:11px;font-weight:900;line-height:1.1;text-transform:lowercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#sizePreset{width:100%;font-size:11px!important;margin:4px 0 7px!important;max-width:100%;text-overflow:ellipsis}
-.sizeInputs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:7px;align-items:center;margin-bottom:6px}
-.sizeInputs span{color:rgba(255,232,248,.65);font-weight:900;text-align:center}
-.sizeInputs input{min-width:0;width:100%;font-size:12px!important;text-align:center}
-@media(max-width:1180px){.presetMiniGroup,.presetMiniGroup:has(button:nth-of-type(3)){grid-template-columns:1fr 1fr}.presetMiniGroup span{grid-column:1/-1}.presetMiniGroup button{font-size:10.5px!important;padding:6px!important}}
-
-
-/* UX pass: clearer pattern frame builder without confusing 3/4/5 shortcut buttons */
-.frameCountRow{display:grid;grid-template-columns:1fr 86px;gap:8px;align-items:center;margin:8px 0 9px}
-.frameCountRow label{font-size:12px!important;color:rgba(216,206,222,.9);font-weight:850;text-transform:lowercase}
-.frameCountRow input{width:100%;text-align:center}
-#frameList{max-height:170px;overflow:auto}
 
 
 
-/* Clean Pattern Showcase generator — one simple control, no extra trays */
-.showcaseTypeGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:9px 0 10px}
-.showcaseTypeGrid button{min-height:38px;text-align:center;font-size:12px!important}
-.showcaseTypeGrid button.active{outline:2px solid rgba(255,142,214,.8)!important;background:linear-gradient(90deg,rgba(155,107,255,.34),rgba(255,142,214,.24))!important}
-.frameStepper{display:grid;grid-template-columns:34px 1fr 34px;gap:6px;align-items:center}
-.frameStepper span{display:grid;place-items:center;min-height:34px;border-radius:11px;border:1px solid rgba(255,232,248,.14);background:rgba(255,255,255,.045);font-weight:950;color:#fff8fb}
-.layer.patternSlot{background:#fff;border:2px dashed rgba(80,65,100,.35);box-shadow:0 15px 32px rgba(20,20,50,.16);overflow:hidden}
-.layer.patternSlot .placeholder{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;color:#8f829c;font-size:clamp(11px,1.6vw,18px);font-weight:900;letter-spacing:.01em;background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(250,244,252,.9))}
-.layer.patternSlot.selected{outline:4px solid rgba(255,142,214,.98)!important;outline-offset:5px!important;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 0 0 8px rgba(255,142,214,.24),0 20px 40px rgba(20,20,50,.22)!important}
-.layer.patternSlot.selected .placeholder{color:#7d4fd6;background:linear-gradient(135deg,#fff7fc,#f4edff)}
-.layer.circleSlot{border-radius:50%}.layer.circleSlot img,.layer.circleSlot .placeholder{border-radius:50%}
-.layer.stripSlot .placeholder{writing-mode:vertical-rl;text-orientation:mixed;font-size:13px}
-.layer.patternSlot.filledSlot{border-style:solid;border-color:rgba(255,255,255,.65)}
-.thumb{cursor:pointer}.thumb[draggable="true"]{touch-action:none}
 
 
 
-/* FLASH MOP URGENT TEXT PANEL RESTORE */
-#rightPanel .shadowSliderBox,
-.rightPanel .shadowSliderBox,
-#editPanel .shadowSliderBox,
-.editBox .shadowSliderBox,
-aside:last-of-type .shadowSliderBox{
-  display:none!important;
-}
-.textStudioBox,
-#textPanel,
-.textPanel,
-.box:has(.textStudioBox),
-.box:has([onclick*="addText"]),
-.box:has([onclick*="paste"]),
-.box:has([onclick*="bullet"]),
-.box:has([onclick*="numbered"]){
-  display:block!important;
-}
-.frameShadowBox{
-  margin-top:10px;
-  padding:10px;
-  border:1px solid rgba(255,232,248,.13);
-  border-radius:14px;
-  background:rgba(255,255,255,.045);
-}
-.frameShadowBox label{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  color:#ffeaf7;
-  font-size:12px;
-  font-weight:900;
-  margin-bottom:6px;
-}
-.frameShadowBox input[type=range]{
-  width:100%;
-  accent-color:#ff8ed6;
-}
-.layer.frameSlot .frameSvg .frameOutline,
-.layer.frameSlot .frameSvg .frameBg{
-  stroke:transparent!important;
-}
 
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="collapse-centering-fix-script">
@@ -4678,94 +4200,13 @@ body.rightCollapsed .workspace{
 
 
 
-/* Presets visible again — compact chips, not button soup */
-.sizePresetSections{display:grid;gap:8px;margin:8px 0 10px}
-.presetMiniGroup{display:grid;grid-template-columns:78px 1fr 1fr;gap:6px;align-items:stretch}
-.presetMiniGroup span{align-self:center;color:#ffb8e7;font-size:11px;font-weight:900;text-transform:lowercase;letter-spacing:.04em;opacity:.95}
-.presetMiniGroup button{font-size:11px!important;padding:7px 7px!important;min-height:32px!important;line-height:1.1!important;text-align:center!important;border-radius:10px!important;background:rgba(255,255,255,.052)!important;white-space:normal!important}
-.presetMiniGroup button.activePreset{outline:2px solid rgba(255,142,214,.75)!important;background:linear-gradient(90deg,rgba(155,107,255,.35),rgba(255,142,214,.28))!important}
-.presetMiniGroup:has(button:nth-of-type(3)){grid-template-columns:78px 1fr 1fr 1fr}
-.chosenSizePill{margin:8px 0 7px;padding:7px 9px;border-radius:999px;border:1px solid rgba(255,142,214,.26);background:rgba(255,142,214,.08);color:#ffe9fb;font-size:11px;font-weight:900;line-height:1.1;text-transform:lowercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#sizePreset{width:100%;font-size:11px!important;margin:4px 0 7px!important;max-width:100%;text-overflow:ellipsis}
-.sizeInputs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:7px;align-items:center;margin-bottom:6px}
-.sizeInputs span{color:rgba(255,232,248,.65);font-weight:900;text-align:center}
-.sizeInputs input{min-width:0;width:100%;font-size:12px!important;text-align:center}
-@media(max-width:1180px){.presetMiniGroup,.presetMiniGroup:has(button:nth-of-type(3)){grid-template-columns:1fr 1fr}.presetMiniGroup span{grid-column:1/-1}.presetMiniGroup button{font-size:10.5px!important;padding:6px!important}}
-
-
-/* UX pass: clearer pattern frame builder without confusing 3/4/5 shortcut buttons */
-.frameCountRow{display:grid;grid-template-columns:1fr 86px;gap:8px;align-items:center;margin:8px 0 9px}
-.frameCountRow label{font-size:12px!important;color:rgba(216,206,222,.9);font-weight:850;text-transform:lowercase}
-.frameCountRow input{width:100%;text-align:center}
-#frameList{max-height:170px;overflow:auto}
 
 
 
-/* Clean Pattern Showcase generator — one simple control, no extra trays */
-.showcaseTypeGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:9px 0 10px}
-.showcaseTypeGrid button{min-height:38px;text-align:center;font-size:12px!important}
-.showcaseTypeGrid button.active{outline:2px solid rgba(255,142,214,.8)!important;background:linear-gradient(90deg,rgba(155,107,255,.34),rgba(255,142,214,.24))!important}
-.frameStepper{display:grid;grid-template-columns:34px 1fr 34px;gap:6px;align-items:center}
-.frameStepper span{display:grid;place-items:center;min-height:34px;border-radius:11px;border:1px solid rgba(255,232,248,.14);background:rgba(255,255,255,.045);font-weight:950;color:#fff8fb}
-.layer.patternSlot{background:#fff;border:2px dashed rgba(80,65,100,.35);box-shadow:0 15px 32px rgba(20,20,50,.16);overflow:hidden}
-.layer.patternSlot .placeholder{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;color:#8f829c;font-size:clamp(11px,1.6vw,18px);font-weight:900;letter-spacing:.01em;background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(250,244,252,.9))}
-.layer.patternSlot.selected{outline:4px solid rgba(255,142,214,.98)!important;outline-offset:5px!important;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 0 0 8px rgba(255,142,214,.24),0 20px 40px rgba(20,20,50,.22)!important}
-.layer.patternSlot.selected .placeholder{color:#7d4fd6;background:linear-gradient(135deg,#fff7fc,#f4edff)}
-.layer.circleSlot{border-radius:50%}.layer.circleSlot img,.layer.circleSlot .placeholder{border-radius:50%}
-.layer.stripSlot .placeholder{writing-mode:vertical-rl;text-orientation:mixed;font-size:13px}
-.layer.patternSlot.filledSlot{border-style:solid;border-color:rgba(255,255,255,.65)}
-.thumb{cursor:pointer}.thumb[draggable="true"]{touch-action:none}
 
 
 
-/* FLASH MOP URGENT TEXT PANEL RESTORE */
-#rightPanel .shadowSliderBox,
-.rightPanel .shadowSliderBox,
-#editPanel .shadowSliderBox,
-.editBox .shadowSliderBox,
-aside:last-of-type .shadowSliderBox{
-  display:none!important;
-}
-.textStudioBox,
-#textPanel,
-.textPanel,
-.box:has(.textStudioBox),
-.box:has([onclick*="addText"]),
-.box:has([onclick*="paste"]),
-.box:has([onclick*="bullet"]),
-.box:has([onclick*="numbered"]){
-  display:block!important;
-}
-.frameShadowBox{
-  margin-top:10px;
-  padding:10px;
-  border:1px solid rgba(255,232,248,.13);
-  border-radius:14px;
-  background:rgba(255,255,255,.045);
-}
-.frameShadowBox label{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  color:#ffeaf7;
-  font-size:12px;
-  font-weight:900;
-  margin-bottom:6px;
-}
-.frameShadowBox input[type=range]{
-  width:100%;
-  accent-color:#ff8ed6;
-}
-.layer.frameSlot .frameSvg .frameOutline,
-.layer.frameSlot .frameSvg .frameBg{
-  stroke:transparent!important;
-}
 
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="canvas-fit-visible-workspace-script">
@@ -4960,94 +4401,13 @@ body.leftCollapsed.rightCollapsed .stage.listing{
 }
 
 
-/* Presets visible again — compact chips, not button soup */
-.sizePresetSections{display:grid;gap:8px;margin:8px 0 10px}
-.presetMiniGroup{display:grid;grid-template-columns:78px 1fr 1fr;gap:6px;align-items:stretch}
-.presetMiniGroup span{align-self:center;color:#ffb8e7;font-size:11px;font-weight:900;text-transform:lowercase;letter-spacing:.04em;opacity:.95}
-.presetMiniGroup button{font-size:11px!important;padding:7px 7px!important;min-height:32px!important;line-height:1.1!important;text-align:center!important;border-radius:10px!important;background:rgba(255,255,255,.052)!important;white-space:normal!important}
-.presetMiniGroup button.activePreset{outline:2px solid rgba(255,142,214,.75)!important;background:linear-gradient(90deg,rgba(155,107,255,.35),rgba(255,142,214,.28))!important}
-.presetMiniGroup:has(button:nth-of-type(3)){grid-template-columns:78px 1fr 1fr 1fr}
-.chosenSizePill{margin:8px 0 7px;padding:7px 9px;border-radius:999px;border:1px solid rgba(255,142,214,.26);background:rgba(255,142,214,.08);color:#ffe9fb;font-size:11px;font-weight:900;line-height:1.1;text-transform:lowercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#sizePreset{width:100%;font-size:11px!important;margin:4px 0 7px!important;max-width:100%;text-overflow:ellipsis}
-.sizeInputs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:7px;align-items:center;margin-bottom:6px}
-.sizeInputs span{color:rgba(255,232,248,.65);font-weight:900;text-align:center}
-.sizeInputs input{min-width:0;width:100%;font-size:12px!important;text-align:center}
-@media(max-width:1180px){.presetMiniGroup,.presetMiniGroup:has(button:nth-of-type(3)){grid-template-columns:1fr 1fr}.presetMiniGroup span{grid-column:1/-1}.presetMiniGroup button{font-size:10.5px!important;padding:6px!important}}
-
-
-/* UX pass: clearer pattern frame builder without confusing 3/4/5 shortcut buttons */
-.frameCountRow{display:grid;grid-template-columns:1fr 86px;gap:8px;align-items:center;margin:8px 0 9px}
-.frameCountRow label{font-size:12px!important;color:rgba(216,206,222,.9);font-weight:850;text-transform:lowercase}
-.frameCountRow input{width:100%;text-align:center}
-#frameList{max-height:170px;overflow:auto}
 
 
 
-/* Clean Pattern Showcase generator — one simple control, no extra trays */
-.showcaseTypeGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:9px 0 10px}
-.showcaseTypeGrid button{min-height:38px;text-align:center;font-size:12px!important}
-.showcaseTypeGrid button.active{outline:2px solid rgba(255,142,214,.8)!important;background:linear-gradient(90deg,rgba(155,107,255,.34),rgba(255,142,214,.24))!important}
-.frameStepper{display:grid;grid-template-columns:34px 1fr 34px;gap:6px;align-items:center}
-.frameStepper span{display:grid;place-items:center;min-height:34px;border-radius:11px;border:1px solid rgba(255,232,248,.14);background:rgba(255,255,255,.045);font-weight:950;color:#fff8fb}
-.layer.patternSlot{background:#fff;border:2px dashed rgba(80,65,100,.35);box-shadow:0 15px 32px rgba(20,20,50,.16);overflow:hidden}
-.layer.patternSlot .placeholder{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;color:#8f829c;font-size:clamp(11px,1.6vw,18px);font-weight:900;letter-spacing:.01em;background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(250,244,252,.9))}
-.layer.patternSlot.selected{outline:4px solid rgba(255,142,214,.98)!important;outline-offset:5px!important;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 0 0 8px rgba(255,142,214,.24),0 20px 40px rgba(20,20,50,.22)!important}
-.layer.patternSlot.selected .placeholder{color:#7d4fd6;background:linear-gradient(135deg,#fff7fc,#f4edff)}
-.layer.circleSlot{border-radius:50%}.layer.circleSlot img,.layer.circleSlot .placeholder{border-radius:50%}
-.layer.stripSlot .placeholder{writing-mode:vertical-rl;text-orientation:mixed;font-size:13px}
-.layer.patternSlot.filledSlot{border-style:solid;border-color:rgba(255,255,255,.65)}
-.thumb{cursor:pointer}.thumb[draggable="true"]{touch-action:none}
 
 
 
-/* FLASH MOP URGENT TEXT PANEL RESTORE */
-#rightPanel .shadowSliderBox,
-.rightPanel .shadowSliderBox,
-#editPanel .shadowSliderBox,
-.editBox .shadowSliderBox,
-aside:last-of-type .shadowSliderBox{
-  display:none!important;
-}
-.textStudioBox,
-#textPanel,
-.textPanel,
-.box:has(.textStudioBox),
-.box:has([onclick*="addText"]),
-.box:has([onclick*="paste"]),
-.box:has([onclick*="bullet"]),
-.box:has([onclick*="numbered"]){
-  display:block!important;
-}
-.frameShadowBox{
-  margin-top:10px;
-  padding:10px;
-  border:1px solid rgba(255,232,248,.13);
-  border-radius:14px;
-  background:rgba(255,255,255,.045);
-}
-.frameShadowBox label{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  color:#ffeaf7;
-  font-size:12px;
-  font-weight:900;
-  margin-bottom:6px;
-}
-.frameShadowBox input[type=range]{
-  width:100%;
-  accent-color:#ff8ed6;
-}
-.layer.frameSlot .frameSvg .frameOutline,
-.layer.frameSlot .frameSvg .frameBg{
-  stroke:transparent!important;
-}
 
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 
@@ -5173,71 +4533,8 @@ body.leftCollapsed.rightCollapsed .stage.listing{
 
 
 
-/* Clean Pattern Showcase generator — one simple control, no extra trays */
-.showcaseTypeGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:9px 0 10px}
-.showcaseTypeGrid button{min-height:38px;text-align:center;font-size:12px!important}
-.showcaseTypeGrid button.active{outline:2px solid rgba(255,142,214,.8)!important;background:linear-gradient(90deg,rgba(155,107,255,.34),rgba(255,142,214,.24))!important}
-.frameStepper{display:grid;grid-template-columns:34px 1fr 34px;gap:6px;align-items:center}
-.frameStepper span{display:grid;place-items:center;min-height:34px;border-radius:11px;border:1px solid rgba(255,232,248,.14);background:rgba(255,255,255,.045);font-weight:950;color:#fff8fb}
-.layer.patternSlot{background:#fff;border:2px dashed rgba(80,65,100,.35);box-shadow:0 15px 32px rgba(20,20,50,.16);overflow:hidden}
-.layer.patternSlot .placeholder{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;color:#8f829c;font-size:clamp(11px,1.6vw,18px);font-weight:900;letter-spacing:.01em;background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(250,244,252,.9))}
-.layer.patternSlot.selected{outline:4px solid rgba(255,142,214,.98)!important;outline-offset:5px!important;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 0 0 8px rgba(255,142,214,.24),0 20px 40px rgba(20,20,50,.22)!important}
-.layer.patternSlot.selected .placeholder{color:#7d4fd6;background:linear-gradient(135deg,#fff7fc,#f4edff)}
-.layer.circleSlot{border-radius:50%}.layer.circleSlot img,.layer.circleSlot .placeholder{border-radius:50%}
-.layer.stripSlot .placeholder{writing-mode:vertical-rl;text-orientation:mixed;font-size:13px}
-.layer.patternSlot.filledSlot{border-style:solid;border-color:rgba(255,255,255,.65)}
-.thumb{cursor:pointer}.thumb[draggable="true"]{touch-action:none}
 
 
-
-/* FLASH MOP URGENT TEXT PANEL RESTORE */
-#rightPanel .shadowSliderBox,
-.rightPanel .shadowSliderBox,
-#editPanel .shadowSliderBox,
-.editBox .shadowSliderBox,
-aside:last-of-type .shadowSliderBox{
-  display:none!important;
-}
-.textStudioBox,
-#textPanel,
-.textPanel,
-.box:has(.textStudioBox),
-.box:has([onclick*="addText"]),
-.box:has([onclick*="paste"]),
-.box:has([onclick*="bullet"]),
-.box:has([onclick*="numbered"]){
-  display:block!important;
-}
-.frameShadowBox{
-  margin-top:10px;
-  padding:10px;
-  border:1px solid rgba(255,232,248,.13);
-  border-radius:14px;
-  background:rgba(255,255,255,.045);
-}
-.frameShadowBox label{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  color:#ffeaf7;
-  font-size:12px;
-  font-weight:900;
-  margin-bottom:6px;
-}
-.frameShadowBox input[type=range]{
-  width:100%;
-  accent-color:#ff8ed6;
-}
-.layer.frameSlot .frameSvg .frameOutline,
-.layer.frameSlot .frameSvg .frameBg{
-  stroke:transparent!important;
-}
-
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 
@@ -5309,71 +4606,8 @@ aside:last-of-type .shadowSliderBox{
 }
 
 
-/* Clean Pattern Showcase generator — one simple control, no extra trays */
-.showcaseTypeGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:9px 0 10px}
-.showcaseTypeGrid button{min-height:38px;text-align:center;font-size:12px!important}
-.showcaseTypeGrid button.active{outline:2px solid rgba(255,142,214,.8)!important;background:linear-gradient(90deg,rgba(155,107,255,.34),rgba(255,142,214,.24))!important}
-.frameStepper{display:grid;grid-template-columns:34px 1fr 34px;gap:6px;align-items:center}
-.frameStepper span{display:grid;place-items:center;min-height:34px;border-radius:11px;border:1px solid rgba(255,232,248,.14);background:rgba(255,255,255,.045);font-weight:950;color:#fff8fb}
-.layer.patternSlot{background:#fff;border:2px dashed rgba(80,65,100,.35);box-shadow:0 15px 32px rgba(20,20,50,.16);overflow:hidden}
-.layer.patternSlot .placeholder{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;color:#8f829c;font-size:clamp(11px,1.6vw,18px);font-weight:900;letter-spacing:.01em;background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(250,244,252,.9))}
-.layer.patternSlot.selected{outline:4px solid rgba(255,142,214,.98)!important;outline-offset:5px!important;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 0 0 8px rgba(255,142,214,.24),0 20px 40px rgba(20,20,50,.22)!important}
-.layer.patternSlot.selected .placeholder{color:#7d4fd6;background:linear-gradient(135deg,#fff7fc,#f4edff)}
-.layer.circleSlot{border-radius:50%}.layer.circleSlot img,.layer.circleSlot .placeholder{border-radius:50%}
-.layer.stripSlot .placeholder{writing-mode:vertical-rl;text-orientation:mixed;font-size:13px}
-.layer.patternSlot.filledSlot{border-style:solid;border-color:rgba(255,255,255,.65)}
-.thumb{cursor:pointer}.thumb[draggable="true"]{touch-action:none}
 
 
-
-/* FLASH MOP URGENT TEXT PANEL RESTORE */
-#rightPanel .shadowSliderBox,
-.rightPanel .shadowSliderBox,
-#editPanel .shadowSliderBox,
-.editBox .shadowSliderBox,
-aside:last-of-type .shadowSliderBox{
-  display:none!important;
-}
-.textStudioBox,
-#textPanel,
-.textPanel,
-.box:has(.textStudioBox),
-.box:has([onclick*="addText"]),
-.box:has([onclick*="paste"]),
-.box:has([onclick*="bullet"]),
-.box:has([onclick*="numbered"]){
-  display:block!important;
-}
-.frameShadowBox{
-  margin-top:10px;
-  padding:10px;
-  border:1px solid rgba(255,232,248,.13);
-  border-radius:14px;
-  background:rgba(255,255,255,.045);
-}
-.frameShadowBox label{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  color:#ffeaf7;
-  font-size:12px;
-  font-weight:900;
-  margin-bottom:6px;
-}
-.frameShadowBox input[type=range]{
-  width:100%;
-  accent-color:#ff8ed6;
-}
-.layer.frameSlot .frameSvg .frameOutline,
-.layer.frameSlot .frameSvg .frameBg{
-  stroke:transparent!important;
-}
-
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="ppages-final-ux-fixes-js">
@@ -5414,71 +4648,8 @@ aside:last-of-type .shadowSliderBox{
 }
 
 
-/* Clean Pattern Showcase generator — one simple control, no extra trays */
-.showcaseTypeGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:9px 0 10px}
-.showcaseTypeGrid button{min-height:38px;text-align:center;font-size:12px!important}
-.showcaseTypeGrid button.active{outline:2px solid rgba(255,142,214,.8)!important;background:linear-gradient(90deg,rgba(155,107,255,.34),rgba(255,142,214,.24))!important}
-.frameStepper{display:grid;grid-template-columns:34px 1fr 34px;gap:6px;align-items:center}
-.frameStepper span{display:grid;place-items:center;min-height:34px;border-radius:11px;border:1px solid rgba(255,232,248,.14);background:rgba(255,255,255,.045);font-weight:950;color:#fff8fb}
-.layer.patternSlot{background:#fff;border:2px dashed rgba(80,65,100,.35);box-shadow:0 15px 32px rgba(20,20,50,.16);overflow:hidden}
-.layer.patternSlot .placeholder{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;color:#8f829c;font-size:clamp(11px,1.6vw,18px);font-weight:900;letter-spacing:.01em;background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(250,244,252,.9))}
-.layer.patternSlot.selected{outline:4px solid rgba(255,142,214,.98)!important;outline-offset:5px!important;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 0 0 8px rgba(255,142,214,.24),0 20px 40px rgba(20,20,50,.22)!important}
-.layer.patternSlot.selected .placeholder{color:#7d4fd6;background:linear-gradient(135deg,#fff7fc,#f4edff)}
-.layer.circleSlot{border-radius:50%}.layer.circleSlot img,.layer.circleSlot .placeholder{border-radius:50%}
-.layer.stripSlot .placeholder{writing-mode:vertical-rl;text-orientation:mixed;font-size:13px}
-.layer.patternSlot.filledSlot{border-style:solid;border-color:rgba(255,255,255,.65)}
-.thumb{cursor:pointer}.thumb[draggable="true"]{touch-action:none}
 
 
-
-/* FLASH MOP URGENT TEXT PANEL RESTORE */
-#rightPanel .shadowSliderBox,
-.rightPanel .shadowSliderBox,
-#editPanel .shadowSliderBox,
-.editBox .shadowSliderBox,
-aside:last-of-type .shadowSliderBox{
-  display:none!important;
-}
-.textStudioBox,
-#textPanel,
-.textPanel,
-.box:has(.textStudioBox),
-.box:has([onclick*="addText"]),
-.box:has([onclick*="paste"]),
-.box:has([onclick*="bullet"]),
-.box:has([onclick*="numbered"]){
-  display:block!important;
-}
-.frameShadowBox{
-  margin-top:10px;
-  padding:10px;
-  border:1px solid rgba(255,232,248,.13);
-  border-radius:14px;
-  background:rgba(255,255,255,.045);
-}
-.frameShadowBox label{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  color:#ffeaf7;
-  font-size:12px;
-  font-weight:900;
-  margin-bottom:6px;
-}
-.frameShadowBox input[type=range]{
-  width:100%;
-  accent-color:#ff8ed6;
-}
-.layer.frameSlot .frameSvg .frameOutline,
-.layer.frameSlot .frameSvg .frameBg{
-  stroke:transparent!important;
-}
-
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 
@@ -5495,71 +4666,8 @@ aside:last-of-type .shadowSliderBox{
 @media(max-width:1180px){.projectGroup{order:4}.toolbarRow.studioActions{gap:8px!important}.actionGroup{padding:5px!important}}
 
 
-/* Clean Pattern Showcase generator — one simple control, no extra trays */
-.showcaseTypeGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:9px 0 10px}
-.showcaseTypeGrid button{min-height:38px;text-align:center;font-size:12px!important}
-.showcaseTypeGrid button.active{outline:2px solid rgba(255,142,214,.8)!important;background:linear-gradient(90deg,rgba(155,107,255,.34),rgba(255,142,214,.24))!important}
-.frameStepper{display:grid;grid-template-columns:34px 1fr 34px;gap:6px;align-items:center}
-.frameStepper span{display:grid;place-items:center;min-height:34px;border-radius:11px;border:1px solid rgba(255,232,248,.14);background:rgba(255,255,255,.045);font-weight:950;color:#fff8fb}
-.layer.patternSlot{background:#fff;border:2px dashed rgba(80,65,100,.35);box-shadow:0 15px 32px rgba(20,20,50,.16);overflow:hidden}
-.layer.patternSlot .placeholder{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;color:#8f829c;font-size:clamp(11px,1.6vw,18px);font-weight:900;letter-spacing:.01em;background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(250,244,252,.9))}
-.layer.patternSlot.selected{outline:4px solid rgba(255,142,214,.98)!important;outline-offset:5px!important;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 0 0 8px rgba(255,142,214,.24),0 20px 40px rgba(20,20,50,.22)!important}
-.layer.patternSlot.selected .placeholder{color:#7d4fd6;background:linear-gradient(135deg,#fff7fc,#f4edff)}
-.layer.circleSlot{border-radius:50%}.layer.circleSlot img,.layer.circleSlot .placeholder{border-radius:50%}
-.layer.stripSlot .placeholder{writing-mode:vertical-rl;text-orientation:mixed;font-size:13px}
-.layer.patternSlot.filledSlot{border-style:solid;border-color:rgba(255,255,255,.65)}
-.thumb{cursor:pointer}.thumb[draggable="true"]{touch-action:none}
 
 
-
-/* FLASH MOP URGENT TEXT PANEL RESTORE */
-#rightPanel .shadowSliderBox,
-.rightPanel .shadowSliderBox,
-#editPanel .shadowSliderBox,
-.editBox .shadowSliderBox,
-aside:last-of-type .shadowSliderBox{
-  display:none!important;
-}
-.textStudioBox,
-#textPanel,
-.textPanel,
-.box:has(.textStudioBox),
-.box:has([onclick*="addText"]),
-.box:has([onclick*="paste"]),
-.box:has([onclick*="bullet"]),
-.box:has([onclick*="numbered"]){
-  display:block!important;
-}
-.frameShadowBox{
-  margin-top:10px;
-  padding:10px;
-  border:1px solid rgba(255,232,248,.13);
-  border-radius:14px;
-  background:rgba(255,255,255,.045);
-}
-.frameShadowBox label{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  color:#ffeaf7;
-  font-size:12px;
-  font-weight:900;
-  margin-bottom:6px;
-}
-.frameShadowBox input[type=range]{
-  width:100%;
-  accent-color:#ff8ed6;
-}
-.layer.frameSlot .frameSvg .frameOutline,
-.layer.frameSlot .frameSvg .frameBg{
-  stroke:transparent!important;
-}
-
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="cordula-font-matchmaker-cleanup">
@@ -6507,11 +5615,6 @@ aside:last-of-type .shadowSliderBox{
   stroke:transparent!important;
 }
 
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 
@@ -8764,11 +7867,6 @@ function makeNumberedList(){
   }
   .showcaseFillTools button{font-size:11.5px!important;min-height:34px!important}
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 
 <script id="ppages-flashmop-86-showcase-js">
@@ -8943,11 +8041,6 @@ function makeNumberedList(){
     border:0!important;
   }
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 <script id="ppages-stacked-showcase-no-pink-js">
 (function(){
@@ -9057,11 +8150,6 @@ function makeNumberedList(){
   .stage .layer.label.ppTextTouchLocked .resizeHint::after{
     content:' · text'!important;
   }
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="ppages-text-unlocked-flashmop-js">
@@ -9194,11 +8282,6 @@ function makeNumberedList(){
   .layer.frameSlot.frameCustom.filledSlot .customFrameMask{
     background-color:transparent!important;
   }
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="pp-doggy-91-custom-frame-js">
@@ -9403,11 +8486,6 @@ function makeNumberedList(){
   /* Avoid duplicate-looking bottom-right dots: the new SE handle is the visible one. */
   .stage .layer.selected > .handle{opacity:0!important;}
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 <script id="pp-doggy-94-selection-rescue-js">
 (function(){
@@ -9578,11 +8656,6 @@ function makeNumberedList(){
   }
   .stage .layer.selected > .resizeHint{display:none!important;}
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 
 
@@ -9599,11 +8672,6 @@ function makeNumberedList(){
   body.ppMemorySafe .layer.patternSlot:not(.selected){box-shadow:0 8px 18px rgba(20,20,50,.14)!important;}
   body.ppMemorySafe .stage{box-shadow:0 18px 38px rgba(0,0,0,.28),0 0 0 1px rgba(255,255,255,.10)!important;}
   body.ppMemorySafe .workspace{background-size:72px 72px,72px 72px,auto!important;}
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="ppages-memory-safe-v3-js">
@@ -9833,11 +8901,6 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
 .layer.text,.layer.label{overflow:visible!important;}
 .layer.text.selected .handle,.layer.label.selected .handle{display:block!important;}
 .layer.text .shapeText,.layer.label .shapeText{pointer-events:none!important;}
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="ppages-v92-frame-text-gesture-safe">
@@ -10160,11 +9223,6 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
 .layer.frameSlot.selected .deleteMini,
 .layer.frameSlot.selected .resizeHint{display:block!important;}
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 <script id="trueNoSquareFrameFinalPatchScript">
 (function(){
@@ -10242,11 +9300,6 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
     line-height:1.32;
     color:rgba(255,248,252,.86);
   }
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="pp-crop-to-layer-prototype-js">
@@ -10511,11 +9564,6 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
 .pageListRow button.small{width:30px!important;height:30px!important;padding:0!important;display:grid!important;place-items:center!important;}
 .pageListRow .pageDeleteBtn{background:rgba(255,107,107,.14)!important;border-color:rgba(255,107,107,.32)!important;color:#ffd8d8!important;}
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 <script>
 (function(){
@@ -10678,11 +9726,6 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
   display:none!important;
 }
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 <script>
 /* V103D EMERGENCY FIX — never hide the layer panel body. */
@@ -10778,11 +9821,6 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
   .layerItem.ppLayerRow{grid-template-columns:21px 32px 26px minmax(0,1fr) 26px!important;gap:4px!important;}
   .layerThumb{width:31px!important;height:31px!important;border-radius:8px!important;}
 }
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="ppLayerPanelThumbsAndNamesV99Script">
@@ -10978,11 +10016,6 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
     .layerItem.ppLayerRow{grid-template-columns:21px 32px 26px minmax(0,1fr) 26px!important;gap:4px!important;}
     .layerThumb{width:31px!important;height:31px!important;border-radius:8px!important;}
   }
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="pp-layer-filename-thumbs-v100-js">
@@ -11183,11 +10216,6 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
     body.ppLayersWide{--pp-rightW:360px!important;}
     body.ppLayersWide .side.right{min-width:360px!important;}
   }
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="pp-expandable-layers-panel-v101-js">
@@ -11545,11 +10573,6 @@ window.addEventListener('DOMContentLoaded',function(){
     z-index:100190!important;
   }
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 <script id="pp-text-free-the-box-js">
 (function(){
@@ -11705,11 +10728,6 @@ window.addEventListener('DOMContentLoaded',function(){
   #toggleRightPanel{right:0!important;left:auto!important;border-radius:17px 0 0 17px!important;}
   body.leftHanded #toggleLeftPanel{right:0!important;left:auto!important;border-radius:17px 0 0 17px!important;}
   body.leftHanded #toggleRightPanel{left:0!important;right:auto!important;border-radius:0 17px 17px 0!important;}
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 
@@ -11957,11 +10975,6 @@ window.addEventListener('DOMContentLoaded',function(){
     font-weight:750!important;
   }
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 
 <script id="upload-design-assets-source-fix-script-109">
@@ -12035,11 +11048,6 @@ window.addEventListener('DOMContentLoaded',function(){
     font-size:10.8px!important;
     line-height:1.18!important;
   }
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 
@@ -12174,11 +11182,6 @@ window.addEventListener('DOMContentLoaded',function(){
 #textValue.mainTextEditor{min-height:86px!important; -webkit-user-select:text!important; user-select:text!important; touch-action:manipulation!important;}
 #smartTextBar{display:none!important;} /* pause the experimental quick bar until panel typing is solid */
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 <script id="ppTextFocusFix117">
 /* TEXT FOCUS FIX v117
@@ -12297,11 +11300,6 @@ window.addEventListener('DOMContentLoaded',function(){
   cursor:move!important;
 }
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 <script id="ppTextPanelTapStable122">
 (function(){
@@ -12403,11 +11401,6 @@ window.addEventListener('DOMContentLoaded',function(){
 #textValue.ppMagicFocus124{outline:2px solid rgba(255,142,214,.9)!important;box-shadow:0 0 0 4px rgba(255,142,214,.16)!important;}
 .stage .layer.text .shapeText,.stage .layer.label .shapeText{contenteditable:false!important;-webkit-user-select:none!important;user-select:none!important;}
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 <script id="ppMagicFocus124">
 (function(){
@@ -12480,11 +11473,6 @@ window.addEventListener('DOMContentLoaded',function(){
 .stage .layer.text,.stage .layer.label{touch-action:manipulation!important;}
 .stage .layer.text .shapeText,.stage .layer.label .shapeText{cursor:text!important;}
 #textValue.ppMagicFocus125{outline:2px solid rgba(255,142,214,.95)!important;box-shadow:0 0 0 4px rgba(255,142,214,.18)!important;}
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="ppMagicDoubleTap125">
@@ -12572,11 +11560,6 @@ window.addEventListener('DOMContentLoaded',function(){
 }
 #textValue::selection{background:rgba(255,142,214,.42)!important;color:#fff8fb!important;}
 #textValue.ppCaretReady126{outline:2px solid rgba(255,142,214,.92)!important;box-shadow:0 0 0 4px rgba(255,142,214,.16)!important;}
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="ppTextCaret126">
@@ -12700,11 +11683,6 @@ window.addEventListener('DOMContentLoaded',function(){
   content:'▶ ';
   color:#ffb8e7;
 }
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 
@@ -13012,11 +11990,6 @@ window.addEventListener('DOMContentLoaded',function(){
   isolation:isolate!important;
 }
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 <script id="pp-v164-real-multiply-layer-patch">
 (function(){
@@ -13083,11 +12056,6 @@ window.addEventListener('DOMContentLoaded',function(){
     transform:translateZ(0)!important;
     -webkit-transform:translateZ(0)!important;
   }
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="pp-v167-custom-mockup-button-rescue-script">
@@ -13213,11 +12181,6 @@ window.addEventListener('DOMContentLoaded',function(){
   }
   body.ppLayersWide #layerList .ppFrozenLayerThumb{width:42px!important;height:42px!important;}
   body.ppLayersWide #layerList .layerItem.ppFrozenThumbRow{grid-template-columns:22px 42px 28px minmax(0,1fr) 28px!important;min-height:56px!important;}
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="pp-frozen-real-layer-thumbs-v166-js">
@@ -13399,11 +12362,6 @@ window.addEventListener('DOMContentLoaded',function(){
     text-transform:none!important;
   }
   .ppTextToast176{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:2147483647;background:rgba(20,15,30,.94);border:1px solid rgba(255,232,248,.16);box-shadow:0 12px 30px rgba(0,0,0,.30);border-radius:999px;padding:9px 14px;font:850 12px/1.2 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#fff8fb;opacity:0;pointer-events:none;transition:opacity .2s ease}.ppTextToast176.show{opacity:1}
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="pp-text-v176-js">
@@ -13683,11 +12641,6 @@ window.addEventListener('DOMContentLoaded',function(){
     display:none !important;
   }
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 <script id="pp-v171-calm-layer-selection-js">
 (function(){
@@ -13724,11 +12677,6 @@ window.addEventListener('DOMContentLoaded',function(){
   .stage .layer{
     visibility:visible!important;
   }
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="pp-v172-keep-siblings-visible-js">
@@ -13811,11 +12759,6 @@ window.addEventListener('DOMContentLoaded',function(){
     height:100%!important;
     display:block!important;
   }
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="pp-v174-tight-png-bounds-js">
@@ -17416,11 +16359,6 @@ else install();
     .ppTextDone176{top:224px!important;}
   }
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 
 <script id="pp-text-v192-live-sheet-js">
@@ -17614,11 +16552,6 @@ else install();
     margin-top:7px;
   }
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 
 <script id="pp-font-matchmaker-v194-js">
@@ -17789,11 +16722,6 @@ else install();
   #layerList .layerItem.ppCleanThumbRow .deleteLayerBtn{width:28px!important;height:28px!important;padding:0!important;border-radius:9px!important;display:grid!important;place-items:center!important;font-size:12px!important;}
   body.ppLayersWide #layerList .ppCleanLayerThumb{width:42px!important;height:42px!important;}
   body.ppLayersWide #layerList .layerItem.ppCleanThumbRow{grid-template-columns:22px 42px 28px minmax(0,1fr) 28px!important;min-height:56px!important;}
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="pp-v167-clean-thumbs-js">
@@ -18072,11 +17000,6 @@ else install();
     100%{outline:2px solid rgba(255,142,214,.92);outline-offset:2px;box-shadow:0 0 0 1px rgba(255,255,255,.42),0 0 18px rgba(255,142,214,.22)}
   }
 
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
-
 </style>
 <script id="pp-v170-layer-row-select-js">
 (function(){
@@ -18224,11 +17147,6 @@ else install();
 <style id="pp-v173-no-selection-shift-css">
   .layer.ppSelectFlash{animation:none!important;}
   .stage .layer.selected{transform-origin:center center!important;}
-
-/* v178: uploaded image assets keep proportions when corner-resized. */
-.layer.image .resizeHint::after,
-.layer.banner .resizeHint::after,
-.layer.overlay .resizeHint::after{content:' · keeps proportions';}
 
 </style>
 <script id="pp-v173-no-selection-shift-js">
