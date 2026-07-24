@@ -26147,47 +26147,12 @@ else install();
   };
   try{ generateFontMatches = window.generateFontMatches; }catch(_){}
 
-  var oldApply=window.applyGeneratedFontPair;
-  window.applyGeneratedFontPair=function(headingFont, bodyFont){
-    var selected=selectedLayer();
-    var texts=textLayers();
-
-    if(!texts.length){
-      if(typeof addTitleSubtitle === 'function'){
-        addTitleSubtitle();
-        texts=textLayers();
-      }
-    }
-
-    if(!texts.length) return;
-
-    try{ if(typeof save === 'function') save(); }catch(_){}
-
-    // Safer launch behaviour:
-    // If one text box is selected, treat it as the heading and apply the heading font to that box.
-    // If nothing is selected, apply heading/body to the first two text boxes on the page.
-    if(isTextLayer(selected)){
-      selected.font=headingFont;
-      selected.bold=true;
-      selected.fontSize=Math.max(selected.fontSize||54,56);
-      var s=S(); if(s) s.selected=selected.id;
-    }else{
-      var heading=texts[0], body=texts[1]||null;
-      heading.font=headingFont;
-      heading.bold=true;
-      heading.fontSize=Math.max(heading.fontSize||54,56);
-      if(body){
-        body.font=bodyFont;
-        body.bold=false;
-        body.fontSize=Math.min(Math.max(body.fontSize||28,24),34);
-      }
-      var st=S(); if(st) st.selected=heading.id;
-    }
-
-    renderAll();
-    updateStatus();
-  };
-  try{ applyGeneratedFontPair = window.applyGeneratedFontPair; }catch(_){}
+  // NOTE(consolidation): a window.applyGeneratedFontPair assignment that lived here was
+  // removed - fully superseded by a later generation (confirmed via a fresh scan: the final
+  // applyGeneratedFontPair generation fully replaces with no fallback to a previous version),
+  // so it was dead code. selectedLayer/textLayers/isTextLayer/renderAll/updateStatus/S stay
+  // live - the window.generateFontMatches wrap above still uses updateStatus, and the
+  // selection-tracking listener below still uses updateStatus too.
 
   // Keep the matchmaker aware of the currently selected text box.
   ['click','touchend','pointerup','keyup'].forEach(function(type){
@@ -28265,61 +28230,12 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
 
 
 <!-- FONT MATCHMAKER APPLY FIX — routes through the normal font dropdown update path -->
-<script id="pp-font-matchmaker-dropdown-path-fix">
-(function(){
-  'use strict';
-
-  function selectedEditableText(){
-    var l=null;
-    try{ if(typeof getLayer==='function') l=getLayer(); }catch(_){ }
-    return l && (l.type==='text' || l.type==='label') && !l.disclosureBadge ? l : null;
-  }
-
-  function applyMatchmakerFontThroughDropdown(fontName){
-    var layer=selectedEditableText();
-    var fontSelect=document.getElementById('fontFamily');
-
-    if(!layer){
-      alert('Select a text box first, then tap Apply to text.');
-      return false;
-    }
-    if(!fontSelect || typeof applyTextControls!=='function'){
-      alert('The text font controls are not available.');
-      return false;
-    }
-
-    /* Load the selected box into the normal text controls first, exactly as a
-       canvas selection does, so applyTextControls cannot overwrite it with
-       values belonging to a previously selected text box. */
-    try{ if(typeof syncControls==='function') syncControls(); }catch(_){ }
-
-    var option=[].slice.call(fontSelect.options).find(function(o){
-      return String(o.value).toLowerCase()===String(fontName).toLowerCase();
-    });
-    if(!option){
-      option=document.createElement('option');
-      option.value=fontName;
-      option.textContent=fontName;
-      fontSelect.appendChild(option);
-    }
-
-    try{ if(typeof save==='function') save(); }catch(_){ }
-    fontSelect.value=option.value;
-
-    /* This is the exact same update path used by the normal font dropdown. */
-    applyTextControls();
-
-    try{ if(typeof syncControls==='function') syncControls(); }catch(_){ }
-    try{ if(typeof autosaveSoon==='function') autosaveSoon(); }catch(_){ }
-    return true;
-  }
-
-  window.applyGeneratedFontPair=function(headingFont, bodyFont){
-    return applyMatchmakerFontThroughDropdown(headingFont);
-  };
-  try{ applyGeneratedFontPair=window.applyGeneratedFontPair; }catch(_){ }
-})();
-</script>
+<!-- NOTE(consolidation): the pp-font-matchmaker-dropdown-path-fix script that lived here was
+     removed - its window.applyGeneratedFontPair (and its private
+     selectedEditableText/applyMatchmakerFontThroughDropdown helpers, used only by it) was
+     fully superseded by the pp-font-matchmaker-pair-restore generation below (confirmed via a
+     fresh scan: the final generation fully replaces with no fallback to a previous version),
+     so the whole block was dead code. -->
 
 <!-- FONT MATCHMAKER PAIR RESTORE — applies heading + subtitle through the normal font dropdown path -->
 <script id="pp-font-matchmaker-pair-restore">
