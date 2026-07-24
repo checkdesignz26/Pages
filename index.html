@@ -17462,16 +17462,8 @@ function makeNumberedList(){
     };
   }
 
-  /* Keep add text safely unlocked even if older code or imported projects stored lock flags. */
-  var previousAddText=window.addText;
-  if(typeof previousAddText==='function'){
-    window.addText=function(){
-      var result=previousAddText.apply(this,arguments);
-      unlockTextData();
-      try{ if(typeof render==='function') render(); }catch(_){}
-      return result;
-    };
-  }
+  /* NOTE(consolidation): an addText wrap that lived here was removed because window.addText
+     is fully replaced later (no fallback to a previous version), so this wrap never ran. */
 
   var previousAddBadge=window.addBadge;
   if(typeof previousAddBadge==='function'){
@@ -20106,15 +20098,8 @@ window.addEventListener('DOMContentLoaded',function(){
       st.querySelectorAll('.layer.text,.layer.label').forEach(function(node){bindTextNode(node,pi);});
     });
   }
-  var oldAddText=window.addText;
-  if(typeof oldAddText==='function'){
-    window.addText=function(){
-      var out=oldAddText.apply(this,arguments);
-      unlockAllText();
-      setTimeout(function(){redrawHard(); patchDOM();},0);
-      return out;
-    };
-  }
+  /* NOTE(consolidation): an addText wrap that lived here was removed because window.addText
+     is fully replaced later (no fallback to a previous version), so this wrap never ran. */
   var oldRender=window.render;
   if(typeof oldRender==='function'){
     window.render=function(){ unlockAllText(); var out=oldRender.apply(this,arguments); setTimeout(patchDOM,0); return out; };
