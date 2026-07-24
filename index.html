@@ -16436,15 +16436,6 @@ function makeNumberedList(){
 <script>
 /* DOGGY DIRECTOR STRIP LOCK + CLEAR SLOT FINAL */
 (function(){
-  function currentPageSafe(){
-    try{return current();}catch(e){return state.pages[state.selectedPage];}
-  }
-  function selectedLayerSafe(){
-    try{return getLayer();}catch(e){
-      const p=currentPageSafe();
-      return p && p.layers ? p.layers.find(l=>l.id===state.selected) : null;
-    }
-  }
   function isGeneratedStrip(l){
     return !!(l && l.generatedPatternLayout && l.slotShape === "strip");
   }
@@ -16480,18 +16471,10 @@ function makeNumberedList(){
     };
   }
 
-  window.clearSelectedSlot = function(){
-    const l = selectedLayerSafe();
-    if(!l || !(l.patternSlot || isGeneratedStrip(l))){
-      alert("Select a pattern slot first.");
-      return;
-    }
-    save();
-    l.src = null;
-    l.filledSlot = false;
-    render();
-  };
-
+  // NOTE(consolidation): window.clearSelectedSlot had an earlier generation here; fully
+  // superseded by ppages-flashmop-86-showcase-js's generation further down (a standalone
+  // replacement, not a wrap). ensureClearButton()'s button below still calls clearSelectedSlot()
+  // by bare identifier, which correctly resolves to whichever generation is currently live.
   function ensureClearButton(){
     const patternTray = document.querySelector("#patternTray");
     const patternBox = patternTray && patternTray.closest(".box");
@@ -18877,7 +18860,10 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
     return l;
   }
   window.ppAutoNameLayer=autoNameLayer;
-  window.ppAutoNamePage=function(p){ layers(p||page()).forEach(function(l){autoNameLayer(l,p||page(),false);}); };
+  // NOTE(consolidation): window.ppAutoNamePage had an earlier generation here; fully superseded
+  // by pp-layer-filename-thumbs-v100-js's generation further down (a standalone replacement, not
+  // a wrap). boot() below still calls window.ppAutoNamePage(...) by property access, which
+  // correctly resolves to whichever generation is currently live.
 
   var oldLayer=window.layer;
   if(typeof oldLayer==='function'){
@@ -24449,8 +24435,9 @@ document.addEventListener('DOMContentLoaded',function(){
   window.generateHorizontalFabricStashLayout=function(){return buildEvenStack(count(),preservedStrips(),true)};
   try{generateHorizontalFabricStashLayout=window.generateHorizontalFabricStashLayout}catch(e){}
 
-  window.relayoutGeneratedStripsPreserveFills=function(){return buildEvenStack(preservedStrips().length||count(),preservedStrips(),false)};
-  try{relayoutGeneratedStripsPreserveFills=window.relayoutGeneratedStripsPreserveFills}catch(e){}
+  // NOTE(consolidation): window.relayoutGeneratedStripsPreserveFills had an earlier generation
+  // here; fully superseded by ppages-v182p-vertical-stack-js's generation further down (a
+  // standalone replacement, not a wrap - confirmed no fallback to a previous version).
 
   var oldSetCards=window.setCards;
   window.setCards=function(n,style){
@@ -24802,7 +24789,6 @@ window.generatePatternShowcaseLayout=function(){
   },true);
 
   function isSlot(l){ return !!(l&&(l.patternSlot||l.generatedPatternLayout||l.showcaseSlot)); }
-  function slotsFor(p){ return (p&&Array.isArray(p.layers)?p.layers:[]).filter(isSlot); }
   function selectedSlot(){
     var s=S(),p=currentPage(); if(!s||!p) return null;
     var l=(p.layers||[]).find(function(x){return x&&String(x.id)===String(s.selected);});
@@ -24835,26 +24821,12 @@ window.generatePatternShowcaseLayout=function(){
     if(!srcs.length){alert('Choose at least one pattern from the Pattern Tray first.');return;}
     saveOnce(); l.src=srcs[srcs.length-1]; l.fit='cover'; commitOnce(l.id);
   };
-  window.magicFillEmptySlots=function(){
-    var p=currentPage(),srcs=chosenSources();
-    if(!p){alert('Add or select a page first.');return;}
-    if(!srcs.length){alert('Choose one or more patterns from the Pattern Tray first.');return;}
-    var targets=slotsFor(p).filter(function(l){return !l.src;});
-    if(!targets.length){alert('There are no empty showcase slots on this page.');return;}
-    saveOnce();
-    targets.forEach(function(l,i){l.src=srcs[i%srcs.length];l.fit='cover';});
-    commitOnce(targets[0].id);
-  };
-  window.replaceAllShowcaseSlots=function(){
-    var p=currentPage(),srcs=chosenSources();
-    if(!p){alert('Add or select a page first.');return;}
-    if(!srcs.length){alert('Choose one or more patterns from the Pattern Tray first.');return;}
-    var targets=slotsFor(p);
-    if(!targets.length){alert('Generate a Pattern Showcase first.');return;}
-    saveOnce();
-    targets.forEach(function(l,i){l.src=srcs[i%srcs.length];l.fit='cover';});
-    commitOnce(targets[0].id);
-  };
+  // NOTE(consolidation): magicFillEmptySlots and replaceAllShowcaseSlots had earlier generations
+  // here; both are superseded by ppages-v183b-magic-polish-js's generations further down (which
+  // read the same .ppMagicSelected/.ppMagicNumber badge state this block's paint()/toggleThumb()
+  // still maintain), and magicFillEmptySlots gets one more live wrap after that in
+  // ppages-v183c-showcase-depth-js. chosenSources/isSlot/selectedSlot stay - fillSelectedFrame
+  // above is still live and uses them.
 
   function watchTray(){
     var t=tray(); if(!t) return;
