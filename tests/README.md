@@ -48,3 +48,15 @@ after page load. Two consequences show up in these tests:
 If a test in here starts failing after a change to `index.html`, don't disable it - it's
 almost certainly telling you a live code path just changed behavior, which is exactly what this
 suite exists to catch.
+
+## Touch gesture tests
+
+`tests/specs/gestures.spec.js` dispatches real `TouchEvent`s built with the `Touch` constructor
+(`test.use({ hasTouch: true })`), not Playwright/CDP's `Input.dispatchTouchEvent`. CDP's touch
+emulation silently drops a `touchend` when it partially releases a multi-touch gesture (one
+finger up, one still down) in the same sequence as an immediately preceding partial release -
+that's a CDP quirk, not an app bug, and it produced confusing false failures while this suite was
+being written. Touch identifiers come from one incrementing counter per test and are never
+reused, matching real touch hardware - reusing a small id (0, 1, ...) across two unrelated
+gestures in the same test can trip the app's own stale-gesture recovery, which keys off "is this
+id still an active touch," not "is this a fresh gesture."

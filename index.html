@@ -27732,23 +27732,30 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
 </script>
 
 <!-- Pattern Pages v183k — clean iPad undo/redo only -->
-<script id="ppages-v183k-clean-undo-redo-only">
+<script id="ppages-gesture-suite-undo-redo-duplicate">
 (function(){
   'use strict';
-  if(window.__PP_V183K_UNDO_REDO_ONLY__) return;
+  if(window.__PP_GESTURE_SUITE__) return;
+  window.__PP_GESTURE_SUITE__=true;
+  /* Neutralise older gesture generations in case they ever run first. */
   window.__PP_V183K_UNDO_REDO_ONLY__=true;
   window.__PP_V183J_CLEAN_GESTURES__=true;
   window.__PP_V183H_GESTURES__=true;
 
-  var gesture=null;
   var TAP_MAX_MS=460;
   var MOVE_LIMIT=26;
+  var HOLD_MS=380;       // how long the first finger must stay put before a 2nd-finger tap counts as "duplicate"
+  var DOUBLE_TAP_MS=400; // Apple's system undo/redo gesture: 3-finger tap = undo, 3-finger double-tap = redo
 
   function insideStage(node){return !!(node&&node.closest&&node.closest('.stage'));}
   function centre(touches){
     var x=0,y=0,n=touches.length||1;
     for(var i=0;i<touches.length;i++){x+=touches[i].clientX;y+=touches[i].clientY;}
     return {x:x/n,y:y/n};
+  }
+  function touchById(list,id){
+    for(var i=0;i<list.length;i++){if(list[i].identifier===id)return list[i];}
+    return null;
   }
   function showNote(text){
     try{
@@ -27772,50 +27779,133 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     }catch(err){console.error(err);}
     return false;
   }
+  function hasSelection(){
+    try{return !!(typeof state!=='undefined'&&state&&state.selected);}catch(e){return false;}
+  }
   function swallow(e){
     if(e.cancelable)e.preventDefault();
     e.stopPropagation();
     if(typeof e.stopImmediatePropagation==='function')e.stopImmediatePropagation();
   }
 
+  /* Undo/redo: three-finger tap = undo, three-finger double-tap = redo (Apple's system gesture). */
+  var triGesture=null;
+  var lastTripleTapTime=0;
+  var pendingUndoTimer=null;
+
+  /* Duplicate: hold the selected layer with one finger, then tap with a second finger (Affinity-style). */
+  var singleHold=null;
+  var dupCandidate=null;
+
   document.addEventListener('touchstart',function(e){
-    if(!insideStage(e.target))return;
-    if(e.touches.length!==2&&e.touches.length!==3)return;
-    var p=centre(e.touches);
-    gesture={count:e.touches.length,maxCount:e.touches.length,start:Date.now(),x:p.x,y:p.y,moved:false};
-    /* Capture the gesture before layer/delete handlers can interpret either finger as a normal tap. */
-    swallow(e);
+    /* A render() mid-gesture (e.g. duplicateSelected/undo/redo rebuild the touched DOM node)
+       can detach a finger's original target before its touchend fires, so that touchend never
+       reaches this listener and leaves stale hold/duplicate state behind. Every touchstart's
+       e.touches is the browser's current authoritative list, so use it to self-heal: a tracked
+       touch id that's no longer present has, in fact, already ended. */
+    if(singleHold&&!touchById(e.touches,singleHold.id))singleHold=null;
+    if(dupCandidate&&!touchById(e.touches,dupCandidate.id))dupCandidate=null;
+
+    if(e.touches.length===1){
+      if(!insideStage(e.target))return; // only track a hold that starts on the canvas
+      var t=e.touches[0];
+      singleHold={id:t.identifier,time:Date.now(),x:t.clientX,y:t.clientY,moved:false};
+      return; // never swallow a lone finger - normal select/drag must keep working
+    }
+
+    if(e.touches.length===2&&!triGesture){
+      /* The 2nd finger's tap can land anywhere ("tap elsewhere"), not just on the stage -
+         only the held finger needs to have started there. */
+      if(singleHold&&!singleHold.moved&&(Date.now()-singleHold.time)>=HOLD_MS){
+        var second=null;
+        for(var i=0;i<e.touches.length;i++){if(e.touches[i].identifier!==singleHold.id)second=e.touches[i];}
+        if(second){
+          dupCandidate={id:second.identifier,x:second.clientX,y:second.clientY,start:Date.now(),moved:false};
+          /* Capture this specific gesture before layer/select handlers see the 2nd finger. */
+          swallow(e);
+        }
+      }
+      return; // an ordinary (non-hold) 2-finger touch is left alone - that's pinch-to-zoom's job
+    }
+
+    if(e.touches.length===3){
+      if(!insideStage(e.target))return;
+      var p=centre(e.touches);
+      triGesture={start:Date.now(),x:p.x,y:p.y,moved:false};
+      dupCandidate=null;
+      swallow(e);
+    }
   },{capture:true,passive:false});
 
   document.addEventListener('touchmove',function(e){
-    if(!gesture)return;
-    if(e.touches.length>gesture.maxCount)gesture.maxCount=e.touches.length;
-    if(e.touches.length){
-      var p=centre(e.touches);
-      if(Math.hypot(p.x-gesture.x,p.y-gesture.y)>MOVE_LIMIT)gesture.moved=true;
+    if(e.touches.length===1&&singleHold){
+      var t=touchById(e.touches,singleHold.id);
+      if(t&&Math.hypot(t.clientX-singleHold.x,t.clientY-singleHold.y)>MOVE_LIMIT)singleHold.moved=true;
+      return;
     }
-    swallow(e);
+    if(dupCandidate){
+      var t2=touchById(e.touches,dupCandidate.id);
+      if(t2&&Math.hypot(t2.clientX-dupCandidate.x,t2.clientY-dupCandidate.y)>MOVE_LIMIT)dupCandidate.moved=true;
+      swallow(e);
+      return;
+    }
+    if(triGesture){
+      if(e.touches.length){
+        var p=centre(e.touches);
+        if(Math.hypot(p.x-triGesture.x,p.y-triGesture.y)>MOVE_LIMIT)triGesture.moved=true;
+      }
+      swallow(e);
+    }
   },{capture:true,passive:false});
 
   document.addEventListener('touchend',function(e){
-    if(!gesture)return;
-    swallow(e);
-    if(e.touches.length!==0)return;
-    var g=gesture;gesture=null;
-    if(g.moved||Date.now()-g.start>TAP_MAX_MS)return;
-    if(g.maxCount===2){if(run('undo'))showNote('Undo');}
-    else if(g.maxCount===3){if(run('redo'))showNote('Redo');}
+    if(dupCandidate){
+      swallow(e);
+      if(!touchById(e.touches,dupCandidate.id)){
+        var ok=!dupCandidate.moved&&(Date.now()-dupCandidate.start)<=TAP_MAX_MS;
+        dupCandidate=null;
+        if(ok&&hasSelection()&&typeof window.duplicateSelected==='function'){
+          window.duplicateSelected();
+          showNote('Duplicated');
+        }
+      }
+      if(e.touches.length===0)singleHold=null;
+      return;
+    }
+
+    if(triGesture){
+      swallow(e);
+      if(e.touches.length!==0)return;
+      var g=triGesture;triGesture=null;singleHold=null;
+      if(g.moved||Date.now()-g.start>TAP_MAX_MS)return;
+      var now=Date.now();
+      if(now-lastTripleTapTime<=DOUBLE_TAP_MS){
+        lastTripleTapTime=0;
+        if(pendingUndoTimer){clearTimeout(pendingUndoTimer);pendingUndoTimer=null;}
+        if(run('redo'))showNote('Redo');
+        return;
+      }
+      lastTripleTapTime=now;
+      if(pendingUndoTimer)clearTimeout(pendingUndoTimer);
+      pendingUndoTimer=setTimeout(function(){
+        pendingUndoTimer=null;
+        if(run('undo'))showNote('Undo');
+      },DOUBLE_TAP_MS);
+      return;
+    }
+
+    if(e.touches.length===0)singleHold=null;
   },{capture:true,passive:false});
 
   document.addEventListener('touchcancel',function(e){
-    if(!gesture)return;
-    gesture=null;
-    swallow(e);
+    var wasActive=!!(dupCandidate||triGesture);
+    singleHold=null;dupCandidate=null;triGesture=null;
+    if(wasActive)swallow(e);
   },{capture:true,passive:false});
 
   function updateHints(){
     document.querySelectorAll('.gestureHint').forEach(function(el){
-      el.textContent='On the page: two-finger tap = undo · three-finger tap = redo. Duplicate stays on the duplicate button.';
+      el.textContent='On the page: pinch with two fingers to zoom · three-finger tap = undo · three-finger double-tap = redo · hold the selected layer, then tap with a second finger to duplicate.';
     });
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',updateHints,{once:true});
