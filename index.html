@@ -16087,46 +16087,10 @@ function makeNumberedList(){
     setTimeout(updateFramePanelHighlight, 80);
   }, true);
 
-  function getFrameTarget(){
-    const p = currentPageSafe();
-    if(!p || !p.layers) return null;
-
-    let l = p.layers.find(x => x.id === state.selected);
-    if(l && (l.type === "frame" || l.patternSlot)) return l;
-
-    if(DD_FRAME.lastFrameId){
-      l = p.layers.find(x => x.id === DD_FRAME.lastFrameId);
-      if(l && (l.type === "frame" || l.patternSlot)){
-        state.selected = l.id;
-        return l;
-      }
-    }
-    return null;
-  }
-
-  window.fillSelectedFrame = function(){
-    const src = selectedPatternSrc();
-    if(!src){
-      alert("Choose a pattern from the Pattern Tray first.");
-      return;
-    }
-
-    const l = getFrameTarget();
-    if(!l){
-      alert("Select a layout slot or frame on the canvas first.");
-      return;
-    }
-
-    save();
-    l.src = src;
-    l.fit = "cover";
-    l.patternSlot = true;
-    l.filledSlot = true;
-    DD_FRAME.lastFrameId = l.id;
-    state.selected = l.id;
-    render();
-    setTimeout(updateFramePanelHighlight, 80);
-  };
+  // NOTE(consolidation): getFrameTarget() and a window.fillSelectedFrame assignment that
+  // lived here were removed - fully superseded by a later generation (confirmed via a fresh
+  // scan: the final fillSelectedFrame generation fully replaces with no fallback to a
+  // previous version), so they were dead code.
 
   function updateFramePanelHighlight(){
     try{
@@ -16836,20 +16800,6 @@ function makeNumberedList(){
     if(!st || !p || !st.selected) return null;
     return (p.layers||[]).find(function(x){return x.id===st.selected;}) || null;
   }
-  function selectedPatternSrc(){
-    var st=getState();
-    if(!st || !st.trays || !st.trays.pattern || !st.trays.pattern.length) return null;
-    var i=st.selectedTray && st.selectedTray.pattern;
-    if(i==null || !st.trays.pattern[i]){
-      /* UX rescue: if the user only uploaded one pattern, use it. */
-      if(st.trays.pattern.length===1){
-        if(st.selectedTray) st.selectedTray.pattern=0;
-        return st.trays.pattern[0].src;
-      }
-      return null;
-    }
-    return st.trays.pattern[i].src;
-  }
   function isFillableSlot(l){
     return !!(l && (l.patternSlot || l.type==='frame' || l.type==='strip' || l.type==='card'));
   }
@@ -16858,29 +16808,10 @@ function makeNumberedList(){
     var n=$('autosaveNotice'); if(n){n.textContent=msg;n.classList.add('show');setTimeout(function(){n.classList.remove('show');},1600);}
   }
 
-  /* Override the original fill button with a safer version.
-     Works for strips, squares, rectangles, circles, and frames. */
-  window.fillSelectedFrame = function(){
-    var st=getState(), p=getCurrentPage(), l=currentLayer();
-    if(!st || !p){ alert('Project is not ready yet.'); return; }
-    if(!isFillableSlot(l)){
-      alert('Tap a strip, square, rectangle, circle, or frame on the canvas first.');
-      return;
-    }
-    var src=selectedPatternSrc();
-    if(!src){
-      alert('Choose a pattern from the Pattern Tray first.');
-      return;
-    }
-    try{ if(typeof save==='function') save(); }catch(e){}
-    l.src=src;
-    l.fit='cover';
-    l.patternSlot=true;
-    if(l.type==='card' && !l.slotShape) l.slotShape='square';
-    if(l.type==='strip' && !l.slotShape) l.slotShape='strip';
-    try{ render(); }catch(e){ try{renderPages();}catch(_){} }
-    status('Filled selected slot.');
-  };
+  // NOTE(consolidation): a window.fillSelectedFrame assignment that lived here was removed -
+  // fully superseded by a later generation (confirmed via a fresh scan: the final
+  // fillSelectedFrame generation fully replaces with no fallback to a previous version), so
+  // it was dead code.
 
   window.clearSelectedSlot = function(){
     var l=currentLayer();
@@ -16894,25 +16825,10 @@ function makeNumberedList(){
     status('Cleared selected slot.');
   };
 
-  /* Override drag/drop fill too, so iPad/desktop both use the same reliable path. */
-  window.fillLayerWithPattern = function(layerId, patternIndex, pageIndex){
-    var st=getState();
-    if(!st || !st.pages) return;
-    pageIndex = pageIndex==null ? (st.selectedPage||0) : pageIndex;
-    var p=st.pages[pageIndex]; if(!p) return;
-    var l=(p.layers||[]).find(function(x){return x.id===layerId;});
-    var src=st.trays && st.trays.pattern && st.trays.pattern[patternIndex] && st.trays.pattern[patternIndex].src;
-    if(!l || !src) return;
-    try{ if(typeof save==='function') save(); }catch(e){}
-    l.src=src;
-    l.fit='cover';
-    l.patternSlot=true;
-    st.selectedPage=pageIndex;
-    st.selected=layerId;
-    if(st.selectedTray) st.selectedTray.pattern=patternIndex;
-    try{ render(); }catch(e){ try{renderPages();}catch(_){} }
-    status('Filled selected slot.');
-  };
+  // NOTE(consolidation): a window.fillLayerWithPattern assignment that lived here was
+  // removed - fully superseded by a later generation (confirmed via a fresh scan: the final
+  // fillLayerWithPattern generation fully replaces with no fallback to a previous version),
+  // so it was dead code.
 
   /* Tiny UI cleanup: place Fill/Clear inside the Pattern Showcase panel as well.
      We do not delete the old buttons, so the build stays stable; we just add the controls
@@ -17414,16 +17330,10 @@ function makeNumberedList(){
     }
   };
 
-  var oldFill = window.fillSelectedFrame;
-  window.fillSelectedFrame = function(){
-    var before;
-    try{ before=state.selected; }catch(e){}
-    if(typeof oldFill==='function') oldFill.apply(this,arguments);
-    try{
-      var p=page(); var l=(p.layers||[]).find(function(x){return x.id===state.selected || x.id===before;});
-      if(l && l.type==='frame' && l.frameShape==='custom' && l.src){ l.filledSlot=true; render(); }
-    }catch(e){}
-  };
+  // NOTE(consolidation): a window.fillSelectedFrame wrap that lived here was removed - fully
+  // superseded by a later generation (confirmed via a fresh scan: the final fillSelectedFrame
+  // generation fully replaces with no fallback to a previous version), so this wrap - despite
+  // correctly calling its captured oldFill - never actually ran.
 })();
 </script>
 
@@ -17837,69 +17747,16 @@ function makeNumberedList(){
   // the thumbSrc lazy-thumbnail behavior this version added). Removed as
   // dead code.
 
-  window.getSelectedPattern=function(){ var s=st(); var i=s&&s.selectedTray?s.selectedTray.pattern:null; return i!=null && s.trays && s.trays.pattern[i] ? s.trays.pattern[i].src : null; };
   window.getPattern=function(i){ var s=st(); var tray=s&&s.trays?s.trays.pattern:[]; return tray && tray.length ? tray[i%tray.length].src : null; };
 
-  window.loadTray=function(e,type){
-    var files=Array.prototype.slice.call((e&&e.target&&e.target.files)||[]); if(!files.length) return;
-    var s=st(); if(!s) return; s.trays=s.trays||{pattern:[],asset:[]}; s.trays[type]=s.trays[type]||[];
-    toast('Adding images in memory-safe size…');
-    Promise.all(files.map(async function(file){
-      var src=await fileToLiveImage(file,LIVE_EDGE);
-      var thumb=await makeThumb(src);
-      s.trays[type].push({src:src,thumbSrc:thumb,name:file.name,originalSize:file.size||0,memorySafe:true});
-    })).then(function(){
-      if(e&&e.target) e.target.value='';
-      try{window.renderTrays();}catch(err){}
-      if(s.trays[type].length>10) toast('Large tray mode: keep only patterns needed for this listing.'); else toast('Images added safely.');
-      queueTrim();
-    }).catch(function(err){ console.error(err); alert('One image could not be added safely. Try a smaller PNG.'); });
-  };
-
-  window.addUploadedImageLayer=function(e){
-    var file=e&&e.target&&e.target.files&&e.target.files[0]; if(!file) return;
-    fileToLiveImage(file,LIVE_EDGE).then(function(src){
-      try{ if(typeof save==='function') save(); }catch(er){}
-      var img=new Image();
-      img.onload=function(){
-        var box=(typeof placeInUsefulSize==='function')?placeInUsefulSize('image',img):{x:15,y:15,w:60,h:45};
-        var l=layer('image',Object.assign({name:'image overlay',src:src,fit:'contain',z:nextZ()},box));
-        current().layers.push(l); state.selected=l.id; if(e.target)e.target.value=''; render(); queueTrim();
-      };
-      img.onerror=function(){ var l=layer('image',{name:'image overlay',x:15,y:15,w:60,h:45,src:src,fit:'contain',z:nextZ()}); current().layers.push(l); state.selected=l.id; render(); queueTrim(); };
-      img.src=src;
-    });
-  };
-
-  window.createMockupPage=function(e){
-    var file=e&&e.target&&e.target.files&&e.target.files[0]; if(!file) return;
-    fileToLiveImage(file,MOCKUP_EDGE).then(function(src){
-      var img=new Image();
-      img.onload=function(){
-        try{ if(typeof save==='function') save(); }catch(er){}
-        var p={type:'mockup',w:img.naturalWidth||img.width,h:img.naturalHeight||img.height,layers:[]};
-        var bg=layer('mockup',{name:'mock-up background',x:0,y:0,w:100,h:100,src:src,fit:'cover',z:1,memorySafe:true});
-        p.layers.push(bg);
-        try{ if(document.getElementById('aiDisclosureToggle') && document.getElementById('aiDisclosureToggle').checked) p.layers.push(makeAIDisclosureLayer(2)); }catch(er){}
-        state.pages.push(p); state.selectedPage=state.pages.length-1; state.selected=(p.layers.at(-1)||bg).id;
-        if(e.target)e.target.value=''; render(); if(typeof scrollSel==='function') scrollSel(); queueTrim();
-      };
-      img.src=src;
-    }).catch(function(err){ console.error(err); alert('Could not create a memory-safe mock-up page from this image.'); });
-  };
-
-  // When layers are moved/resized repeatedly, avoid keeping many heavy undo snapshots.
-  try{
-    var oldSave=window.save;
-    window.save=function(){
-      var s=st();
-      try{
-        var rough=s?JSON.stringify({pages:s.pages,trays:s.trays}).length:0;
-        if(rough>7000000){ if(s){s.history=[];s.redoStack=[];} queueTrim(); return; }
-      }catch(e){}
-      if(typeof oldSave==='function') return oldSave.apply(this,arguments);
-    };
-  }catch(e){}
+  // NOTE(consolidation): window.getSelectedPattern, window.loadTray, window.addUploadedImageLayer,
+  // window.createMockupPage, and a window.save wrap that lived here were removed - each fully
+  // superseded by a later generation (confirmed via a fresh scan: the final generation of each
+  // fully replaces with no fallback to a previous version), so they were dead code. The upload-time
+  // capping they did is restored independently by pp-memory-safe-upload-cap-js, which wraps the
+  // live loadTray/addUploadedImageLayer/createMockupPage generations directly. fileToLiveImage/
+  // capDataURL/makeThumb above stay live regardless, since window.ppMemoryTrimState below still
+  // uses them on its own boot timer to slim down oversized images already in a loaded project.
 
   ['change','pointerup'].forEach(function(evt){ document.addEventListener(evt,queueTrim,true); });
   setTimeout(function(){ window.ppMemoryTrimState(false); toast('Memory Safe v3 active'); },900);
@@ -19229,15 +19086,10 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
   // still calls them by property access, which correctly resolves to
   // whichever generation is currently live.
 
-  window.fillSelectedFrame=function(){
-    var l=(typeof getLayer==='function')?getLayer():null;
-    if(!l || !(['strip','card','pattern','frame'].indexOf(l.type)>=0 || l.patternSlot)){alert('Select a layout slot or frame on the canvas first.');return;}
-    var it=selectedTrayItem('pattern'); if(!it||!it.src){alert('Choose a pattern from the Pattern Tray first.');return;}
-    try{save();}catch(e){}
-    l.src=it.src; l.thumbSrc=it.thumbSrc||it.src; l.fit='cover'; l.sourceName=it.name||l.sourceName; ensureName(l,page(),true);
-    try{render();}catch(e){try{renderPages();renderLayers();renderFrameList();}catch(_){}}
-  };
-  try{fillSelectedFrame=window.fillSelectedFrame;}catch(e){}
+  // NOTE(consolidation): a window.fillSelectedFrame assignment that lived here was removed -
+  // fully superseded by a later generation (confirmed via a fresh scan: the final
+  // fillSelectedFrame generation fully replaces with no fallback to a previous version), so
+  // it was dead code.
 
   window.fillLayerWithPattern=function(layerId,patternIndex,pageIndex){
     var s=st(); if(pageIndex==null)pageIndex=s.selectedPage;
@@ -19250,57 +19102,10 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
   };
   try{fillLayerWithPattern=window.fillLayerWithPattern;}catch(e){}
 
-  window.placePatternOnPage=function(){
-    var it=selectedTrayItem('pattern'); if(!it||!it.src){alert('Choose a pattern from the pattern tray first.');return;}
-    try{save();}catch(e){}
-    var l=layer('pattern',Object.assign({name:fileBase(it.name)||'Pattern',sourceName:it.name,thumbSrc:it.thumbSrc||it.src,src:it.src,fit:'cover',z:nextZ()},placeInUsefulSize('pattern')));
-    ensureName(l,page(),true); page().layers.push(l); st().selected=l.id;
-    try{render();}catch(e){}
-  };
-  try{placePatternOnPage=window.placePatternOnPage;}catch(e){}
-
-  window.addImageLayer=function(kind){
-    var it=selectedTrayItem('asset'); var src=it&&it.src; var p=page();
-    try{save();}catch(e){}
-    function addLayer(type,box,fit,opacity){
-      var l=layer(type,Object.assign({name:fileBase(it&&it.name)||preferredNameFor({type:type}),sourceName:it&&it.name,thumbSrc:(it&&it.thumbSrc)||src,src:src,fit:fit||'cover',opacity:opacity==null?1:opacity,z:nextZ()},box));
-      ensureName(l,p,true); p.layers.push(l); st().selected=l.id; try{render();}catch(e){};
-    }
-    if(kind==='image'){
-      if(!src){alert('Select an uploaded image first.');return;}
-      var img=new Image(); img.onload=function(){addLayer('image',typeof placeInUsefulSize==='function'?placeInUsefulSize('image',img):{x:15,y:15,w:60,h:45},'contain');}; img.onerror=function(){addLayer('image',{x:15,y:15,w:60,h:45},'contain');}; img.src=src; return;
-    }
-    if(kind==='banner'){
-      if(src){var bi=new Image(); bi.onload=function(){addLayer('banner',typeof placeInUsefulSize==='function'?placeInUsefulSize('banner',bi):{x:8,y:7,w:84,h:14},'cover');}; bi.onerror=function(){addLayer('banner',{x:8,y:7,w:84,h:14},'cover');}; bi.src=src;}
-      else{var l=layer('label',{name:'Banner Label',text:'Your banner text',x:8,y:7,w:84,h:14,fill:'#ff8ed6',border:'#ffffff',borderW:0,color:'#ffffff',fontSize:42,bold:false,badgeShape:'rounded',z:nextZ()});p.layers.push(l);st().selected=l.id;render();}
-      return;
-    }
-    if(kind==='overlay'){
-      if(src)addLayer('overlay',typeof placeInUsefulSize==='function'?placeInUsefulSize('overlay'):{x:5,y:5,w:90,h:90},'cover',.55);
-      else{var o=layer('rectangle',{name:'Soft White Overlay',x:5,y:5,w:90,h:90,fill:'rgba(255,255,255,.92)',border:'#ffffff',borderW:0,opacity:.62,z:nextZ()});p.layers.push(o);st().selected=o.id;render();}
-    }
-  };
-  try{addImageLayer=window.addImageLayer;}catch(e){}
-
-  var oldAddUploaded=window.addUploadedImageLayer;
-  window.addUploadedImageLayer=function(e){
-    var file=e&&e.target&&e.target.files&&e.target.files[0];
-    if(!file){ if(typeof oldAddUploaded==='function')return oldAddUploaded.apply(this,arguments); return; }
-    var reader=new FileReader();
-    reader.onload=function(ev){
-      try{save();}catch(er){}
-      var src=ev.target.result; var img=new Image();
-      img.onload=function(){
-        var box=typeof placeInUsefulSize==='function'?placeInUsefulSize('image',img):{x:15,y:15,w:60,h:45};
-        var l=layer('image',Object.assign({name:fileBase(file.name)||'Image',sourceName:file.name,src:src,thumbSrc:src,fit:'contain',z:nextZ()},box));
-        ensureName(l,page(),true); page().layers.push(l); st().selected=l.id; if(e.target)e.target.value=''; render();
-      };
-      img.onerror=function(){var l=layer('image',{name:fileBase(file.name)||'Image',sourceName:file.name,src:src,thumbSrc:src,x:15,y:15,w:60,h:45,fit:'contain',z:nextZ()});ensureName(l,page(),true);page().layers.push(l);st().selected=l.id;render();};
-      img.src=src;
-    };
-    reader.readAsDataURL(file);
-  };
-  try{addUploadedImageLayer=window.addUploadedImageLayer;}catch(e){}
+  // NOTE(consolidation): window.placePatternOnPage, window.addImageLayer, and
+  // window.addUploadedImageLayer assignments that lived here were removed - each fully
+  // superseded by a later generation (confirmed via a fresh scan: the final generation of
+  // each fully replaces with no fallback to a previous version), so they were dead code.
 
   var oldMock=window.createMockupPage;
   window.createMockupPage=function(e){
@@ -20045,11 +19850,6 @@ window.addEventListener('DOMContentLoaded',function(){
   };
   try{ getSelectedPattern = window.getSelectedPattern; }catch(e){}
 
-  function getSelectedAsset(){
-    var it=selectedTrayItemReal('asset');
-    return it && it.src ? it.src : null;
-  }
-
   window.placePatternOnPage = function(){
     var src=window.getSelectedPattern();
     if(!src){ alert('Choose a pattern from the pattern tray first.'); return; }
@@ -20061,80 +19861,11 @@ window.addEventListener('DOMContentLoaded',function(){
   };
   try{ placePatternOnPage = window.placePatternOnPage; }catch(e){}
 
-  window.fillSelectedFrame = function(){
-    var l=(typeof getLayer==='function') ? getLayer() : null;
-    if(!l || !(['strip','card','pattern','frame'].indexOf(l.type)>=0 || l.patternSlot)){
-      alert('Select a layout slot or frame on the canvas first.');
-      return;
-    }
-    var src=window.getSelectedPattern();
-    if(!src){ alert('Choose a pattern from the pattern tray first.'); return; }
-    try{ save(); }catch(e){}
-    l.src=src;
-    l.fit='cover';
-    var it=selectedTrayItemReal('pattern');
-    if(it){
-      l.thumbSrc=it.thumbSrc || it.src;
-      l.sourceName=it.name || l.sourceName;
-    }
-    render();
-  };
-  try{ fillSelectedFrame = window.fillSelectedFrame; }catch(e){}
-
-  window.addImageLayer = function(kind){
-    var src=getSelectedAsset();
-    var it=selectedTrayItemReal('asset');
-    var p=current();
-
-    function addLayer(type,box,fit,opacity){
-      var l=layer(type,Object.assign({
-        name:(it&&it.name)||type,
-        sourceName:it&&it.name,
-        thumbSrc:(it&&it.thumbSrc)||src,
-        src:src,
-        fit:fit||'cover',
-        opacity:opacity==null?1:opacity,
-        z:nextZ()
-      },box));
-      p.layers.push(l);
-      st().selected=l.id;
-      render();
-    }
-
-    if(kind==='image'){
-      if(!src){ alert('Select an uploaded image first.'); return; }
-      try{ save(); }catch(e){}
-      var img=new Image();
-      img.onload=function(){ addLayer('image', typeof placeInUsefulSize==='function'?placeInUsefulSize('image',img):{x:15,y:15,w:60,h:45}, 'contain'); };
-      img.onerror=function(){ addLayer('image',{x:15,y:15,w:60,h:45},'contain'); };
-      img.src=src;
-      return;
-    }
-
-    if(kind==='banner'){
-      try{ save(); }catch(e){}
-      if(src){
-        var bi=new Image();
-        bi.onload=function(){ addLayer('banner', typeof placeInUsefulSize==='function'?placeInUsefulSize('banner',bi):{x:8,y:7,w:84,h:14}, 'cover'); };
-        bi.onerror=function(){ addLayer('banner',{x:8,y:7,w:84,h:14},'cover'); };
-        bi.src=src;
-      }else{
-        var l=layer('label',{name:'Banner Label',text:'Your banner text',x:8,y:7,w:84,h:14,fill:'#ff8ed6',border:'#ffffff',borderW:0,color:'#ffffff',fontSize:42,bold:false,badgeShape:'rounded',z:nextZ()});
-        p.layers.push(l); st().selected=l.id; render();
-      }
-      return;
-    }
-
-    if(kind==='overlay'){
-      try{ save(); }catch(e){}
-      if(src) addLayer('overlay', typeof placeInUsefulSize==='function'?placeInUsefulSize('overlay'):{x:5,y:5,w:90,h:90}, 'cover', .55);
-      else{
-        var o=layer('rectangle',{name:'Soft White Overlay',x:5,y:5,w:90,h:90,fill:'rgba(255,255,255,.92)',border:'#ffffff',borderW:0,opacity:.62,z:nextZ()});
-        p.layers.push(o); st().selected=o.id; render();
-      }
-    }
-  };
-  try{ addImageLayer = window.addImageLayer; }catch(e){}
+  // NOTE(consolidation): window.fillSelectedFrame and window.addImageLayer assignments
+  // (plus getSelectedAsset, only used by the latter) that lived here were removed - each
+  // fully superseded by a later generation (confirmed via a fresh scan: the final generation
+  // of each fully replaces with no fallback to a previous version), so they were dead code.
+  // window.placePatternOnPage above stays - it's still the live base a later wrap builds on.
 
   // Clean accordion panels: one tap, no double event.
   function wireAccordions(){
@@ -25153,79 +24884,11 @@ window.generatePatternShowcaseLayout=function(){
 })();
 </script>
 
-<script>
-/* v182w — reliable showcase slot filling + Magic Fill */
-(function(){
-  function appState(){ return window.state || null; }
-  function activePage(){
-    var s=appState();
-    if(!s || !Array.isArray(s.pages) || !s.pages.length) return null;
-    var pi=Number.isInteger(s.selectedPage)?s.selectedPage:0;
-    return s.pages[pi] || s.pages[0] || null;
-  }
-  function chosenPatternSrc(){
-    var s=appState();
-    if(s && s.trays && Array.isArray(s.trays.pattern)){
-      var i=s.selectedTray && Number.isInteger(s.selectedTray.pattern) ? s.selectedTray.pattern : null;
-      if(i!==null && s.trays.pattern[i] && s.trays.pattern[i].src) return s.trays.pattern[i].src;
-    }
-    var img=document.querySelector('#patternTray .thumb.selected img');
-    return img && img.src ? img.src : null;
-  }
-  function selectedSlot(){
-    var s=appState(), p=activePage();
-    if(!s || !p || !Array.isArray(p.layers)) return null;
-    var l=p.layers.find(function(x){ return x && x.id===s.selected; });
-    if(l && (l.patternSlot || ['strip','card','pattern','frame'].includes(l.type))) return l;
-    var el=document.querySelector('.stage .layer.patternSlot.selected, .stage .layer.selected[data-id]');
-    if(el && el.dataset && el.dataset.id){
-      l=p.layers.find(function(x){ return x && x.id===el.dataset.id; });
-      if(l && (l.patternSlot || ['strip','card','pattern','frame'].includes(l.type))){
-        s.selected=l.id;
-        return l;
-      }
-    }
-    return null;
-  }
-  function redraw(){
-    if(typeof window.render==='function') window.render();
-    else if(typeof window.renderAll==='function') window.renderAll();
-    else if(typeof window.renderPages==='function') window.renderPages();
-    if(typeof window.autosaveSoon==='function') window.autosaveSoon();
-  }
-  window.fillSelectedFrame=function(){
-    var s=appState(), l=selectedSlot(), src=chosenPatternSrc();
-    if(!l){ alert('Tap a showcase slot so it highlights first.'); return; }
-    if(!src){ alert('Choose a pattern from the Pattern Tray first.'); return; }
-    if(typeof window.save==='function') window.save();
-    l.src=src; l.fit='cover';
-    if(s) s.selected=l.id;
-    redraw();
-  };
-  window.magicFillEmptySlots=function(){
-    var p=activePage(), src=chosenPatternSrc();
-    if(!p){ alert('Add or select a page first.'); return; }
-    if(!src){ alert('Choose a pattern from the Pattern Tray first.'); return; }
-    var slots=(p.layers||[]).filter(function(l){ return l && l.patternSlot && !l.src; });
-    if(!slots.length){ alert('There are no empty showcase slots on this page.'); return; }
-    if(typeof window.save==='function') window.save();
-    slots.forEach(function(l){ l.src=src; l.fit='cover'; });
-    var s=appState(); if(s) s.selected=slots[0].id;
-    redraw();
-  };
-  window.replaceAllShowcaseSlots=function(){
-    var p=activePage(), src=chosenPatternSrc();
-    if(!p){ alert('Add or select a page first.'); return; }
-    if(!src){ alert('Choose a pattern from the Pattern Tray first.'); return; }
-    var slots=(p.layers||[]).filter(function(l){ return l && l.patternSlot; });
-    if(!slots.length){ alert('Generate a Pattern Showcase first.'); return; }
-    if(typeof window.save==='function') window.save();
-    slots.forEach(function(l){ l.src=src; l.fit='cover'; });
-    var s=appState(); if(s) s.selected=slots[0].id;
-    redraw();
-  };
-})();
-</script>
+<!-- NOTE(consolidation): the v182w script that lived here (window.fillSelectedFrame,
+     window.magicFillEmptySlots, window.replaceAllShowcaseSlots) was removed - each fully
+     superseded by the v183a generation below (confirmed via a fresh scan: the final
+     generation of each fully replaces with no fallback to a previous version), so the whole
+     block was dead code. -->
 
 
 <!-- v182y — window-capture Pattern Tray multi-select fix -->
@@ -29582,4 +29245,3 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   }
 })();
 </script>
-
