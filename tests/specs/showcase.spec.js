@@ -172,3 +172,26 @@ test('a generated strip can be dragged to reposition it', async ({ page }) => {
   });
   expect(Math.abs(after.x - before.x) > 0.5 || Math.abs(after.y - before.y) > 0.5).toBe(true);
 });
+
+test('a banner added before generateSelectedShowcaseLayout (the real generate-layout button path) stays on top', async ({ page }) => {
+  // The other "stays on top" tests above all go through setCards/generatePatternShowcaseLayout,
+  // which do call ppNormalizeShowcaseZ - but window.generateSelectedShowcaseLayout (what the
+  // panel's actual "generate/update layout" button is wired to, via
+  // ppages-v180c-showcase-fix-js's rebuild()) never called it, so the banner-behind-decorations
+  // bug those other tests guard against was still live through this specific, primary path.
+  const result = await page.evaluate(() => {
+    save();
+    addImageLayer('banner');
+    render();
+    window.showcaseLayoutType = 'strips';
+    window.stripDirection = 'vertical';
+    window.generateSelectedShowcaseLayout();
+    const p = current();
+    const banner = p.layers.find((l) => l.type === 'label');
+    const showcase = p.layers.filter((l) => l.generatedPatternLayout);
+    return { bannerZ: banner.z, maxShowcaseZ: Math.max(...showcase.map((l) => l.z || 0)), showcaseCount: showcase.length };
+  });
+
+  expect(result.showcaseCount).toBeGreaterThan(0);
+  expect(result.bannerZ).toBeGreaterThan(result.maxShowcaseZ);
+});

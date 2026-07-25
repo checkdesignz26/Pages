@@ -1771,18 +1771,11 @@ function generateHorizontalFabricStashLayout(){
   else if(typeof renderAll==='function') renderAll();
   if(typeof autosaveSoon==='function') autosaveSoon();
 }
-function generateSelectedShowcaseLayout(){
-  const h=document.getElementById('stripDirHorizontalBtn');
-  const horizontal = !!(h && h.classList.contains('active'));
-  if((showcaseLayoutType||'strips')==='strips' && horizontal){
-    generateHorizontalFabricStashLayout();
-  }else if(typeof setCards==='function'){
-    setCards(getFrameCount(),showcaseLayoutType||'strips');
-  }else{
-    generatePatternShowcaseLayout();
-  }
-}
-
+// NOTE(consolidation): the original function generateSelectedShowcaseLayout(){...} used to be
+// defined here. Confirmed dead: window.generateSelectedShowcaseLayout is fully replaced (not
+// wrapped) by ppages-v180c-showcase-fix-js's rebuild()-based generation, synchronously during
+// initial page load, before any user interaction is possible, so this base definition was never
+// reachable again - removed as dead code.
 // NOTE(consolidation): the original function generatePatternShowcaseLayout(){...}
 // used to be defined here. Confirmed dead: window.generatePatternShowcaseLayout
 // is fully replaced (not wrapped) by the ppages-stacked-showcase-no-pink-js
@@ -13206,7 +13199,9 @@ window.addEventListener('DOMContentLoaded',function(){
 
 <!-- Pattern Pages v180b — live Pattern Showcase UX patch -->
 <style id="ppages-v180b-showcase-live-css">
-  #stripDirectionControls.showcaseHidden{display:none!important;}
+  /* NOTE(consolidation): #stripDirectionControls.showcaseHidden{display:none!important;} used to
+     be duplicated here - exact byte-identical copy of ppages-v180c-showcase-fix-css's rule
+     further down, removed. */
   .showcaseDeleteBtn{
     width:100%!important;margin-top:7px!important;
     border-color:rgba(255,120,160,.34)!important;
@@ -16957,6 +16952,15 @@ else install();
       for(i=0;i<n;i++){var row=Math.floor(i/cc),col=i%cc;made.push(reuse(old[i],i,t,{x:x0+col*(sw+g),y:y0+row*(sh+g),w:sw,h:sh,z:z(i)}));}
     }
     p.layers=p.layers.concat(made);
+    // NOTE(bugfix): rebuild() never called ppNormalizeShowcaseZ, unlike every other showcase
+    // generator (setCards, generatePatternShowcaseLayout, the vertical/horizontal strip
+    // builders) - but rebuild() is what the real "generate/update layout" button actually calls
+    // (via window.generateSelectedShowcaseLayout). Confirmed live: adding a banner then calling
+    // window.generateSelectedShowcaseLayout() left the banner's z below the regenerated
+    // showcase's z, i.e. the "banner behind decorations" bug pp-showcase-behind-decorations-fix-js
+    // was meant to have fixed was still reachable through this specific path. Fixed by
+    // normalizing here too, matching every other generator.
+    try{ if(typeof window.ppNormalizeShowcaseZ==='function') window.ppNormalizeShowcaseZ(p); }catch(e){}
     try{state.selected=null;}catch(e){}
     renderSafe();
     try{if(typeof autosaveSoon==='function')autosaveSoon();}catch(e){}
