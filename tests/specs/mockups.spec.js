@@ -422,3 +422,83 @@ test('a custom mock-up survives save-template/load-template WITHOUT manually mar
   // the test ends, so it doesn't try to accept a dialog on an already-closed page.
   await page.waitForTimeout(150);
 });
+
+test('creating a mock-up with no pattern selected makes an empty, fillable placeholder slot', async ({ page }) => {
+  // Real request: the mock-up used to require a pattern to be selected at creation time
+  // (createClean threw an alert otherwise), forcing the seller to pick one of their 450+
+  // patterns before they could even lay out the mock-up in a template. The white-mask crop
+  // bounds only depend on the background + mask (fillPattern just paints pixels inside that
+  // area later) - a pattern was never actually needed to know where and how big the slot is.
+  // Now, creating a mock-up with no pattern selected produces an empty slot (patternSlot:true,
+  // no src) exactly like a plain listing placeholder, ready to be filled later.
+  page.on('dialog', (d) => d.accept());
+  await expandAllBoxes(page);
+
+  const bgInput = page.locator('#customMockupBgInput');
+  const maskInput = page.locator('#customMockupMaskInput');
+  const btn = page.locator('#createCustomMockupBtnV163');
+
+  // No pattern uploaded to the tray at all - not even a fallback thumb exists.
+  await bgInput.setInputFiles({ name: 'bg.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await maskInput.setInputFiles({ name: 'mask.png', mimeType: 'image/png', buffer: TINY_PNG });
+
+  await clickResilient(page, btn);
+  await expect
+    .poll(
+      () => page.evaluate(() => state.pages.some((p) => (p.layers || []).some((l) => l.customMockupCropped))),
+      { timeout: 5000 }
+    )
+    .toBe(true);
+
+  const created = await page.evaluate(() => {
+    const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
+    return {
+      src: l.src,
+      patternSlot: l.patternSlot,
+      customMockup: l.customMockup,
+      hasRecipe: !!l.customMockupRecipe,
+      recipeBg: l.customMockupRecipe && l.customMockupRecipe.bg,
+      recipeMask: l.customMockupRecipe && l.customMockupRecipe.mask,
+      recipePattern: l.customMockupRecipe && l.customMockupRecipe.pattern,
+    };
+  });
+  expect(created.src).toBeFalsy();
+  expect(created.patternSlot).toBe(true);
+  expect(created.customMockup).toBe(false);
+  expect(created.hasRecipe).toBe(true);
+  expect(created.recipeBg).toBeTruthy();
+  expect(created.recipeMask).toBeTruthy();
+  expect(created.recipePattern).toBeFalsy();
+
+  // Now pick a pattern and fill it in via the normal listing-placeholders "fill all" flow.
+  const patternInput = page.locator('input[onchange*="loadTray"][onchange*="pattern"]');
+  await patternInput.setInputFiles({ name: 'pat-a.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await page.locator('#patternTray .thumb').last().click();
+
+  const patternSrc = await page.evaluate(() => {
+    const idx = state.selectedTray && state.selectedTray.pattern;
+    return state.trays.pattern[idx].src;
+  });
+
+  await page.evaluate(() => window.fillLinkedPlaceholdersFromTray());
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
+          return l && l.src;
+        }),
+      { timeout: 5000 }
+    )
+    .not.toBeFalsy();
+
+  const filled = await page.evaluate(() => {
+    const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
+    return { pattern: l.customMockupRecipe && l.customMockupRecipe.pattern, customMockup: l.customMockup };
+  });
+  expect(filled.pattern).toBe(patternSrc);
+  expect(filled.customMockup).toBe(true);
+
+  await page.waitForTimeout(150);
+});
