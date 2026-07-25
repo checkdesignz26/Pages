@@ -61,7 +61,7 @@ test('applyGeneratedFontPair applies the heading font through the normal text co
 });
 
 test('double-tapping text opens the floating editor, hides resize handles, and Done cleans up fully', async ({ page }) => {
-  // Two real bugs here, both from CSS/JS added in later patches without accounting for what
+  // Three real bugs here, all from CSS/JS added in later patches without accounting for what
   // pp-text-v176-js ("GOLDEN CAGE TEXT SURGERY") already relied on:
   // 1. pp-text-free-the-box-css's .stage .layer.text.selected > .handle (and .resizeHint/
   //    .rotateHandle) rules have 5 classes of specificity, beating v176's own 4-class
@@ -73,10 +73,23 @@ test('double-tapping text opens the floating editor, hides resize handles, and D
   //    (registered second). stopImmediatePropagation() in the first silently killed the
   //    second, so Done never removed the floating textarea/button - tapping it just left the
   //    editor sitting there, overlapping the now-"selected" canvas layer underneath.
+  // 3. pp-text-free-the-box-js's bindTextNode() installed its own duplicate pointerdown/
+  //    pointermove/pointerup drag+select handler directly on every text/label node (on top of
+  //    the universal makeDraggable(), which the base renderLayer already attaches to every
+  //    layer and which doesn't care about l.locked). On pointerup its temporary WINDOW-level
+  //    capture-phase listener fired before the event ever reached document, and called
+  //    stopPropagation() - silently swallowing the touchend/pointerup half of every real
+  //    double-tap gesture before pp-text-v176-js's document-level double-tap detector ever saw
+  //    it, so the floating editor could never open for a real touchscreen tap. This didn't show
+  //    up in a touch-only synthetic test (below) because real touch devices fire BOTH pointer
+  //    events and touch events for the same physical gesture - the tap() helper now fires both,
+  //    matching real hardware, specifically so this class of bug gets caught again if it
+  //    reappears. Fixed by removing bindTextNode's duplicate handler.
   await page.evaluate(() => { addText('text'); });
   await page.waitForTimeout(200);
 
   await page.evaluate(() => {
+    window.__nextPointerId = 500;
     window.__mkTouch = (id, x, y, target) => new Touch({ identifier: id, target, clientX: x, clientY: y, pageX: x, pageY: y });
     window.__fireTouch = (type, touches, changed, target) => {
       target.dispatchEvent(new TouchEvent(type, { touches, targetTouches: touches, changedTouches: changed, bubbles: true, cancelable: true }));
@@ -87,12 +100,21 @@ test('double-tapping text opens the floating editor, hides resize handles, and D
   const box = await page.locator(`.layer[data-id="${layerId}"]`).boundingBox();
   const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
 
+  // Real touchscreens fire a PointerEvent alongside each TouchEvent for the same physical tap
+  // (pointerdown/pointerup, pointerType:'touch') - dispatch both, in real device order, so this
+  // test exercises the same event interference a real device produces.
   async function tap(x, y) {
     await page.evaluate(({ x, y }) => {
       const el = document.elementFromPoint(x, y);
-      const t = window.__mkTouch(1, x, y, el);
+      const id = window.__nextPointerId++;
+      const t = window.__mkTouch(id, x, y, el);
+      el.dispatchEvent(new PointerEvent('pointerdown', { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true, clientX: x, clientY: y }));
       window.__fireTouch('touchstart', [t], [t], el);
-      setTimeout(() => window.__fireTouch('touchend', [], [t], el), 20);
+      setTimeout(() => {
+        const el2 = document.elementFromPoint(x, y);
+        el2.dispatchEvent(new PointerEvent('pointerup', { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true, clientX: x, clientY: y }));
+        window.__fireTouch('touchend', [], [t], el2);
+      }, 20);
     }, { x, y });
     await page.waitForTimeout(60);
   }

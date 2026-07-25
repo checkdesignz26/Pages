@@ -10356,57 +10356,20 @@ window.addEventListener('DOMContentLoaded',function(){
     var l=layerForNode(node,pi); if(!isText(l)) return;
     node.__textFreeBound=true;
     node.classList.remove('ppTextTouchLocked');
-
-    var oldHandler=node.onpointerdown;
-    node.addEventListener('pointerdown',function(e){
-      if(e.target.closest && e.target.closest('.deleteMini')) return;
-      // Let the dedicated four-corner rescue handles do their own thing.
-      if(e.target.closest && e.target.closest('.ppResizeHandle')) return;
-      var s=S(); if(!s || s.handMode) return;
-      var currentLayer=layerForNode(node,pi); if(!isText(currentLayer)) return;
-      l=currentLayer;
-      s.selectedPage=pi; s.selected=l.id; node.classList.add('selected'); redrawSoft();
-      var stage=node.parentElement; if(!stage) return;
-      var rect=stage.getBoundingClientRect();
-      var resize=!!(e.target.closest && e.target.closest('.handle'));
-      var rotate=!!(e.target.closest && e.target.closest('.rotateHandle'));
-      var layerRect=node.getBoundingClientRect();
-      var start={x:e.clientX,y:e.clientY,lx:+l.x||0,ly:+l.y||0,lw:+l.w||20,lh:+l.h||8,lr:+l.r||0,rect:rect,resize:resize,rotate:rotate,active:false,saved:false,cx:layerRect.left+layerRect.width/2,cy:layerRect.top+layerRect.height/2};
-      try{node.setPointerCapture(e.pointerId);}catch(_){ }
-      e.preventDefault(); e.stopPropagation();
-
-      function move(ev){
-        var dx=(ev.clientX-start.x)/start.rect.width*100;
-        var dy=(ev.clientY-start.y)/start.rect.height*100;
-        if(!start.active && Math.hypot(ev.clientX-start.x,ev.clientY-start.y)<4) return;
-        if(!start.saved){saveSafe();start.saved=true;}
-        start.active=true;
-        if(start.rotate){
-          var a1=Math.atan2(start.y-start.cy,start.x-start.cx);
-          var a2=Math.atan2(ev.clientY-start.cy,ev.clientX-start.cx);
-          l.r=start.lr+(a2-a1)*180/Math.PI;
-        }else if(start.resize){
-          l.w=Math.max(5,start.lw+dx);
-          l.h=Math.max(4,start.lh+dy);
-        }else{
-          l.x=Math.max(-20,Math.min(120,start.lx+dx));
-          l.y=Math.max(-20,Math.min(120,start.ly+dy));
-        }
-        applyVisual(node,l); redrawSoft();
-        ev.preventDefault(); ev.stopPropagation();
-      }
-      function up(ev){
-        window.removeEventListener('pointermove',move,true);
-        window.removeEventListener('pointerup',up,true);
-        window.removeEventListener('pointercancel',up,true);
-        try{node.releasePointerCapture(ev.pointerId);}catch(_){ }
-        redrawHard();
-        ev.preventDefault(); ev.stopPropagation();
-      }
-      window.addEventListener('pointermove',move,true);
-      window.addEventListener('pointerup',up,true);
-      window.addEventListener('pointercancel',up,true);
-    },{passive:false,capture:true});
+    // NOTE(bugfix): a duplicate pointerdown/pointermove/pointerup drag+select+resize+rotate
+    // handler used to be installed here, on every text/label node, in ADDITION to the universal
+    // makeDraggable() that the base renderLayer already attaches to every layer (including text)
+    // unconditionally - makeDraggable doesn't check l.locked/lockText, so it already handled
+    // dragging free text layers without this. Worse, this handler was pure interference: it was
+    // registered on the same node with {capture:true}, called node.setPointerCapture() and
+    // e.stopPropagation() on every pointerdown, then on pointerup its temporary WINDOW-level
+    // capture-phase listener (which fires before the event ever reaches the target/document) also
+    // called stopPropagation() - confirmed live (via realistic pointerdown+touchstart+pointerup+
+    // touchend dispatch, matching real touchscreen event order) that this silently swallowed the
+    // touchend/pointerup half of every real double-tap gesture before it could reach pp-text-v176-
+    // js's document-level double-tap detector, so the floating text editor could never open for
+    // real touch users tapping text - a live, user-facing bug this fix resolves. Removed the whole
+    // handler; makeDraggable already covers drag/select/resize/rotate for text layers.
   }
   function patchDOM(){
     unlockAllText();
