@@ -183,3 +183,128 @@ test('fill all with selected pattern (listing placeholders) also re-fills every 
   });
   expect(placeholderSrc).toBe(newPatternSrc);
 });
+
+test('a custom mock-up marked as a placeholder survives save-template/load-template and can be refilled', async ({ page }) => {
+  // The real "template creator" the seller uses is the separate templates.ptemplate save/load
+  // panel (templateExtensionScript: "save template"/"load template"/"mark placeholder"), not just
+  // the in-session fill-all button covered above. A seller builds a page with a mock-up, selects
+  // it, clicks "mark placeholder", saves a .ptemplate, and later re-loads that file for a brand
+  // new pattern. strippedLayer() (the function that scrubs a layer for the saved template) blanks
+  // l.src for anything marked as a placeholder but must NOT also drop l.customMockupRecipe/
+  // customMockupCropped - those are what let fillLinkedPlaceholdersFromTray() find and re-render
+  // the mock-up after the round trip. This exercises the real save/load functions end to end,
+  // not a re-implementation of their logic.
+  page.on('dialog', (d) => d.accept());
+  await expandAllBoxes(page);
+
+  const bgInput = page.locator('#customMockupBgInput');
+  const maskInput = page.locator('#customMockupMaskInput');
+  const btn = page.locator('#createCustomMockupBtnV163');
+  const patternInput = page.locator('input[onchange*="loadTray"][onchange*="pattern"]');
+
+  await bgInput.setInputFiles({ name: 'bg.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await maskInput.setInputFiles({ name: 'mask.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await patternInput.setInputFiles({ name: 'pat-a.png', mimeType: 'image/png', buffer: TINY_PNG });
+
+  await clickResilient(page, btn);
+  await expect
+    .poll(
+      () => page.evaluate(() => state.pages.some((p) => (p.layers || []).some((l) => l.customMockupCropped))),
+      { timeout: 5000 }
+    )
+    .toBe(true);
+
+  const mockupLayerId = await page.evaluate(() => {
+    for (const p of state.pages) {
+      const l = (p.layers || []).find((x) => x.customMockupCropped);
+      if (l) return l.id;
+    }
+    return null;
+  });
+
+  // Select the mock-up layer and mark it as a placeholder, the documented templates-panel flow.
+  await page.evaluate((id) => {
+    state.selected = id;
+    window.markSelectedAsPlaceholder();
+  }, mockupLayerId);
+
+  await page.evaluate(() => window.addLkmPlaceholder('main pattern'));
+
+  // Save a real .ptemplate via the actual save function, capturing the Blob instead of letting
+  // the browser download it.
+  const templateJson = await page.evaluate(async () => {
+    const orig = URL.createObjectURL;
+    let captured = null;
+    URL.createObjectURL = function (blob) {
+      captured = blob;
+      return orig.call(URL, blob);
+    };
+    window.downloadPatternPagesTemplate();
+    URL.createObjectURL = orig;
+    return await captured.text();
+  });
+
+  const savedMockupLayer = JSON.parse(templateJson).pages.flatMap((p) => p.layers || []).find((l) => l.customMockupCropped);
+  expect(savedMockupLayer).toBeTruthy();
+  expect(savedMockupLayer.isPlaceholder).toBe(true);
+  expect(savedMockupLayer.src).toBeFalsy();
+  expect(savedMockupLayer.customMockupRecipe && savedMockupLayer.customMockupRecipe.bg).toBeTruthy();
+  expect(savedMockupLayer.customMockupRecipe && savedMockupLayer.customMockupRecipe.mask).toBeTruthy();
+
+  // Load that saved template back through the real load function (a fresh "open this template
+  // for a new pattern" session), then confirm the mock-up comes back blank, ready to be filled.
+  await page.evaluate((json) => {
+    const file = new File([json], 'test.ptemplate', { type: 'application/json' });
+    window.loadPatternPagesTemplate({ target: { files: [file], value: '' } });
+  }, templateJson);
+
+  await expect
+    .poll(() => page.evaluate(() => state.pages.some((p) => (p.layers || []).some((l) => l.customMockupCropped))), {
+      timeout: 5000,
+    })
+    .toBe(true);
+
+  const reloadedMockupSrc = await page.evaluate(() => {
+    const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
+    return l && l.src;
+  });
+  expect(reloadedMockupSrc).toBeFalsy();
+
+  // Now pick a brand new pattern and hit the one-button fill-all, the actual seller workflow.
+  const secondPattern = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFhAJ/wlseKgAAAABJRU5ErkJggg==',
+    'base64'
+  );
+  await patternInput.setInputFiles({ name: 'pat-b.png', mimeType: 'image/png', buffer: secondPattern });
+  await page.locator('#patternTray .thumb').last().click();
+
+  const newPatternSrc = await page.evaluate(() => {
+    const idx = state.selectedTray && state.selectedTray.pattern;
+    return state.trays.pattern[idx].src;
+  });
+
+  await page.evaluate(() => window.fillLinkedPlaceholdersFromTray());
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
+          return l && l.src;
+        }),
+      { timeout: 5000 }
+    )
+    .not.toBeFalsy();
+
+  const filledMockupPattern = await page.evaluate(() => {
+    const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
+    return l && l.customMockupRecipe && l.customMockupRecipe.pattern;
+  });
+  expect(filledMockupPattern).toBe(newPatternSrc);
+
+  const reloadedPlaceholderSrc = await page.evaluate(() => {
+    const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.lkmPlaceholder);
+    return l && l.src;
+  });
+  expect(reloadedPlaceholderSrc).toBe(newPatternSrc);
+});
