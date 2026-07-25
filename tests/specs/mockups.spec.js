@@ -423,14 +423,21 @@ test('a custom mock-up survives save-template/load-template WITHOUT manually mar
   await page.waitForTimeout(150);
 });
 
-test('creating a mock-up with no pattern selected makes an empty, fillable placeholder slot', async ({ page }) => {
+test('creating a mock-up with no pattern selected makes a clipped, multiply-blended placeholder', async ({ page }) => {
   // Real request: the mock-up used to require a pattern to be selected at creation time
   // (createClean threw an alert otherwise), forcing the seller to pick one of their 450+
   // patterns before they could even lay out the mock-up in a template. The white-mask crop
   // bounds only depend on the background + mask (fillPattern just paints pixels inside that
   // area later) - a pattern was never actually needed to know where and how big the slot is.
-  // Now, creating a mock-up with no pattern selected produces an empty slot (patternSlot:true,
-  // no src) exactly like a plain listing placeholder, ready to be filled later.
+  //
+  // The first attempt at this left the slot with no src at all (a plain CSS placeholder div),
+  // which rendered as an opaque, unclipped rectangle sitting flat on top of the mock-up photo -
+  // not shaped to the mask silhouette and not blended. Real user feedback: "it needs to be
+  // clipped and blended as multiply." Fixed by rendering the placeholder through the exact same
+  // pipeline as a real pattern fill (renderCropped), just substituting a generated neutral
+  // diagonal-hatch tile for the pattern - so it comes out alpha-clipped to the mask shape and
+  // gets the same .customMockupLayer mix-blend-mode:multiply treatment as a real mock-up, while
+  // customMockupRecipe.pattern stays null so it's clearly still waiting for a real pattern.
   page.on('dialog', (d) => d.accept());
   await expandAllBoxes(page);
 
@@ -454,21 +461,32 @@ test('creating a mock-up with no pattern selected makes an empty, fillable place
     const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
     return {
       src: l.src,
-      patternSlot: l.patternSlot,
       customMockup: l.customMockup,
+      customMockupLive: l.customMockupLive,
       hasRecipe: !!l.customMockupRecipe,
       recipeBg: l.customMockupRecipe && l.customMockupRecipe.bg,
       recipeMask: l.customMockupRecipe && l.customMockupRecipe.mask,
       recipePattern: l.customMockupRecipe && l.customMockupRecipe.pattern,
     };
   });
-  expect(created.src).toBeFalsy();
-  expect(created.patternSlot).toBe(true);
-  expect(created.customMockup).toBe(false);
+  // Rendered through the real fill pipeline, so it has actual (clipped) pixel content - not blank.
+  expect(created.src).toMatch(/^data:image\/png/);
+  // Same locked/live mock-up treatment as a real fill, so it also picks up .customMockupLayer's
+  // mix-blend-mode:multiply CSS.
+  expect(created.customMockup).toBe(true);
+  expect(created.customMockupLive).toBe(true);
   expect(created.hasRecipe).toBe(true);
   expect(created.recipeBg).toBeTruthy();
   expect(created.recipeMask).toBeTruthy();
+  // No real pattern applied yet - still waiting to be filled.
   expect(created.recipePattern).toBeFalsy();
+
+  const hasBlendClass = await page.evaluate(() => {
+    const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
+    const el = document.querySelector(`.layer[data-id="${l.id}"]`);
+    return el ? el.classList.contains('customMockupLayer') : null;
+  });
+  expect(hasBlendClass).toBe(true);
 
   // Now pick a pattern and fill it in via the normal listing-placeholders "fill all" flow.
   const patternInput = page.locator('input[onchange*="loadTray"][onchange*="pattern"]');

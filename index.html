@@ -1308,7 +1308,7 @@ body.autoGroupEditing .layer.collectionGrouped{
 
 
   <div class="box trayTop customMockupBox"><h2>custom mock-up</h2><div class="panelBody">
-    <p class="customMockupHint"><strong>Procreate → Pattern Pages.</strong> Upload your mock-up background and white mask, then create the mock-up in one click. Picking a pattern first fills it right away - skip that step and it's created as an empty slot you can fill later.</p>
+    <p class="customMockupHint"><strong>Procreate → Pattern Pages.</strong> Upload your mock-up background and white mask, then create the mock-up in one click. Picking a pattern first fills it right away - skip that step and it's created as a placeholder (clipped and blended the same way) that you can fill later.</p>
     <div class="customMockupPreviewGrid">
       <div class="customMockupPreview" id="customMockupBgPreview">mock-up<br>background</div>
       <div class="customMockupPreview" id="customMockupMaskPreview">white<br>mask</div>
@@ -11005,23 +11005,27 @@ window.addEventListener('DOMContentLoaded',function(){
     const item=newLayer('image',{name:'custom mock-up pattern area',src:r.maskSrc,fit:'contain',x:r.bounds.x/r.pageW*100,y:r.bounds.y/r.pageH*100,w:r.bounds.w/r.pageW*100,h:r.bounds.h/r.pageH*100,z:2,opacity:1,customMockup:true,customMockupLive:true,customMockupCropped:true,customMockupRecipe:r.recipe,aspect:r.bounds.w/Math.max(1,r.bounds.h)});
     p.layers.push(bg,item); s.pages.push(p); s.selectedPage=s.pages.length-1; s.selected=item.id; cage.lastLayerId=item.id; return item;
   }
-  // Bounds only - no pattern yet. The white-mask crop area only depends on bg+mask, never on the
-  // pattern (fillPattern just paints pixels inside it), so a mock-up slot can be created and
-  // positioned before any pattern is chosen. Left unfilled (no src) with patternSlot:true, it gets
-  // the same "drop pattern here" look as a plain listing placeholder, ready for fillLayerWithSelectedPattern.
-  async function renderBoundsOnly(recipe){
-    if(!recipe.bg||!recipe.mask) throw new Error('incomplete mock-up recipe');
-    const [bg,mask]=await Promise.all([image(recipe.bg),image(recipe.mask)]);
-    const w=bg.naturalWidth||bg.width, h=bg.naturalHeight||bg.height;
-    const bounds=findWhiteBounds(mask,w,h);
-    return {bgSrc:recipe.bg, pageW:w, pageH:h, bounds, recipe};
+  // No pattern picked yet: render the crop through the exact same pipeline as a real fill (so it
+  // comes out clipped to the mask shape and multiply-blended over the background, not a plain
+  // opaque rectangle sitting on top of the photo), just using a generated neutral diagonal-hatch
+  // tile in place of a real pattern. The stored recipe keeps pattern:null so it's clearly still
+  // waiting for a real one - fillLinkedPlaceholdersFromTray()/updateClean() overwrite it exactly
+  // like any other mock-up once a pattern is chosen.
+  function dummyPatternTile(){
+    if(cage.dummyPatternSrc) return cage.dummyPatternSrc;
+    const size=120;
+    const c=document.createElement('canvas'); c.width=size; c.height=size;
+    const ctx=c.getContext('2d');
+    ctx.fillStyle='#ece3f4'; ctx.fillRect(0,0,size,size);
+    ctx.strokeStyle='#c9b3e3'; ctx.lineWidth=16; ctx.lineCap='square';
+    for(let x=-size;x<size*2;x+=size/3){ ctx.beginPath(); ctx.moveTo(x,size); ctx.lineTo(x+size,0); ctx.stroke(); }
+    cage.dummyPatternSrc=c.toDataURL('image/png');
+    return cage.dummyPatternSrc;
   }
-  function buildEmptyPage(r){
-    const s=appState(); if(!s||!Array.isArray(s.pages)) throw new Error('no app pages');
-    const p={type:'mockup',title:'custom mock-up',w:r.pageW,h:r.pageH,layers:[]};
-    const bg=newLayer('image',{name:'mock-up background',src:r.bgSrc,fit:'cover',x:0,y:0,w:100,h:100,z:1,opacity:1,lockedMockupBackground:true});
-    const item=newLayer('image',{name:'custom mock-up pattern area',fit:'contain',x:r.bounds.x/r.pageW*100,y:r.bounds.y/r.pageH*100,w:r.bounds.w/r.pageW*100,h:r.bounds.h/r.pageH*100,z:2,opacity:1,patternSlot:true,customMockup:false,customMockupCropped:true,customMockupRecipe:r.recipe,aspect:r.bounds.w/Math.max(1,r.bounds.h)});
-    p.layers.push(bg,item); s.pages.push(p); s.selectedPage=s.pages.length-1; s.selected=item.id; cage.lastLayerId=item.id; return item;
+  async function renderPlaceholderMockup(recipe){
+    const r=await renderCropped(Object.assign({},recipe,{pattern:dummyPatternTile()}));
+    r.recipe=Object.assign({},r.recipe,{pattern:null});
+    return r;
   }
   function selectedCroppedLayer(){
     const s=appState(), p=page(); if(!s||!p||!p.layers)return null;
@@ -11041,10 +11045,11 @@ window.addEventListener('DOMContentLoaded',function(){
       if(rec.pattern){
         status('creating mock-up…'); const r=await renderCropped(rec); buildPage(r); redraw(); status('mock-up created ✨');
       }else{
-        // No pattern picked yet - create the slot empty anyway, just like a listing placeholder.
-        // It's ready to fill later, either from the mock-up sliders once a pattern is selected
-        // or via the listing placeholders panel's "fill all with selected pattern".
-        status('creating empty mock-up slot…'); const r=await renderBoundsOnly(rec); buildEmptyPage(r); redraw(); status('empty mock-up slot created — pick a pattern, then fill it or use "fill all with selected pattern"');
+        // No pattern picked yet - create the slot with a neutral placeholder fill anyway, clipped
+        // and multiply-blended exactly like a real mock-up. It's ready to fill later, either from
+        // the mock-up sliders once a pattern is selected, or via the listing placeholders panel's
+        // "fill all with selected pattern".
+        status('creating mock-up placeholder…'); const r=await renderPlaceholderMockup(rec); buildPage(r); redraw(); status('mock-up placeholder created — pick a pattern, then update it or use "fill all with selected pattern"');
       }
     }catch(err){ console.error(err); status('mock-up failed'); alert('Could not create the clean mock-up. Try PNG/JPG files and a clear white mask.'); }
     finally{ setTimeout(()=>{cage.busy=false;},500); }
