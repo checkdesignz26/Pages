@@ -11413,6 +11413,21 @@ window.addEventListener('DOMContentLoaded',function(){
   function updateName(l){var raw=String(l.text||'').replace(/\s+/g,' ').trim(); l.name=raw?raw.slice(0,34):'Text';}
   function mirrorPanel(l){var v=document.getElementById('textValue'); if(v)v.value=l.text||''; var p=document.getElementById('pasteTextArea'); if(p)p.value=l.text||'';}
   function disablePanel(){var v=document.getElementById('textValue'); if(v){v.readOnly=true;v.placeholder='double-tap text on canvas to type';} var p=document.getElementById('pasteTextArea'); if(p){p.readOnly=true;p.placeholder='double-tap text on canvas to type';}}
+  // iOS Safari auto-zooms the whole page in when a focused text input's rendered font-size is
+  // under 16px, and does not reliably zoom back out on blur - the page can be left stuck zoomed
+  // in until the user manually pinches back out. Two defenses: (1) resetIOSZoom() re-touches the
+  // viewport meta tag on editor close, which reliably forces Safari to re-apply/reset the zoom
+  // level; (2) startEditor() below floors the textarea's own font-size at 16px as a second layer
+  // of defense in case a future style change ever lets a smaller value reach the focused element.
+  function resetIOSZoom(){
+    try{
+      var meta=document.querySelector('meta[name="viewport"]');
+      if(!meta)return;
+      var original=meta.getAttribute('content');
+      meta.setAttribute('content',original+', maximum-scale=1.0');
+      setTimeout(function(){ try{ meta.setAttribute('content',original); }catch(e){} },60);
+    }catch(e){}
+  }
 
   var active=null;
   function cleanup(commit){
@@ -11454,6 +11469,7 @@ window.addEventListener('DOMContentLoaded',function(){
     active=null;
     if(a.ta&&a.ta.parentNode)a.ta.parentNode.removeChild(a.ta);
     if(a.done&&a.done.parentNode)a.done.parentNode.removeChild(a.done);
+    resetIOSZoom();
 
     // Refresh only the inspector/layer list. The canvas node remains selected.
     try{if(typeof renderLayers==='function')renderLayers();}catch(e){}
@@ -11504,7 +11520,7 @@ window.addEventListener('DOMContentLoaded',function(){
     ta.style.background=(l.fill&&l.fill!=='transparent')?l.fill:'rgba(255,255,255,.96)';
     ta.style.color=cs.color||l.color||'#222';
     ta.style.fontFamily=cs.fontFamily||l.font||'system-ui';
-    ta.style.fontSize=cs.fontSize||(l.fontSize||36)+'px';
+    ta.style.fontSize=Math.max(16,px(cs.fontSize,l.fontSize||36))+'px';
     ta.style.fontWeight=cs.fontWeight||(l.bold?'900':'500');
     ta.style.fontStyle=cs.fontStyle||(l.italic?'italic':'normal');
     ta.style.lineHeight=cs.lineHeight||((l.lineHeight||1.05)*(l.fontSize||36))+'px';
