@@ -111,3 +111,75 @@ test('a large mock-up background upload is capped to the memory-safe max edge', 
   expect(result.pagesGrew).toBe(true);
   expect(Math.max(result.dims.w, result.dims.h)).toBeLessThanOrEqual(1400);
 });
+
+test('fill all with selected pattern (listing placeholders) also re-fills every custom mock-up', async ({ page }) => {
+  // The listing-placeholders template feature is built for sellers with hundreds of patterns to
+  // list: load a template mixing plain pattern slots and custom mock-ups, hit one button, get a
+  // fresh listing set for a new pattern. fillLinkedPlaceholdersFromTray() used to only touch
+  // l.lkmPlaceholder layers - custom mock-ups (which store their own bg/mask/settings on
+  // l.customMockupRecipe) were left on whatever pattern they were created with. It now also
+  // sweeps every customMockupCropped layer and re-renders it against the newly selected pattern.
+  page.on('dialog', (d) => d.accept());
+  await expandAllBoxes(page);
+
+  const bgInput = page.locator('#customMockupBgInput');
+  const maskInput = page.locator('#customMockupMaskInput');
+  const btn = page.locator('#createCustomMockupBtnV163');
+  const patternInput = page.locator('input[onchange*="loadTray"][onchange*="pattern"]');
+
+  await bgInput.setInputFiles({ name: 'bg.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await maskInput.setInputFiles({ name: 'mask.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await patternInput.setInputFiles({ name: 'pat-a.png', mimeType: 'image/png', buffer: TINY_PNG });
+
+  await clickResilient(page, btn);
+  await expect
+    .poll(
+      () => page.evaluate(() => state.pages.some((p) => (p.layers || []).some((l) => l.customMockupCropped))),
+      { timeout: 5000 }
+    )
+    .toBe(true);
+
+  const mockupLayerId = await page.evaluate(() => {
+    for (const p of state.pages) {
+      const l = (p.layers || []).find((x) => x.customMockupCropped);
+      if (l) return l.id;
+    }
+    return null;
+  });
+  expect(mockupLayerId).toBeTruthy();
+
+  await page.evaluate(() => window.addLkmPlaceholder('main pattern'));
+
+  const secondPattern = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFhAJ/wlseKgAAAABJRU5ErkJggg==',
+    'base64'
+  );
+  await patternInput.setInputFiles({ name: 'pat-b.png', mimeType: 'image/png', buffer: secondPattern });
+
+  // Uploading a file into the tray doesn't itself select it - a real user clicks the new thumb.
+  await page.locator('#patternTray .thumb').last().click();
+
+  const newPatternSrc = await page.evaluate(() => {
+    const idx = state.selectedTray && state.selectedTray.pattern;
+    return state.trays.pattern[idx].src;
+  });
+
+  await page.evaluate(() => window.fillLinkedPlaceholdersFromTray());
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate((id) => {
+          const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.id === id);
+          return l && l.customMockupRecipe && l.customMockupRecipe.pattern;
+        }, mockupLayerId),
+      { timeout: 5000 }
+    )
+    .toBe(newPatternSrc);
+
+  const placeholderSrc = await page.evaluate(() => {
+    const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.lkmPlaceholder);
+    return l && l.src;
+  });
+  expect(placeholderSrc).toBe(newPatternSrc);
+});

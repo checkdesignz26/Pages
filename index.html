@@ -11033,6 +11033,24 @@ window.addEventListener('DOMContentLoaded',function(){
     catch(err){ console.error(err); status('mock-up update failed'); }
   }
   function schedule(e){ if(e){ e.preventDefault&&e.preventDefault(); e.stopPropagation&&e.stopPropagation(); e.stopImmediatePropagation&&e.stopImmediatePropagation(); } clearTimeout(cage.timer); cage.timer=setTimeout(updateClean,150); return false; }
+  // Batch re-fill for the "listing placeholders" template feature: unlike updateClean() (which
+  // pulls repeat/offsetX/offsetY/texture from the on-screen sliders for whichever one mock-up is
+  // being actively edited), this re-runs a SPECIFIC layer's own saved recipe against whatever
+  // pattern is currently selected, so many mock-ups with different saved settings can each be
+  // re-filled correctly in one sweep without touching the sliders.
+  async function fillLayerWithSelectedPattern(l){
+    if(!l||!l.customMockupRecipe) return false;
+    const base=l.customMockupRecipe;
+    const rec={bg:base.bg,mask:base.mask,pattern:selectedPattern()||base.pattern,
+      repeat:Number(base.repeat!=null?base.repeat:62),offsetX:Number(base.offsetX!=null?base.offsetX:0),
+      offsetY:Number(base.offsetY!=null?base.offsetY:0),texture:Number(base.texture!=null?base.texture:55),
+      blend:'multiply',version:'v163-cropped-mask-layer'};
+    if(!rec.bg||!rec.mask||!rec.pattern) return false;
+    const r=await renderCropped(rec);
+    l.src=r.maskSrc; l.x=r.bounds.x/r.pageW*100; l.y=r.bounds.y/r.pageH*100; l.w=r.bounds.w/r.pageW*100; l.h=r.bounds.h/r.pageH*100; l.aspect=r.bounds.w/Math.max(1,r.bounds.h);
+    l.customMockupRecipe=rec; l.customMockup=true; l.customMockupLive=true; l.customMockupCropped=true;
+    return true;
+  }
   async function loadPart(e,part){
     if(e){ e.stopPropagation&&e.stopPropagation(); e.stopImmediatePropagation&&e.stopImmediatePropagation(); }
     const f=e&&e.target&&e.target.files&&e.target.files[0]; if(!f)return false;
@@ -11047,6 +11065,7 @@ window.addEventListener('DOMContentLoaded',function(){
     const old=[...document.querySelectorAll('.customMockupBox button,button')].find(b=>/create/i.test(b.textContent||'')&&/mock-up/i.test(b.textContent||'')) || document.querySelector('[onclick*="createCustomMockupFromMask"]');
     const btn=cloneBind(old); if(btn){ btn.id='createCustomMockupBtnV163'; btn.textContent='create mock-up ✨'; btn.addEventListener('click',createClean,true); }
     window.createCustomMockupFromMask=createClean; window.createOrUpdateCustomMockup=createClean; window.loadCustomMockupPart=loadPart; window.regenerateSelectedCustomMockupV163=schedule;
+    window.fillCustomMockupLayerWithSelectedPattern=fillLayerWithSelectedPattern;
     status('mock-up tools ready · pattern tools untouched');
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind); else bind();
@@ -12252,7 +12271,7 @@ window.addEventListener('DOMContentLoaded',function(){
     state.selected=front.id;
     renderSafe();
   };
-  window.fillLinkedPlaceholdersFromTray=function(){
+  window.fillLinkedPlaceholdersFromTray=async function(){
     const src=selectedPatternSrc();
     if(!src){ alert('Choose a pattern in the Pattern Tray first.'); return; }
     let count=0;
@@ -12265,7 +12284,25 @@ window.addEventListener('DOMContentLoaded',function(){
       });
     });
     renderSafe();
-    setTimeout(()=>alert(count?('Main Pattern filled '+count+' placeholder'+(count===1?'':'s')+'.'):'No Main Pattern placeholders found.'),40);
+    // Also re-fill every custom mock-up on the page with the same selected pattern - a mock-up
+    // layer carries its own saved recipe (background + white mask + repeat/offset/texture), so it
+    // can be re-rendered against a new pattern the same way plain placeholders get a new src.
+    let mockupCount=0, mockupFailed=0;
+    const mockupLayers=[];
+    state.pages.forEach(p=>{ (p.layers||[]).forEach(l=>{ if(l.customMockupCropped) mockupLayers.push(l); }); });
+    if(mockupLayers.length && typeof window.fillCustomMockupLayerWithSelectedPattern==='function'){
+      for(const l of mockupLayers){
+        try{ const ok=await window.fillCustomMockupLayerWithSelectedPattern(l); if(ok)mockupCount++; else mockupFailed++; }
+        catch(e){ mockupFailed++; }
+      }
+      renderSafe();
+    }
+    const parts=[];
+    if(count) parts.push('Main Pattern filled '+count+' placeholder'+(count===1?'':'s')+'.');
+    if(mockupCount) parts.push('Updated '+mockupCount+' custom mock-up'+(mockupCount===1?'':'s')+'.');
+    if(mockupFailed) parts.push(mockupFailed+' mock-up'+(mockupFailed===1?'':'s')+' could not be updated.');
+    if(!parts.length) parts.push('No placeholders or mock-ups found.');
+    setTimeout(()=>alert(parts.join(' ')),40);
   };
   window.clearLinkedPlaceholders=function(){
     let count=0; saveSafe();
@@ -12299,11 +12336,11 @@ window.addEventListener('DOMContentLoaded',function(){
     box.className='box trayTop lkmPlaceholderBox';
     box.id='lkmPlaceholderPanel';
     box.innerHTML=`<h2>listing placeholders</h2><div class="panelBody">
-      <p class="smallText">Set up empty pattern slots, then fill them all at once from one selected Pattern Tray image.</p>
+      <p class="smallText">Set up empty pattern slots, then fill them all at once from one selected Pattern Tray image. Any custom mock-ups on the page get updated with the same pattern too.</p>
       <div class="grid2"><button class="primary" onclick="addNotebookPlaceholderPair()">2 cover placeholders</button><button onclick="addLkmPlaceholder('main pattern')">one placeholder</button></div>
       <div class="grid2"><button onclick="fillLinkedPlaceholdersFromTray()">fill all with selected pattern</button><button onclick="clearLinkedPlaceholders()">clear slots</button></div>
-      <div class="lkmTagRow"><span class="lkmTag">source: main pattern</span><span class="lkmTag">keeps size</span><span class="lkmTag">keeps opacity</span></div>
-      <p class="lkmTiny">Great for notebook covers, planner sets or any layout that repeats the same pattern in a few spots.</p>
+      <div class="lkmTagRow"><span class="lkmTag">source: main pattern</span><span class="lkmTag">keeps size</span><span class="lkmTag">keeps opacity</span><span class="lkmTag">includes mock-ups</span></div>
+      <p class="lkmTiny">Great for notebook covers, planner sets or any layout that repeats the same pattern in a few spots. Build a template once with placeholders and custom mock-ups mixed in, then reuse it for every new pattern.</p>
     </div>`;
     host.parentNode.insertBefore(box, host.nextSibling);
   }
