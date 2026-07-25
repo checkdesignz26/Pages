@@ -8350,14 +8350,12 @@ function makeNumberedList(){
 
 <!-- 94 — selection box + real iPad resize handles rescue -->
 <style id="pp-doggy-94-selection-rescue-css">
-  /* Bring back the clear selected boundary. The previous ghost-dot styling hid the box. */
-  .stage .layer.selected{
-    outline:2px solid rgba(155,107,255,.98)!important;
-    outline-offset:2px!important;
-    box-shadow:0 0 0 1px rgba(255,255,255,.95),0 0 0 7px rgba(155,107,255,.14),0 10px 24px rgba(30,20,50,.12)!important;
-    overflow:visible!important;
-  }
-  .stage .layer.selected::after{display:none!important;content:none!important;}
+  /* NOTE(consolidation): a .stage .layer.selected{outline/box-shadow/overflow} rule and a
+     .stage .layer.selected::after{display:none} rule used to live here - confirmed via computed
+     styles on a real selected layer that both are fully dead, overridden by
+     pp-doggy-98-real-box-tighter-trim-css's rules of the identical selector/specificity, which
+     wins the source-order tie-break (doggy-98 is later in the file) - it resets outline to none
+     and draws its own ::after box instead. Removed. */
 
   /* Keep the original bottom-right handle usable, but make it a proper iPad target again. */
   .stage .layer.selected > .handle{
@@ -12391,12 +12389,10 @@ window.addEventListener('DOMContentLoaded',function(){
   .stage .layer .rotateHandle,
   .stage .layer .deleteMini{pointer-events:auto!important;}
 
-  /* Newly selected object gets a clearer iPad-friendly selection glow. */
-  .layer.selected{
-    outline:3px solid rgba(255,142,214,.98)!important;
-    outline-offset:4px!important;
-    box-shadow:0 0 0 2px rgba(255,255,255,.88),0 0 0 8px rgba(255,142,214,.18),0 18px 35px rgba(0,0,0,.18)!important;
-  }
+  /* NOTE(consolidation): a .layer.selected{outline/box-shadow} rule used to live here (2-class
+     specificity, no .stage ancestor) - confirmed via computed styles on a real selected layer
+     that it's dead, beaten regardless of source order by pp-doggy-98-real-box-tighter-trim-css's
+     .stage .layer.selected (3-class specificity, higher). Removed. */
 </style>
 <script id="goldenV162TouchSelectionPatch">
 (function(){
@@ -13098,73 +13094,15 @@ window.addEventListener('DOMContentLoaded',function(){
 
 
 <!-- v180e: transparent built-in frames + clear frame selection boundary -->
-<style id="v180e-frame-transparency-selection-fix">
-/* Frame wrappers stay completely transparent until selected. */
-.layer.frameSlot,
-.layer.frameSlot.patternSlot,
-.layer.frameSlot.filledSlot{
-  background:transparent!important;
-  border:0!important;
-  box-shadow:none!important;
-  overflow:visible!important;
-}
+<!-- NOTE(consolidation): v180e-frame-transparency-selection-fix used to live here - structurally
+     a near-duplicate sibling of trueNoSquareFrameFinalPatch (removed earlier this same cleanup
+     pass as a confirmed strict subset of the v181-family frame CSS), just under a different id so
+     it wasn't caught by that round. Confirmed live via computed styles on a real selected frame
+     layer that every property this block tried to set is either overridden by a later, higher-
+     specificity v181-family/doggy-98 rule (selection outline color, selection box-shadow, handle
+     width) or targets an element that doesn't even exist for frame-type layers (.placeholder).
+     Removed as fully dead CSS. -->
 
-/* Never allow the generic pattern-slot card or placeholder to appear behind a frame. */
-.layer.frameSlot .placeholder,
-.layer.frameSlot.patternSlot .placeholder{
-  display:none!important;
-  background:transparent!important;
-}
-
-/* The SVG/custom mask is the only visible artwork. */
-.layer.frameSlot .realFrameSvg,
-.layer.frameSlot .trueShapeFrame,
-.layer.frameSlot .customFrameMask{
-  position:absolute!important;
-  inset:0!important;
-  width:100%!important;
-  height:100%!important;
-  background-color:transparent!important;
-  border:0!important;
-  outline:0!important;
-  box-shadow:none!important;
-}
-
-/* A proper visible selection rectangle around the frame layer.
-   It appears only while selected, so unselected frames never look like square cards. */
-.layer.frameSlot.selected{
-  outline:2px solid rgba(255,142,214,.98)!important;
-  outline-offset:5px!important;
-  box-shadow:0 0 0 2px rgba(255,255,255,.92),
-             0 0 0 8px rgba(255,142,214,.18)!important;
-}
-
-/* Restore the iPad resize, rotate and delete controls for selected frames. */
-.layer.frameSlot.selected .handle,
-.layer.frameSlot.selected .rotateHandle,
-.layer.frameSlot.selected .deleteMini,
-.layer.frameSlot.selected .resizeHint{
-  display:block!important;
-}
-
-/* Make the resize handle easier to hit with finger or Pencil. */
-.layer.frameSlot .handle{
-  width:28px!important;
-  height:28px!important;
-  right:-14px!important;
-  bottom:-14px!important;
-}
-
-/* Keep shape shadows attached to the actual silhouette, never the square wrapper. */
-.layer.frameSlot .realFrameSvg,
-.layer.frameSlot .customFrameMask{
-  filter:drop-shadow(0 14px 13px rgba(20,20,50,.22))!important;
-}
-.layer.frameSlot.selected .realFrameSvg,
-.layer.frameSlot.selected .customFrameMask{
-  filter:drop-shadow(0 14px 13px rgba(20,20,50,.22))!important;
-}
-</style>
 
 
 
