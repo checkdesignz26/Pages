@@ -14112,15 +14112,12 @@ window.addEventListener('DOMContentLoaded',function(){
     syncTextureCards();
   }
 
-  const previousRender=window.render;
-  if(typeof previousRender==="function" && !window.__v182TextureRender){
-    window.__v182TextureRender=previousRender;
-    window.render=function(){
-      const result=window.__v182TextureRender.apply(this,arguments);
-      setTimeout(syncTextureCards,40);
-      return result;
-    };
-  }
+  // NOTE(consolidation): a window.render wrap used to live here, only calling this file's own
+  // syncTextureCards() (toggle .active on the texture cards) after each render. v182f-sticky-
+  // texture's own render wrap (further down) calls paintChosenTexture(), a strict superset -
+  // it also does everything this one did plus repaints the stage background and the <select>
+  // value - so this wrap was fully redundant. syncTextureCards itself stays: chooseTexture()
+  // and the change listener below still call it directly.
 
   document.addEventListener("change",function(e){
     if(e.target && e.target.id==="textureSelect"){
@@ -14138,64 +14135,16 @@ window.addEventListener('DOMContentLoaded',function(){
 <!-- v182e: clean working visual texture application -->
 <script id="v182e-working-textures">
 (function(){
-  function textureById(id){
-    const textures = Array.isArray(window.patternPagesTextures)
-      ? window.patternPagesTextures
-      : [];
-    return textures.find(texture => texture.id === id)
-      || textures.find(texture => texture.id === "none")
-      || null;
-  }
-
-  function getCurrentPage(){
-    try{
-      return state.pages[state.selectedPage] || null;
-    }catch(error){
-      return null;
-    }
-  }
-
-  function getCurrentStage(){
-    try{
-      return document.querySelector(
-        '.pageBlock[data-page="' + state.selectedPage + '"] .stage'
-      ) || document.querySelector(".stage");
-    }catch(error){
-      return document.querySelector(".stage");
-    }
-  }
-
-  function paintCurrentStage(texture){
-    const stage = getCurrentStage();
-    if(!stage || !texture) return;
-
-    stage.style.setProperty(
-      "background",
-      texture.css || texture.color || "#ffffff",
-      "important"
-    );
-    stage.style.setProperty(
-      "background-size",
-      texture.size || "auto",
-      "important"
-    );
-    stage.style.setProperty("background-position", "0 0", "important");
-  }
-
-  function syncTextureCards(id){
-    document.querySelectorAll(".textureVisualCard").forEach(card => {
-      const active = card.dataset.textureId === id;
-      card.classList.toggle("active", active);
-      card.setAttribute("aria-pressed", active ? "true" : "false");
-    });
-  }
-
   // NOTE(consolidation): a window.applyTextureChoice assignment that lived here was removed
   // - fully superseded by a later generation (confirmed via a fresh scan: the final
   // applyTextureChoice generation fully replaces with no fallback to a previous version), so
-  // it was dead code. textureById/getCurrentPage/getCurrentStage/paintCurrentStage/
-  // syncTextureCards stay live regardless - the window.render wrap below still uses them to
-  // repaint the chosen texture after every render.
+  // it was dead code. Its private helpers (textureById/getCurrentPage/getCurrentStage/
+  // paintCurrentStage/syncTextureCards) and the window.render wrap that used them - repainting
+  // the chosen texture after every render - were removed too: v182f-sticky-texture's own render
+  // wrap (further down) calls paintChosenTexture(), a strict superset of what that wrap did
+  // (also updates the <select> value, which this one never touched). clearTextureChoice and the
+  // touchend handler below stay - both call window.applyTextureChoice() directly and don't need
+  // any of the removed helpers.
 
   window.clearTextureChoice = function(){
     const select = document.getElementById("textureSelect");
@@ -14219,27 +14168,6 @@ window.addEventListener('DOMContentLoaded',function(){
     select.value = card.dataset.textureId;
     window.applyTextureChoice();
   }, {passive:false});
-
-  /* Restore the selected texture whenever the app rebuilds the canvas. */
-  const previousRender = window.render;
-  if(typeof previousRender === "function"){
-    window.render = function(){
-      const result = previousRender.apply(this, arguments);
-
-      requestAnimationFrame(function(){
-        const page = getCurrentPage();
-        if(!page) return;
-
-        const texture = textureById(page.backgroundTexture || "none");
-        if(!texture) return;
-
-        paintCurrentStage(texture);
-        syncTextureCards(texture.id);
-      });
-
-      return result;
-    };
-  }
 })();
 </script>
 
