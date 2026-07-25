@@ -308,3 +308,100 @@ test('a custom mock-up marked as a placeholder survives save-template/load-templ
   });
   expect(reloadedPlaceholderSrc).toBe(newPatternSrc);
 });
+
+test('a custom mock-up survives save-template/load-template WITHOUT manually marking it as a placeholder', async ({ page }) => {
+  // Real bug report: a seller built a mock-up, never touched "mark placeholder" (a step that
+  // isn't obvious - the mock-up UI never tells you it's needed), hit "save template", and the
+  // baked-in pattern was saved as permanent artwork instead of being cleared for reuse - loading
+  // the template later showed the OLD pattern still on the mock-up. strippedLayer() only treated
+  // a layer as a placeholder if it was explicitly marked (isPlaceholder/templatePlaceholder/
+  // patternSlot) or had "placeholder" in its name; a freshly created customMockupCropped layer
+  // has none of those. Since every mock-up is meant to be auto-refilled by "fill all" with no
+  // opt-in (per the listing-placeholders feature this was built for), strippedLayer() now also
+  // treats customMockupCropped as an automatic placeholder, with no manual marking step needed.
+  page.on('dialog', (d) => d.accept());
+  await expandAllBoxes(page);
+
+  const bgInput = page.locator('#customMockupBgInput');
+  const maskInput = page.locator('#customMockupMaskInput');
+  const btn = page.locator('#createCustomMockupBtnV163');
+  const patternInput = page.locator('input[onchange*="loadTray"][onchange*="pattern"]');
+
+  await bgInput.setInputFiles({ name: 'bg.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await maskInput.setInputFiles({ name: 'mask.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await patternInput.setInputFiles({ name: 'pat-a.png', mimeType: 'image/png', buffer: TINY_PNG });
+
+  await clickResilient(page, btn);
+  await expect
+    .poll(
+      () => page.evaluate(() => state.pages.some((p) => (p.layers || []).some((l) => l.customMockupCropped))),
+      { timeout: 5000 }
+    )
+    .toBe(true);
+
+  // Deliberately do NOT select the mock-up or call markSelectedAsPlaceholder() - this is the
+  // exact real-world flow that produced the bug.
+  const templateJson = await page.evaluate(async () => {
+    const orig = URL.createObjectURL;
+    let captured = null;
+    URL.createObjectURL = function (blob) {
+      captured = blob;
+      return orig.call(URL, blob);
+    };
+    window.downloadPatternPagesTemplate();
+    URL.createObjectURL = orig;
+    return await captured.text();
+  });
+
+  const savedMockupLayer = JSON.parse(templateJson).pages.flatMap((p) => p.layers || []).find((l) => l.customMockupCropped);
+  expect(savedMockupLayer).toBeTruthy();
+  expect(savedMockupLayer.src).toBeFalsy();
+  expect(savedMockupLayer.customMockupRecipe && savedMockupLayer.customMockupRecipe.bg).toBeTruthy();
+  expect(savedMockupLayer.customMockupRecipe && savedMockupLayer.customMockupRecipe.mask).toBeTruthy();
+
+  await page.evaluate((json) => {
+    const file = new File([json], 'test.ptemplate', { type: 'application/json' });
+    window.loadPatternPagesTemplate({ target: { files: [file], value: '' } });
+  }, templateJson);
+
+  await expect
+    .poll(() => page.evaluate(() => state.pages.some((p) => (p.layers || []).some((l) => l.customMockupCropped))), {
+      timeout: 5000,
+    })
+    .toBe(true);
+
+  const reloadedMockupSrc = await page.evaluate(() => {
+    const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
+    return l && l.src;
+  });
+  expect(reloadedMockupSrc).toBeFalsy();
+
+  const secondPattern = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFhAJ/wlseKgAAAABJRU5ErkJggg==',
+    'base64'
+  );
+  await patternInput.setInputFiles({ name: 'pat-b.png', mimeType: 'image/png', buffer: secondPattern });
+  await page.locator('#patternTray .thumb').last().click();
+
+  const newPatternSrc = await page.evaluate(() => {
+    const idx = state.selectedTray && state.selectedTray.pattern;
+    return state.trays.pattern[idx].src;
+  });
+
+  await page.evaluate(() => window.fillLinkedPlaceholdersFromTray());
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
+          return l && l.customMockupRecipe && l.customMockupRecipe.pattern;
+        }),
+      { timeout: 5000 }
+    )
+    .toBe(newPatternSrc);
+
+  // Let the fill-all confirmation alert (setTimeout(...,40)) fire and get dismissed before
+  // the test ends, so it doesn't try to accept a dialog on an already-closed page.
+  await page.waitForTimeout(150);
+});
