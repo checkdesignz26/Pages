@@ -67,3 +67,17 @@ test('renaming a layer through the prompt-based rename sticks and marks it manua
   expect(layer.name).toBe('My Custom Layer Name');
   expect(layer._manualName).toBe(true);
 });
+
+test('toggling wide panel mode actually grows the layer list', async ({ page }) => {
+  // pp-expandable-layers-panel-v101-css's wide-mode rule used to target `.layerList` (2 classes:
+  // body.ppLayersWide .layerList), which always lost to a bare `#layerList{max-height:390px}`
+  // id selector elsewhere in the file (an id beats any number of classes, regardless of source
+  // order) - toggling "wide panel" silently never changed the list's height. Retargeted to
+  // `#layerList` so it can win.
+  const before = await page.evaluate(() => getComputedStyle(document.getElementById('layerList')).maxHeight);
+  await page.evaluate(() => window.ppToggleLayersPanelWide());
+  const after = await page.evaluate(() => getComputedStyle(document.getElementById('layerList')).maxHeight);
+
+  expect(before).toBe('390px');
+  expect(after).toBe('440px');
+});

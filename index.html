@@ -9517,45 +9517,15 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
 
 
 <style id="ppLayerThumbsCss">
-/* Layer panel thumbnails — inserted before 
-
-<style id="ppLayerPanelThumbsAndNamesV99">
-/* V99 — real layer thumbnails + smart auto layer names */
+/* NOTE(consolidation): this style tag used to contain a much larger V99 "real layer thumbnails"
+   ruleset (an unclosed CSS comment on the very first line had accidentally swallowed the id
+   attribute of what looked like a second <style> tag - it was never a real DOM element, just
+   inert text inside this one's comment). Every rule targeted .layerItem.ppLayerRow / .layerThumb
+   (bare), which a live DOM check confirmed no script anywhere in the file still stamps - the live
+   row generator (v170) uses ppCleanThumbRow/ppCleanLayerThumb instead. Removed as dead, except
+   the one rule below, which is a bare #layerList id selector with no dependency on the dead
+   classes and is still very much live. */
 #layerList{max-height:390px!important;}
-.layerItem.ppLayerRow{
-  grid-template-columns:24px 36px 28px minmax(0,1fr) 28px!important;
-  gap:6px!important;
-  min-height:48px!important;
-  align-items:center!important;
-}
-.layerItem.ppLayerRow .dragGrip{display:grid!important;place-items:center!important;min-width:20px!important;}
-.layerThumb{
-  width:34px!important;height:34px!important;flex:0 0 34px!important;
-  border-radius:9px!important;overflow:hidden!important;
-  border:1px solid rgba(255,232,248,.18)!important;
-  background:linear-gradient(135deg,rgba(255,255,255,.14),rgba(255,255,255,.04))!important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.09)!important;
-  display:grid!important;place-items:center!important;
-  color:#ffe9fb!important;font-size:10px!important;line-height:1!important;
-  font-weight:950!important;letter-spacing:.01em!important;text-transform:none!important;
-  position:relative!important;
-}
-.layerThumb.hasImage{background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;}
-.layerThumb.textThumb span{width:100%;padding:2px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;position:relative;z-index:1;}
-.layerThumb.textThumb::before{content:'T';position:absolute;left:3px;top:3px;font-size:9px;opacity:.55;z-index:0;}
-.layerThumb.badgeThumb{border-radius:999px!important;background:rgba(255,255,255,.88)!important;color:#65586f!important;}
-.layerThumb.circleThumb{border-radius:50%!important;}
-.layerThumb.stripThumb::after{content:'';position:absolute;inset:3px 11px;border-radius:5px;background:rgba(255,255,255,.88);box-shadow:7px 0 0 rgba(255,255,255,.42),-7px 0 0 rgba(255,255,255,.30)}
-.layerThumb.frameThumb::after{content:'';position:absolute;inset:7px;border-radius:9px;background:rgba(255,255,255,.86);clip-path:polygon(50% 0,61% 31%,95% 31%,67% 51%,78% 86%,50% 64%,22% 86%,33% 51%,5% 31%,39% 31%)}
-.layerThumb.hiddenThumb{opacity:.45;filter:grayscale(.45)}
-.layerItem.ppLayerRow.isHidden .layerName{opacity:.48;}
-.layerItem.ppLayerRow .layerName{cursor:pointer!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
-.layerItem.ppLayerRow .deleteLayerBtn,.layerItem.ppLayerRow .visibilityBtn{width:28px!important;height:28px!important;padding:0!important;border-radius:9px!important;display:grid!important;place-items:center!important;font-size:12px!important;}
-@media(max-width:1180px){
-  .layerItem.ppLayerRow{grid-template-columns:21px 32px 26px minmax(0,1fr) 26px!important;gap:4px!important;}
-  .layerThumb{width:31px!important;height:31px!important;border-radius:8px!important;}
-}
-
 </style>
 <script id="ppLayerPanelThumbsAndNamesV99Script">
 (function(){
@@ -9704,54 +9674,10 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
 
 
 <!-- v100: filename layer names + real thumbnail images in layer panel -->
-<style id="pp-layer-filename-thumbs-v100-css">
-  .layerItem.ppLayerRow{
-    grid-template-columns:24px 36px 28px minmax(0,1fr) 28px!important;
-    gap:6px!important;
-    min-height:48px!important;
-    align-items:center!important;
-  }
-  .layerThumb{
-    width:34px!important;
-    height:34px!important;
-    flex:0 0 34px!important;
-    border-radius:9px!important;
-    overflow:hidden!important;
-    border:1px solid rgba(255,232,248,.20)!important;
-    background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.045))!important;
-    display:grid!important;
-    place-items:center!important;
-    color:#ffe9fb!important;
-    font-size:10px!important;
-    font-weight:950!important;
-    line-height:1!important;
-    position:relative!important;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.10)!important;
-  }
-  .layerThumb img{
-    width:100%!important;
-    height:100%!important;
-    object-fit:cover!important;
-    display:block!important;
-    position:absolute!important;
-    inset:0!important;
-    z-index:2!important;
-  }
-  .layerThumb.containThumb img{object-fit:contain!important;background:rgba(255,255,255,.86)!important;}
-  .layerThumb.circleThumb,.layerThumb.circleThumb img{border-radius:50%!important;}
-  .layerThumb.textThumb span{width:100%;padding:2px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;position:relative;z-index:3;}
-  .layerThumb.textThumb::before{content:'T';position:absolute;left:3px;top:3px;font-size:9px;opacity:.55;z-index:1;}
-  .layerThumb.badgeThumb{border-radius:999px!important;background:rgba(255,255,255,.88)!important;color:#65586f!important;}
-  .layerThumb.stripThumb::after{content:'';position:absolute;inset:3px 11px;border-radius:5px;background:rgba(255,255,255,.88);box-shadow:7px 0 0 rgba(255,255,255,.42),-7px 0 0 rgba(255,255,255,.30);z-index:1;}
-  .layerThumb.frameThumb::after{content:'';position:absolute;inset:7px;border-radius:9px;background:rgba(255,255,255,.55);clip-path:polygon(50% 0,61% 31%,95% 31%,67% 51%,78% 86%,50% 64%,22% 86%,33% 51%,5% 31%,39% 31%);z-index:3;pointer-events:none;}
-  .layerThumb.hiddenThumb{opacity:.45;filter:grayscale(.45)}
-  .layerItem.ppLayerRow .layerName{cursor:pointer!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
-  @media(max-width:1180px){
-    .layerItem.ppLayerRow{grid-template-columns:21px 32px 26px minmax(0,1fr) 26px!important;gap:4px!important;}
-    .layerThumb{width:31px!important;height:31px!important;border-radius:8px!important;}
-  }
-
-</style>
+<!-- NOTE(consolidation): pp-layer-filename-thumbs-v100-css used to live here, entirely scoped to
+     .layerItem.ppLayerRow / .layerThumb (bare) - confirmed via a live DOM check that no script
+     anywhere in the file still stamps these classes (the live row generator, v170, uses
+     ppCleanThumbRow/ppCleanLayerThumb instead). Removed as fully dead CSS. -->
 <script id="pp-layer-filename-thumbs-v100-js">
 (function(){
   'use strict';
@@ -9890,26 +9816,19 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
 <style id="pp-expandable-layers-panel-v101-css">
   body.ppLayersWide{--pp-rightW:460px!important;}
   body.ppLayersWide .side.right{min-width:460px!important;}
-  body.ppLayersWide .layerList{max-height:440px!important;}
-  body.ppLayersWide .layerItem.ppLayerRow{
-    grid-template-columns:24px 46px 30px minmax(0,1fr) 30px!important;
-    min-height:60px!important;
-    gap:8px!important;
-  }
-  body.ppLayersWide .layerThumb{
-    width:46px!important;
-    height:46px!important;
-    border-radius:10px!important;
-  }
-  body.ppLayersWide .layerItem.ppLayerRow .layerName{
-    font-size:13px!important;
-    white-space:normal!important;
-    line-height:1.15!important;
-    max-height:2.35em!important;
-    display:-webkit-box!important;
-    -webkit-line-clamp:2!important;
-    -webkit-box-orient:vertical!important;
-  }
+  /* NOTE(bugfix): was `.layerList` (2-class specificity), always losing to the bare id selector
+     #layerList{max-height:390px!important} elsewhere in the file (an id always beats any number
+     of classes) - confirmed live that toggling wide mode never actually changed the list's
+     max-height. Retargeted to the id so wide mode can win as originally intended. */
+  body.ppLayersWide #layerList{max-height:440px!important;}
+  /* NOTE(consolidation): wide-mode rules for .layerItem.ppLayerRow/.layerThumb/.layerName used to
+     live here (bigger thumbnails, longer wrapped names) - confirmed via a live DOM check that no
+     script anywhere in the file still stamps .ppLayerRow/.layerThumb (the live row generator, v170,
+     uses ppCleanThumbRow/ppCleanLayerThumb instead), so none of these ever matched anything.
+     Removed as dead. Note for whoever revisits wide-panel mode: the toggle button's own tooltip
+     ("bigger thumbnails and longer layer names") currently only delivers the wider side panel
+     itself and the taller list (fixed above) - the thumbnail/name-wrapping part of that promise
+     would need equivalent rules re-targeted at .ppCleanThumbRow/.ppCleanLayerThumb to actually work. */
   .layerPanelModeRow{
     display:grid!important;
     grid-template-columns:1fr auto!important;
@@ -9942,8 +9861,6 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
   @media(max-width:1180px){
     body.ppLayersWide{--pp-rightW:410px!important;}
     body.ppLayersWide .side.right{min-width:410px!important;}
-    body.ppLayersWide .layerItem.ppLayerRow{grid-template-columns:22px 42px 28px minmax(0,1fr) 28px!important;min-height:56px!important;gap:6px!important;}
-    body.ppLayersWide .layerThumb{width:42px!important;height:42px!important;}
   }
   @media(max-width:980px){
     body.ppLayersWide{--pp-rightW:360px!important;}
@@ -10920,15 +10837,10 @@ window.addEventListener('DOMContentLoaded',function(){
   color:rgba(216,206,222,.88)!important;
   padding:2px 2px 0!important;
 }
-.layerItem.ppLayerRow{cursor:pointer!important;}
-.layerItem.ppLayerRow.active{
-  outline:2px solid rgba(255,142,214,.78)!important;
-  background:linear-gradient(90deg,rgba(155,107,255,.16),rgba(255,142,214,.10))!important;
-}
-.layerItem.ppLayerRow.active .layerName::before{
-  content:'▶ ';
-  color:#ffb8e7;
-}
+/* NOTE(consolidation): .layerItem.ppLayerRow cursor/.active rules used to live here - confirmed
+   via a live DOM check that no script anywhere in the file still stamps .ppLayerRow (the live row
+   generator, v170, uses ppCleanThumbRow instead, which has its own equivalent active-state styling
+   in pp-v170-layer-row-select-css). Removed as dead. */
 
 </style>
 
@@ -11369,61 +11281,10 @@ window.addEventListener('DOMContentLoaded',function(){
 
 
 <!-- v166: frozen real layer thumbnails (no paparazzi hotel) -->
-<style id="pp-frozen-real-layer-thumbs-v166-css">
-  #layerList .layerItem.ppFrozenThumbRow{
-    grid-template-columns:24px 36px 28px minmax(0,1fr) 28px!important;
-    gap:6px!important;
-    min-height:48px!important;
-    align-items:center!important;
-  }
-  #layerList .ppFrozenLayerThumb{
-    width:34px!important;
-    height:34px!important;
-    flex:0 0 34px!important;
-    border-radius:9px!important;
-    overflow:hidden!important;
-    border:1px solid rgba(255,232,248,.20)!important;
-    background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.045))!important;
-    display:grid!important;
-    place-items:center!important;
-    color:#ffe9fb!important;
-    font-size:10px!important;
-    font-weight:950!important;
-    line-height:1!important;
-    position:relative!important;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.10)!important;
-    text-transform:none!important;
-  }
-  #layerList .ppFrozenLayerThumb img{
-    width:100%!important;
-    height:100%!important;
-    object-fit:cover!important;
-    display:block!important;
-    position:absolute!important;
-    inset:0!important;
-    z-index:2!important;
-    pointer-events:none!important;
-  }
-  #layerList .ppFrozenLayerThumb.containThumb img{object-fit:contain!important;background:rgba(255,255,255,.86)!important;}
-  #layerList .ppFrozenLayerThumb.circleThumb,
-  #layerList .ppFrozenLayerThumb.circleThumb img{border-radius:50%!important;}
-  #layerList .ppFrozenLayerThumb.textThumb span{width:100%;padding:2px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;position:relative;z-index:3;}
-  #layerList .ppFrozenLayerThumb.textThumb::before{content:'T';position:absolute;left:3px;top:3px;font-size:9px;opacity:.55;z-index:1;}
-  #layerList .ppFrozenLayerThumb.badgeThumb{border-radius:999px!important;background:rgba(255,255,255,.88)!important;color:#65586f!important;}
-  #layerList .ppFrozenLayerThumb.stripThumb::after{content:'';position:absolute;inset:3px 11px;border-radius:5px;background:rgba(255,255,255,.88);box-shadow:7px 0 0 rgba(255,255,255,.42),-7px 0 0 rgba(255,255,255,.30);z-index:1;}
-  #layerList .ppFrozenLayerThumb.frameThumb::after{content:'';position:absolute;inset:7px;border-radius:9px;background:rgba(255,255,255,.55);clip-path:polygon(50% 0,61% 31%,95% 31%,67% 51%,78% 86%,50% 64%,22% 86%,33% 51%,5% 31%,39% 31%);z-index:3;pointer-events:none;}
-  #layerList .ppFrozenLayerThumb.hiddenThumb{opacity:.45;filter:grayscale(.45)}
-  #layerList .layerItem.ppFrozenThumbRow .layerName{cursor:pointer!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
-  #layerList .layerItem.ppFrozenThumbRow .visibilityBtn,
-  #layerList .layerItem.ppFrozenThumbRow .deleteLayerBtn{width:28px!important;height:28px!important;padding:0!important;border-radius:9px!important;display:grid!important;place-items:center!important;font-size:12px!important;}
-  @media(max-width:1180px){
-    #layerList .layerItem.ppFrozenThumbRow{grid-template-columns:21px 32px 26px minmax(0,1fr) 26px!important;gap:4px!important;}
-    #layerList .ppFrozenLayerThumb{width:31px!important;height:31px!important;border-radius:8px!important;}
-  }
-  body.ppLayersWide #layerList .ppFrozenLayerThumb{width:42px!important;height:42px!important;}
-  body.ppLayersWide #layerList .layerItem.ppFrozenThumbRow{grid-template-columns:22px 42px 28px minmax(0,1fr) 28px!important;min-height:56px!important;}
-
-</style>
+<!-- NOTE(consolidation): pp-frozen-real-layer-thumbs-v166-css used to live here, entirely scoped
+     to #layerList .layerItem.ppFrozenThumbRow / .ppFrozenLayerThumb - confirmed via a live DOM
+     check that no script anywhere in the file still stamps these classes (the live row generator,
+     v170, uses ppCleanThumbRow/ppCleanLayerThumb instead). Removed as fully dead CSS. -->
 <script id="pp-frozen-real-layer-thumbs-v166-js">
 (function(){
   'use strict';
@@ -12823,38 +12684,11 @@ window.addEventListener('DOMContentLoaded',function(){
 
 
 <!-- PATCH 2026-07-08: Layers panel no-flash, thumbnails visible -->
-<style id="ppages-layer-no-flash-thumb-visible-css">
-#layerList .layerItem.ppNoFlashRow{
-  display:grid!important;
-  grid-template-columns:24px 42px 32px minmax(0,1fr) 34px!important;
-  align-items:center!important;
-  gap:8px!important;
-  min-height:58px!important;
-}
-#layerList .ppNoFlashThumb{
-  width:42px!important;height:42px!important;
-  border-radius:10px!important;
-  overflow:hidden!important;
-  display:grid!important;place-items:center!important;
-  background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.05))!important;
-  border:1px solid rgba(255,232,248,.20)!important;
-  color:#ffe9fb!important;
-  font-size:11px!important;font-weight:950!important;
-  background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;
-  flex:0 0 42px!important;
-}
-#layerList .ppNoFlashThumb.hasImage{color:transparent!important;}
-#layerList .ppNoFlashThumb.containThumb{background-size:contain!important;background-color:rgba(255,255,255,.88)!important;}
-#layerList .ppNoFlashThumb.circleThumb{border-radius:50%!important;}
-#layerList .ppNoFlashThumb.stripThumb::after{content:'';display:block;width:10px;height:34px;border-radius:5px;background:rgba(255,255,255,.75);box-shadow:12px 0 0 rgba(255,255,255,.45),-12px 0 0 rgba(255,255,255,.32)}
-#layerList .ppNoFlashThumb.textThumb{background:rgba(255,255,255,.88)!important;color:#46364e!important;padding:3px!important;text-align:center!important;line-height:1.05!important;}
-#layerList .ppNoFlashThumb.frameThumb{background:#fff!important;color:#9b6bff!important;font-size:18px!important;}
-#layerList .ppNoFlashRow .visibilityBtn,
-#layerList .ppNoFlashRow .deleteLayerBtn{width:30px!important;height:30px!important;padding:0!important;border-radius:9px!important;display:grid!important;place-items:center!important;font-size:12px!important;}
-#layerList .ppNoFlashRow .layerName{min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
-#layerList .ppNoFlashRow.active{outline:2px solid rgba(255,142,214,.9)!important;}
-#layerList .ppNoFlashRow.ppChildRow{margin-left:18px!important;opacity:.96;}
-</style>
+<!-- NOTE(consolidation): ppages-layer-no-flash-thumb-visible-css used to live here, entirely
+     scoped to #layerList .layerItem.ppNoFlashRow / .ppNoFlashThumb - confirmed via a live DOM
+     check (several layer types added, zero elements ever carry these classes) that no script
+     anywhere in the file still stamps them; the live row generator (v170) uses ppCleanThumbRow/
+     ppCleanLayerThumb instead. Removed as fully dead CSS. -->
 
 <script id="pp-recolor-png-restored-js">
 (function(){
@@ -15869,58 +15703,24 @@ else install();
     if(isGroup(l)){t.textContent='▣';return t;}
     t.textContent=short((l&&l.type)||'layer',4); return t;
   }
-  function toggleVisible(id){
-    if(typeof toggleLayerVisibility==='function'){toggleLayerVisibility(id);return;}
-    var p=P(), l=L(p).find(function(x){return x&&x.id===id;}); if(!l)return;
-    try{save();}catch(e){} l.hidden=!l.hidden; try{render();}catch(e){try{renderPages();renderLayers();}catch(_){}}
-  }
-  function deleteOne(id){
-    if(!confirm('Delete this layer?'))return;
-    if(typeof deleteLayerById==='function'){deleteLayerById(id,(S()||{}).selectedPage);return;}
-    var p=P(), s=S(); if(!p)return; try{save();}catch(e){} p.layers=L(p).filter(function(x){return x.id!==id;}); if(s&&s.selected===id)s.selected=null; try{render();}catch(e){}
-  }
-  function rowFor(l,mode){
-    mode=mode||'all'; var s=S()||{}; var group=isGroup(l);
-    var row=document.createElement('div');
-    row.className='layerItem ppCleanThumbRow '+(!l.customMockup&&l.id===s.selected?'active ':'')+(l.hidden?'isHidden ':'')+(group?'groupRow ':'')+(l.customMockup?'customMockupRow ':'');
-    row.dataset.id=l.id; row.dataset.mode=mode; row.draggable=!group;
-    var grip=document.createElement('span'); grip.className='dragGrip'; grip.title='drag to reorder'; grip.textContent=group?(s.collapsedGroups&&s.collapsedGroups[l.id]?'▶':'▼'):'⋮⋮';
-    var eye=document.createElement('button'); eye.type='button'; eye.className='visibilityBtn '+(l.hidden?'layerHidden':''); eye.title=l.hidden?'show layer':'hide layer'; eye.textContent=l.hidden?'🚫':'👁'; eye.onclick=function(e){e.stopPropagation();toggleVisible(l.id);};
-    var name=document.createElement('span'); name.className='layerName'; name.textContent=preferredName(l); name.title='tap to select · double-tap to rename';
-    name.onclick=function(e){e.stopPropagation(); if(l.customMockup){s.selected=null; try{renderLayers();syncControls&&syncControls();}catch(_){}} else if(typeof selectLayer==='function')selectLayer(l.id);};
-    name.ondblclick=function(e){e.stopPropagation(); if(typeof renameLayerById==='function')renameLayerById(l.id);};
-    var del=document.createElement('button'); del.type='button'; del.className='deleteLayerBtn'; del.title='delete layer'; del.textContent='×'; del.onclick=function(e){e.stopPropagation();deleteOne(l.id);};
-    row.appendChild(grip); row.appendChild(thumbFor(l)); row.appendChild(eye); row.appendChild(name); row.appendChild(del);
-    row.onclick=function(){ if(l.customMockup){s.selected=null; try{renderLayers();syncControls&&syncControls();}catch(e){}} else if(typeof selectLayer==='function')selectLayer(l.id); };
-    if(!group){
-      row.addEventListener('dragstart',function(e){row.classList.add('dragging');try{e.dataTransfer.setData('text/plain',JSON.stringify({id:l.id,mode:mode}));}catch(_){} });
-      row.addEventListener('dragend',function(){row.classList.remove('dragging');});
-      row.addEventListener('dragover',function(e){e.preventDefault();});
-      row.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();try{var data=JSON.parse(e.dataTransfer.getData('text/plain')); if(typeof reorderLayerByDrop==='function')reorderLayerByDrop(data.id,l.id,mode);}catch(err){} });
-    }else{grip.onclick=function(e){e.stopPropagation(); if(typeof toggleGroupExpanded==='function')toggleGroupExpanded(l.id);};}
-    return row;
-  }
-  function renderCleanLayers(){
-    var el=document.getElementById('layerList'); if(!el)return;
-    var p=P(); el.innerHTML='';
-    var list=L(p).slice().sort(function(a,b){return (b.z||0)-(a.z||0);});
-    if(!list.length){el.innerHTML='<div class="smallText">No layers yet. Add a pattern frame, banner, label or shape.</div>';return;}
-    list.forEach(function(l){ if(l && !l.groupId) el.appendChild(rowFor(l,'all')); });
-  }
-  function renderCleanFrames(){
-    var el=document.getElementById('frameList'); if(!el)return;
-    var p=P(); el.innerHTML='';
-    var list=L(p).filter(function(l){return l&&(['strip','card','pattern','frame'].indexOf(l.type)>=0||l.patternSlot);}).sort(function(a,b){return (b.z||0)-(a.z||0);});
-    if(!list.length){el.innerHTML='<div class="smallText">No pattern frames yet. Add strips, cards or frames above.</div>';return;}
-    list.forEach(function(l){el.appendChild(rowFor(l,'frames'));});
-  }
   // NOTE(consolidation): this used to also expose window.rowForLayer,
   // window.renderLayers and window.renderFrameList here, all fully
   // superseded by later generations before any user interaction could
-  // observe them - removed as dead code. renderCleanLayers/renderCleanFrames/
-  // rowFor above are still invoked directly by name from boot() below, so
-  // their function bodies stay untouched, only the redundant global exposure
-  // is gone.
+  // observe them - removed as dead code (an earlier round already did this).
+  // This round went further: toggleVisible/deleteOne/rowFor/renderCleanLayers/
+  // renderCleanFrames (which boot() used to call directly by name) were also
+  // removed. renderCleanFrames was already a pure no-op - #frameList does not
+  // exist anywhere in this file's HTML (confirmed via grep), so
+  // document.getElementById('frameList') was always null. renderCleanLayers
+  // did populate #layerList for real, but only for the ~40ms between this
+  // script's boot() (180ms) and v170's boot() (220ms), which immediately
+  // wipes and rebuilds #layerList with its own rowForLayerV170 - and since
+  // both generators build rows with the identical 'ppCleanThumbRow' class and
+  // near-identical markup, that ~40ms window was a same-looking render being
+  // replaced by another same-looking render, not a visible flash of anything
+  // different. thumbFor/ensureCleanThumb below (this generation's real image-
+  // thumbnail renderer) stay untouched and still do real work - v170 calls
+  // them directly via window.__ppV167ThumbFor.
 
   // When content genuinely changes, throw away old previews. Moving/resizing does not call this.
   ['fillSelectedFrame','placePatternOnPage','resetPngColor','applyPngColor','updateClean','createCustomMockup'].forEach(function(fn){
@@ -15931,7 +15731,6 @@ else install();
   function boot(){
     // Remove ancient frozen thumbnail references once at boot; this is the actual paparazzi eviction.
     var p=P(); L(p).forEach(function(l){try{delete l._frozenThumbSrc; delete l.thumbnailCache; delete l.thumbCache;}catch(e){}});
-    try{renderCleanLayers();renderCleanFrames();}catch(e){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(boot,180);}); else setTimeout(boot,180);
 
