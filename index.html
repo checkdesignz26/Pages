@@ -1794,7 +1794,7 @@ function generateHorizontalFabricStashLayout(){
 // setCards generations do wrap each other in a live chain and were left
 // untouched.)
 function applyCardDropdown(){generatePatternShowcaseLayout()}
-function getSelectedPattern(){let i=state.selectedTray.pattern;return i!=null?state.trays.pattern[i]?.src:null}function getPattern(i){return state.trays.pattern[i%Math.max(1,state.trays.pattern.length)]?.src||null}
+function getSelectedPattern(){let i=state.selectedTray.pattern;return i!=null?state.trays.pattern[i]?.src:null}
 function loadTray(e,type){[...e.target.files].forEach(file=>{let r=new FileReader();r.onload=ev=>{state.trays[type].push({src:ev.target.result,name:file.name});renderTrays()};r.readAsDataURL(file)});e.target.value=''}
 function renderTrays(){
  ['pattern','asset'].forEach(type=>{
@@ -4672,15 +4672,10 @@ function generateFontMatches(){
   const matches=MATCHMAKER_LIBRARY[base]||MATCHMAKER_LIBRARY.Georgia;
   results.innerHTML=matches.map((m,i)=>`<button class="fontPairBtn" onclick="applyGeneratedFontPair('${m.heading.replace(/'/g,"\'")}','${m.body.replace(/'/g,"\'" )}')"><span class="pairFonts"><strong style="font-family:${m.heading}">${m.heading}</strong><small style="font-family:${m.body}">${m.body} · ${m.note}</small></span><span class="applyTiny">apply</span></button>`).join('');
 }
-function applyGeneratedFontPair(headingFont,bodyFont){
-  let texts=selectedTextLayers();
-  if(!texts.length){addTitleSubtitle();texts=selectedTextLayers();}
-  save();
-  let heading=texts[0], body=texts[1]||texts[0];
-  heading.font=headingFont; heading.bold=true; heading.fontSize=Math.max(heading.fontSize||54,56);
-  if(body && body!==heading){body.font=bodyFont; body.bold=false; body.fontSize=Math.min(Math.max(body.fontSize||28,24),34);}
-  state.selected=heading.id; render();
-}
+// NOTE(consolidation): a base applyGeneratedFontPair(headingFont,bodyFont) used to be defined
+// here - confirmed dead, hard-overwritten with no fallback by pp-font-matchmaker-pair-restore
+// later in the file (the sole live definition, which routes through the real font controls
+// instead of mutating layers directly - matches what the passing test exercises). Removed.
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',generateFontMatches);else generateFontMatches();
 </script>
 
@@ -8739,7 +8734,11 @@ function makeNumberedList(){
   // the thumbSrc lazy-thumbnail behavior this version added). Removed as
   // dead code.
 
-  window.getPattern=function(i){ var s=st(); var tray=s&&s.trays?s.trays.pattern:[]; return tray && tray.length ? tray[i%tray.length].src : null; };
+  // NOTE(consolidation): window.getPattern used to be reassigned here too (overwriting a base
+  // getPattern(i) defined much earlier in the file, near getSelectedPattern) - a whole-file grep
+  // found zero call sites for getPattern anywhere, in either generation. Both were removed as
+  // dead/unused - getSelectedPattern (a different function, actually used throughout the tray/
+  // fill-slot flows) is untouched.
 
   // NOTE(consolidation): window.getSelectedPattern, window.loadTray, window.addUploadedImageLayer,
   // window.createMockupPage, and a window.save wrap that lived here were removed - each fully
