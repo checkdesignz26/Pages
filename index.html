@@ -3934,13 +3934,14 @@ body.leftCollapsed.rightCollapsed .pageWrap{max-width:none!important;margin-inli
       });
     });
   }
-  var originalToggle=window.toggleSidePanel;
-  if(typeof originalToggle==='function'){
-    window.toggleSidePanel=function(side){
-      originalToggle(side);
-      centreWorkspaceCanvas();
-    };
-  }
+  // NOTE(consolidation): a window.toggleSidePanel wrap used to live here. Confirmed dead: the
+  // only two call sites for toggleSidePanel were the #toggleLeftPanel/#toggleRightPanel buttons'
+  // inline onclick attributes, both of which are stripped by pp-real-tray-state-fix-script-106's
+  // wireArrows() (it clones and replaces those buttons, removing the onclick attribute) - and
+  // even before that, ppages-v182q-all-panels-tap-only-js's document-level capture-phase listener
+  // intercepts every tap on those buttons and calls stopPropagation()/preventDefault() before a
+  // click event could ever reach an onclick handler anyway (confirmed live: clicking the button
+  // correctly toggles the panel, but toggleSidePanel itself is never invoked). Removed.
   var originalRender=window.renderPages;
   if(typeof originalRender==='function'){
     window.renderPages=function(){
@@ -4166,14 +4167,9 @@ body.rightCollapsed .workspace{
     });
   }
 
-  var oldToggle=window.toggleSidePanel;
-  if(typeof oldToggle==='function'){
-    window.toggleSidePanel=function(side){
-      oldToggle(side);
-      setTimeout(fitVisibleCanvas, 20);
-      setTimeout(fitVisibleCanvas, 260);
-    };
-  }
+  // NOTE(consolidation): a window.toggleSidePanel wrap used to live here - confirmed dead for
+  // the same reason documented in collapse-centering-fix-script's NOTE above (toggleSidePanel is
+  // never actually invoked by real clicks).
 
   var oldRender=window.renderPages;
   if(typeof oldRender==='function'){
@@ -4201,23 +4197,9 @@ body.rightCollapsed .workspace{
     ws.scrollLeft = 0;
   }
 
-  const originalToggleSidePanel = window.toggleSidePanel;
-  window.toggleSidePanel = function(side){
-    if(typeof originalToggleSidePanel === 'function'){
-      originalToggleSidePanel(side);
-    }else{
-      if(side==='left'){
-        state.leftCollapsed=!state.leftCollapsed;
-        document.body.classList.toggle('leftCollapsed',state.leftCollapsed);
-      }else{
-        state.rightCollapsed=!state.rightCollapsed;
-        document.body.classList.toggle('rightCollapsed',state.rightCollapsed);
-      }
-    }
-    requestAnimationFrame(centerDesk);
-    setTimeout(centerDesk,80);
-    setTimeout(centerDesk,240);
-  };
+  // NOTE(consolidation): a window.toggleSidePanel wrap used to live here - confirmed dead for
+  // the same reason documented in collapse-centering-fix-script's NOTE further up (toggleSidePanel
+  // is never actually invoked by real clicks).
 
   const originalRenderPages = window.renderPages;
   if(typeof originalRenderPages === 'function'){
@@ -4378,13 +4360,9 @@ body.leftCollapsed.rightCollapsed .stage.listing{
   setTimeout(afterLayout,120);
   setTimeout(afterLayout,420);
 
-  var oldToggle=window.toggleSidePanel;
-  window.toggleSidePanel=function(side){
-    if(typeof oldToggle==='function') oldToggle(side);
-    requestAnimationFrame(keepDeskCentered);
-    setTimeout(keepDeskCentered,80);
-    setTimeout(keepDeskCentered,240);
-  };
+  // NOTE(consolidation): a window.toggleSidePanel wrap used to live here - confirmed dead for
+  // the same reason documented in collapse-centering-fix-script's NOTE further up (toggleSidePanel
+  // is never actually invoked by real clicks).
 
   var oldRender=window.renderPages;
   if(typeof oldRender==='function'){
@@ -4487,13 +4465,10 @@ body.leftCollapsed.rightCollapsed .stage.listing{
     if(!ws) return;
     ws.scrollLeft=0;
   }
-  var oldToggle=window.toggleSidePanel;
-  window.toggleSidePanel=function(side){
-    if(typeof oldToggle==='function') oldToggle(side);
-    requestAnimationFrame(centreWorkspace);
-    setTimeout(centreWorkspace,80);
-    setTimeout(centreWorkspace,260);
-  };
+  // NOTE(consolidation): a window.toggleSidePanel wrap used to live here - confirmed dead for
+  // the same reason documented in collapse-centering-fix-script's NOTE further up (toggleSidePanel
+  // is never actually invoked by real clicks). centreWorkspace() is still called below on resize
+  // and once at boot, so it stays.
   window.addEventListener('resize', centreWorkspace);
   setTimeout(centreWorkspace,120);
 })();
@@ -12459,17 +12434,12 @@ window.addEventListener('DOMContentLoaded',function(){
   document.addEventListener('pointerup',function(){document.body.classList.remove('ppagesDragging')},true);
   document.addEventListener('pointercancel',function(){document.body.classList.remove('ppagesDragging')},true);
 
-  /* Slow panel taps very slightly. It prevents accidental edge brushes opening panels. */
-  var pendingPanelTap=0;
-  var oldToggle=window.toggleSidePanel;
-  window.toggleSidePanel=function(side){
-    var now=Date.now();
-    if(now-pendingPanelTap<180) return;
-    pendingPanelTap=now;
-    if(document.body.classList.contains('ppagesDragging')) return;
-    if(typeof oldToggle==='function') return oldToggle.apply(this,arguments);
-    document.body.classList.toggle(side==='left'?'leftCollapsed':'rightCollapsed');
-  };
+  // NOTE(consolidation): a window.toggleSidePanel wrap used to live here - confirmed dead for
+  // the same reason documented in collapse-centering-fix-script's NOTE much further up
+  // (toggleSidePanel is never actually invoked by real clicks - ppages-v182q-all-panels-tap-
+  // only-js's document-level capture listener intercepts every tap on the panel-toggle buttons
+  // first, and pp-real-tray-state-fix-script-106 also strips their onclick attributes via
+  // cloneNode).
 
   /* After adding/importing layers, normalise missing z/id/name values so all objects are selectable. */
   function repairLayers(){
