@@ -376,6 +376,23 @@ test('a custom mock-up survives save-template/load-template WITHOUT manually mar
   });
   expect(reloadedMockupSrc).toBeFalsy();
 
+  // The blanked mock-up should render with the same dashed "drop pattern here" slot look as
+  // every other placeholder (patternSlot:true), not a plain box showing its raw internal layer
+  // name ("custom mock-up pattern area") on top of the product photo.
+  await page.evaluate(() => render());
+  const reloadedMockupVisual = await page.evaluate(() => {
+    const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
+    const el = document.querySelector(`.layer[data-id="${l.id}"]`);
+    return {
+      patternSlotFlag: l.patternSlot,
+      hasPatternSlotClass: el ? el.classList.contains('patternSlot') : null,
+      placeholderText: el ? (el.querySelector('.placeholder') || {}).textContent : null,
+    };
+  });
+  expect(reloadedMockupVisual.patternSlotFlag).toBe(true);
+  expect(reloadedMockupVisual.hasPatternSlotClass).toBe(true);
+  expect(reloadedMockupVisual.placeholderText).toBe('');
+
   const secondPattern = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFhAJ/wlseKgAAAABJRU5ErkJggg==',
     'base64'

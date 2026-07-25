@@ -16110,6 +16110,10 @@ else install();
       if(copy.type==='image' || copy.type==='mockup' || copy.type==='banner' || copy.type==='overlay'){
         copy.type='image'; copy.fit=copy.fit||'cover';
       }
+      // Match markSelectedAsPlaceholder()'s own convention (patternSlot:true) so a blanked
+      // mock-up gets the same dashed "drop pattern here" slot look as every other placeholder,
+      // instead of rendering as a plain box with its raw internal layer name on top of the photo.
+      copy.patternSlot=true;
     }else{
       // Keep visible artwork that belongs to the template itself, especially overlay/banner PNGs.
       copy.templateAsset=true;
