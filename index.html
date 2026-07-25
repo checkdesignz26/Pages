@@ -11567,6 +11567,17 @@ window.addEventListener('DOMContentLoaded',function(){
   function handleTap(e){
     if(active)return;
     var node=textNodeFromEvent(e); if(!node)return;
+    // Block iOS Safari's native double-tap-to-zoom gesture. stop()/stopPropagation() only stops
+    // the app's OWN listeners from seeing the event - it has no effect on the browser's built-in
+    // double-tap-zoom recognizer, which looks at whether preventDefault() was called on the touch
+    // events themselves. Neither tap of a double-tap sequence called it before (the first tap just
+    // records lastTap and returns; the second tap's stop() never called preventDefault either), so
+    // two rapid taps on text could trigger Safari's own "zoom to fit this element" gesture at the
+    // same time the app opened its own editor - leaving the whole page stuck zoomed in, with no
+    // app-level "reset zoom" able to touch a gesture the browser itself is driving. Prevent default
+    // on every tap here, not just the second, since the browser's gesture recognition considers the
+    // whole two-tap sequence.
+    if(e.cancelable)e.preventDefault();
     var id=node.dataset&&node.dataset.id, now=Date.now();
     if(id&&id===lastTap.id&&(now-lastTap.t)<430){ lastTap.id=null; lastTap.t=0; startEditor(node,e); }
     else { lastTap.id=id; lastTap.t=now; }

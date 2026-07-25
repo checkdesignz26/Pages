@@ -156,3 +156,42 @@ test('double-tapping text opens the floating editor, hides resize handles, and D
   expect(afterDone.hasTextarea).toBe(false);
   expect(afterDone.hasDoneBtn).toBe(false);
 });
+
+test('double-tapping text calls preventDefault on both taps, blocking iOS Safari\'s native double-tap-zoom', async ({ page }) => {
+  // A real bug: stop() in pp-text-v176-js only called stopPropagation()/stopImmediatePropagation(),
+  // which stops the app's OWN listeners from seeing the event but has zero effect on the browser's
+  // built-in double-tap-to-zoom gesture (a separate, lower-level mechanism keyed off whether
+  // preventDefault() was called on the touch events themselves). Two rapid taps on text could
+  // trigger Safari's native "zoom to fit this element" at the same moment the app opened its own
+  // editor, leaving the whole page - canvas AND side panels - stuck zoomed in with no way back to
+  // 100% short of a manual pinch. Fixed by calling preventDefault() in handleTap() for every tap
+  // on a text/label layer, not just the second one that opens the editor.
+  await page.evaluate(() => { addText('text'); });
+  await page.waitForTimeout(200);
+
+  await page.evaluate(() => {
+    window.__mkTouch = (id, x, y, target) => new Touch({ identifier: id, target, clientX: x, clientY: y, pageX: x, pageY: y });
+  });
+
+  const layerId = await page.evaluate(() => state.pages[0].layers[0].id);
+  const box = await page.locator(`.layer[data-id="${layerId}"]`).boundingBox();
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+
+  async function tapAndCheckPrevented(x, y) {
+    return page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      const t = window.__mkTouch(1, x, y, el);
+      const touchend = new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [t], bubbles: true, cancelable: true });
+      el.dispatchEvent(new TouchEvent('touchstart', { touches: [t], targetTouches: [t], changedTouches: [t], bubbles: true, cancelable: true }));
+      el.dispatchEvent(touchend);
+      return touchend.defaultPrevented;
+    }, { x, y });
+  }
+
+  const firstTapPrevented = await tapAndCheckPrevented(cx, cy);
+  await page.waitForTimeout(100);
+  const secondTapPrevented = await tapAndCheckPrevented(cx, cy);
+
+  expect(firstTapPrevented).toBe(true);
+  expect(secondTapPrevented).toBe(true);
+});
