@@ -16326,7 +16326,7 @@ else install();
         }
         if(typeof render==='function')render();
         alert('Template loaded. Placeholder labels are visible while editing and will not export.');
-      }catch(err){console.error(err);alert('Could not load this .ptemplate file.');}
+      }catch(err){console.error(err);alert('Could not load this .ptemplate file.'+(err&&err.message?(' ('+err.message+')'):''));}
       event.target.value='';
     };
     reader.readAsText(file);
