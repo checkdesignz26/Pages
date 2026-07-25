@@ -13912,99 +13912,18 @@ document.addEventListener('DOMContentLoaded',function(){
     transform:none!important;z-index:999997!important
   }
 </style>
-<script id="ppages-v182p-true-tap-only-js">
-(function(){
-  'use strict';
-  if(window.__PPAGES_V182P_TRUE_TAP_ONLY__) return;
-  window.__PPAGES_V182P_TRUE_TAP_ONLY__=true;
+<!-- NOTE(consolidation): ppages-v182p-true-tap-only-js used to live here. Its cloneNode-based
+     tap-only listeners on .box>h2/#toggleLeftPanel/#toggleRightPanel are structurally shadowed by
+     ppages-v182q-all-panels-tap-only-js's document-level capture-phase listener further down -
+     document is an ancestor of every node this script touches, so the document-level capture
+     listener always fires first and calls stopPropagation, regardless of script load order. This
+     is a DOM-structural guarantee, not a timing coincidence. Its moveFeedback() (reparenting the
+     feedback button to document.body) was confirmed via live instrumentation (monkey-patching
+     appendChild) to never actually move anything - the button is already a body-level child
+     straight from the static HTML. Removed the whole script as dead code; its CSS companion
+     (ppages-v182p-true-tap-only-css) is untouched - it's unrelated touch-action/positioning CSS,
+     not tied to this dead listener code. -->
 
-  function state(){try{return window.state||null}catch(e){return null}}
-  function stop(e){if(!e)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();}
-
-  function makeTapOnly(node,onTap,key){
-    if(!node||node.dataset[key]==='1') return node;
-    var fresh=node.cloneNode(true);
-    fresh.dataset[key]='1';
-    fresh.removeAttribute('onclick');
-    fresh.removeAttribute('ontouchstart');
-    fresh.removeAttribute('ontouchend');
-    fresh.removeAttribute('onpointerdown');
-    fresh.removeAttribute('onpointerup');
-    fresh.removeAttribute('onmousedown');
-    fresh.removeAttribute('onmouseup');
-    node.parentNode.replaceChild(fresh,node);
-
-    var g=null, suppressClickUntil=0;
-    function point(e){
-      var p=e.touches&&e.touches[0] ? e.touches[0] : (e.changedTouches&&e.changedTouches[0] ? e.changedTouches[0] : e);
-      return {x:p.clientX||0,y:p.clientY||0};
-    }
-    function down(e){
-      var p=point(e); g={x:p.x,y:p.y,moved:false,id:e.pointerId};
-      e.stopPropagation();
-    }
-    function move(e){
-      if(!g)return; var p=point(e);
-      if(Math.hypot(p.x-g.x,p.y-g.y)>10) g.moved=true;
-    }
-    function up(e){
-      if(!g)return;
-      var moved=g.moved; g=null;
-      suppressClickUntil=Date.now()+450;
-      stop(e);
-      if(!moved) onTap();
-    }
-    function cancel(){g=null;suppressClickUntil=Date.now()+450;}
-    function click(e){
-      stop(e);
-      if(Date.now()<suppressClickUntil) return;
-      onTap();
-    }
-
-    fresh.addEventListener('pointerdown',down,{capture:true,passive:true});
-    fresh.addEventListener('pointermove',move,{capture:true,passive:true});
-    fresh.addEventListener('pointerup',up,{capture:true,passive:false});
-    fresh.addEventListener('pointercancel',cancel,{capture:true,passive:true});
-    fresh.addEventListener('click',click,{capture:true,passive:false});
-    return fresh;
-  }
-
-  function wireHeadings(){
-    document.querySelectorAll('.box > h2').forEach(function(h){
-      makeTapOnly(h,function(){
-        var box=h.closest('.box');
-        if(box) box.classList.toggle('collapsed');
-      },'ppV182pHeading');
-    });
-  }
-
-  function wireArrows(){
-    [['toggleLeftPanel','left'],['toggleRightPanel','right']].forEach(function(pair){
-      var old=document.getElementById(pair[0]);
-      if(!old)return;
-      var side=pair[1];
-      makeTapOnly(old,function(){
-        var cls=side==='left'?'leftCollapsed':'rightCollapsed';
-        document.body.classList.toggle(cls);
-        var s=state();
-        if(s) s[cls]=document.body.classList.contains(cls);
-      },'ppV182pArrow');
-    });
-  }
-
-  function moveFeedback(){
-    var f=document.querySelector('#feedbackBtn,.feedbackBtn,.feedback-btn,.feedbackButton');
-    if(f&&f.parentElement!==document.body) document.body.appendChild(f);
-  }
-
-  function install(){wireHeadings();wireArrows();moveFeedback();}
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',install,{once:true}); else install();
-  setTimeout(install,250);setTimeout(install,900);setTimeout(install,1800);
-
-  var mo=new MutationObserver(function(){clearTimeout(window.__pp182pTimer);window.__pp182pTimer=setTimeout(install,60)});
-  mo.observe(document.documentElement,{childList:true,subtree:true});
-})();
-</script>
 
 
 
@@ -17698,10 +17617,11 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   caret-color:#7a43cf!important;
   -webkit-user-select:text!important;
   user-select:text!important;
-  touch-action:auto!important;
-}
-.documentEditor.ppPersistentDoc183:focus{
-  box-shadow:inset 0 0 0 3px rgba(155,107,255,.16)!important;
+  /* NOTE(consolidation): touch-action:auto!important used to be set here, and a separate
+     :focus{box-shadow:...rgba(155,107,255,.16)} rule used to follow this one - both confirmed
+     dead via computed styles (pp-single-tap-keyboard-186-css defines the identical selector,
+     touch-action:manipulation and a .18-alpha focus box-shadow, later in the file, winning the
+     source-order tie-break since both are !important with identical specificity). Removed. */
 }
 .documentEditor.ppPersistentDoc183 h1{
   margin:0 0 .55em!important;
