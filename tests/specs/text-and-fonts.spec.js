@@ -3,6 +3,8 @@
 // locked text on re-render, and font pairing still applies through the normal text controls.
 const { test, expect } = require('../support/fixtures');
 
+test.use({ hasTouch: true });
+
 test('addText and addBadge create layers, and legacy locked text auto-unlocks on render', async ({ page }) => {
   const result = await page.evaluate(() => {
     save();
@@ -56,4 +58,79 @@ test('applyGeneratedFontPair applies the heading font through the normal text co
   expect(result.ok).toBe(true);
   expect(result.font).toBe('Playfair Display');
   expect(result.bold).toBe(true);
+});
+
+test('double-tapping text opens the floating editor, hides resize handles, and Done cleans up fully', async ({ page }) => {
+  // Two real bugs here, both from CSS/JS added in later patches without accounting for what
+  // pp-text-v176-js ("GOLDEN CAGE TEXT SURGERY") already relied on:
+  // 1. pp-text-free-the-box-css's .stage .layer.text.selected > .handle (and .resizeHint/
+  //    .rotateHandle) rules have 5 classes of specificity, beating v176's own 4-class
+  //    .ppTextEditing176 .handle{display:none} rule regardless of which is later in the
+  //    document - so the resize handles stayed visible on top of the floating textarea while
+  //    editing. Fixed by adding .selected to the hide-rule's own selector.
+  // 2. The Done button registered two capture-phase click/touchend/pointerup listeners on
+  //    itself: a generic "stop everything" one (registered first) and the actual cleanup one
+  //    (registered second). stopImmediatePropagation() in the first silently killed the
+  //    second, so Done never removed the floating textarea/button - tapping it just left the
+  //    editor sitting there, overlapping the now-"selected" canvas layer underneath.
+  await page.evaluate(() => { addText('text'); });
+  await page.waitForTimeout(200);
+
+  await page.evaluate(() => {
+    window.__mkTouch = (id, x, y, target) => new Touch({ identifier: id, target, clientX: x, clientY: y, pageX: x, pageY: y });
+    window.__fireTouch = (type, touches, changed, target) => {
+      target.dispatchEvent(new TouchEvent(type, { touches, targetTouches: touches, changedTouches: changed, bubbles: true, cancelable: true }));
+    };
+  });
+
+  const layerId = await page.evaluate(() => state.pages[0].layers[0].id);
+  const box = await page.locator(`.layer[data-id="${layerId}"]`).boundingBox();
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+
+  async function tap(x, y) {
+    await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      const t = window.__mkTouch(1, x, y, el);
+      window.__fireTouch('touchstart', [t], [t], el);
+      setTimeout(() => window.__fireTouch('touchend', [], [t], el), 20);
+    }, { x, y });
+    await page.waitForTimeout(60);
+  }
+
+  // Two quick taps = the app's own double-tap detector (separate from native dblclick).
+  await tap(cx, cy);
+  await page.waitForTimeout(100);
+  await tap(cx, cy);
+  await page.waitForTimeout(300);
+
+  const duringEdit = await page.evaluate((id) => {
+    const node = document.querySelector(`.layer[data-id="${id}"]`);
+    return {
+      isEditing: node.classList.contains('ppTextEditing176'),
+      hasTextarea: !!document.querySelector('.ppTextArea176'),
+      handleDisplay: getComputedStyle(node.querySelector('.handle')).display,
+      resizeHintDisplay: getComputedStyle(node.querySelector('.resizeHint')).display,
+    };
+  }, layerId);
+  expect(duringEdit.isEditing).toBe(true);
+  expect(duringEdit.hasTextarea).toBe(true);
+  expect(duringEdit.handleDisplay).toBe('none');
+  expect(duringEdit.resizeHintDisplay).toBe('none');
+
+  await page.locator('.ppTextArea176').fill('typed via test');
+  await page.locator('.ppTextDone176').click();
+  await page.waitForTimeout(300);
+
+  const afterDone = await page.evaluate((id) => ({
+    layerText: state.pages[0].layers.find((l) => l.id === id).text,
+    nodeSelected: document.querySelector(`.layer[data-id="${id}"]`).classList.contains('selected'),
+    stillEditing: document.querySelector(`.layer[data-id="${id}"]`).classList.contains('ppTextEditing176'),
+    hasTextarea: !!document.querySelector('.ppTextArea176'),
+    hasDoneBtn: !!document.querySelector('.ppTextDone176'),
+  }), layerId);
+  expect(afterDone.layerText).toBe('typed via test');
+  expect(afterDone.nodeSelected).toBe(true);
+  expect(afterDone.stillEditing).toBe(false);
+  expect(afterDone.hasTextarea).toBe(false);
+  expect(afterDone.hasDoneBtn).toBe(false);
 });

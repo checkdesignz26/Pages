@@ -12326,9 +12326,12 @@ window.addEventListener('DOMContentLoaded',function(){
   .stage .layer.text .shapeText,.stage .layer.label .shapeText{cursor:text!important;}
   .stage .layer.ppTextEditing176{outline:3px solid rgba(255,142,214,.98)!important;outline-offset:5px!important;z-index:2147480000!important;}
   .stage .layer.ppTextEditing176 .shapeText{opacity:0!important;}
-  .stage .layer.ppTextEditing176 .handle,
-  .stage .layer.ppTextEditing176 .rotateHandle,
-  .stage .layer.ppTextEditing176 .resizeHint,
+  .stage .layer.text.selected.ppTextEditing176 .handle,
+  .stage .layer.label.selected.ppTextEditing176 .handle,
+  .stage .layer.text.selected.ppTextEditing176 .rotateHandle,
+  .stage .layer.label.selected.ppTextEditing176 .rotateHandle,
+  .stage .layer.text.selected.ppTextEditing176 .resizeHint,
+  .stage .layer.label.selected.ppTextEditing176 .resizeHint,
   .stage .layer.ppTextEditing176 .deleteMini{display:none!important;}
   .ppTextArea176{
     position:fixed!important;
@@ -12492,13 +12495,20 @@ window.addEventListener('DOMContentLoaded',function(){
 
     ['pointerdown','pointerup','touchstart','touchend','mousedown','mouseup','click','dblclick'].forEach(function(t){
       ta.addEventListener(t,function(ev){stop(ev);},true);
+    });
+    // NOTE: click/touchend/pointerup used to also get a stop-only handler here, registered
+    // before the cleanup-triggering handlers below - since both were on the same element with
+    // capture:true, the stop-only one always ran first and its stopImmediatePropagation() meant
+    // Done's actual cleanup(true) call never fired. Only the remaining event types need a plain
+    // stop; the three that should close the editor call cleanup directly instead.
+    ['pointerdown','touchstart','mousedown','dblclick'].forEach(function(t){
       done.addEventListener(t,function(ev){stop(ev);},true);
     });
     ta.addEventListener('input',function(){ if(active&&active.ta===ta){ l.text=ta.value; mirrorPanel(l); }},false);
     ta.addEventListener('keydown',function(ev){ if(ev.key==='Escape'){stop(ev);cleanup(true);} },true);
-    done.addEventListener('click',function(ev){stop(ev);cleanup(true);},true);
-    done.addEventListener('touchend',function(ev){stop(ev);cleanup(true);},true);
-    done.addEventListener('pointerup',function(ev){stop(ev);cleanup(true);},true);
+    ['click','touchend','pointerup'].forEach(function(t){
+      done.addEventListener(t,function(ev){stop(ev);cleanup(true);},true);
+    });
 
     // Focus must happen synchronously inside the tap/double-tap gesture for iPad.
     try{ta.focus({preventScroll:true});}catch(_){try{ta.focus();}catch(e2){}}
@@ -16146,10 +16156,16 @@ else install();
     visibility:visible!important;
   }
 
-  /* Hide resize/delete/rotate while editing, but keep canvas text itself visible. */
-  .stage .layer.ppTextEditing176 .handle,
-  .stage .layer.ppTextEditing176 .rotateHandle,
-  .stage .layer.ppTextEditing176 .resizeHint,
+  /* Hide resize/delete/rotate while editing, but keep canvas text itself visible.
+     .handle/.rotateHandle/.resizeHint need to beat pp-text-free-the-box-css's
+     .stage .layer.text.selected > .X rules (5 classes) on specificity, not just source
+     order, so they include .selected explicitly rather than relying on .ppTextEditing176 alone. */
+  .stage .layer.text.selected.ppTextEditing176 .handle,
+  .stage .layer.label.selected.ppTextEditing176 .handle,
+  .stage .layer.text.selected.ppTextEditing176 .rotateHandle,
+  .stage .layer.label.selected.ppTextEditing176 .rotateHandle,
+  .stage .layer.text.selected.ppTextEditing176 .resizeHint,
+  .stage .layer.label.selected.ppTextEditing176 .resizeHint,
   .stage .layer.ppTextEditing176 .deleteMini{
     display:none!important;
   }
