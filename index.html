@@ -8922,30 +8922,6 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
   // visible toast), so this cap only needs to bound normal-sized sessions -
   // raised to match the original base save()'s 35-entry limit.
   const PP95_HISTORY_LIMIT = 35;
-  const PP95_MAX_MOCKUP_SIDE = 2200; // keeps iPad RAM calmer for custom mock-ups
-
-  window.pp95MaybeShrinkDataUrl = function(dataUrl, maxSide=PP95_MAX_MOCKUP_SIDE){
-    return new Promise(resolve=>{
-      if(!dataUrl || !/^data:image\//.test(dataUrl)) return resolve(dataUrl);
-      const img=new Image();
-      img.onload=()=>{
-        const w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
-        const side=Math.max(w,h);
-        if(!side || side<=maxSide) return resolve(dataUrl);
-        const scale=maxSide/side;
-        const c=document.createElement('canvas');
-        c.width=Math.max(1,Math.round(w*scale));
-        c.height=Math.max(1,Math.round(h*scale));
-        const ctx=c.getContext('2d');
-        ctx.imageSmoothingEnabled=true;
-        ctx.imageSmoothingQuality='high';
-        ctx.drawImage(img,0,0,c.width,c.height);
-        resolve(c.toDataURL('image/png'));
-      };
-      img.onerror=()=>resolve(dataUrl);
-      img.src=dataUrl;
-    });
-  };
 
   if(typeof save==='function'){
     window.save=function(){
@@ -8970,36 +8946,12 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
   // window.renderPages here (an early "virtualized rendering" full
   // replacement), both fully superseded by the live renderPages generation
   // later in the file (confirmed nothing else in this block depends on
-  // them). Removed as dead code. save/pp95MaybeShrinkDataUrl/
-  // pp95DrawMaskGuide above are NOT superseded and remain live.
-
-  function pp95DrawMaskGuide(ctx,maskCanvas,w,h){
-    try{
-      const guide=document.createElement('canvas'); guide.width=w; guide.height=h;
-      const g=guide.getContext('2d',{willReadFrequently:true});
-      g.drawImage(maskCanvas,0,0,w,h);
-      const img=g.getImageData(0,0,w,h), d=img.data;
-      const out=g.createImageData(w,h), od=out.data;
-      const step=Math.max(1,Math.round(Math.max(w,h)/1200));
-      const alphaAt=(x,y)=> (x<0||y<0||x>=w||y>=h)?0:d[((y*w+x)*4)+3];
-      for(let y=0;y<h;y+=step){
-        for(let x=0;x<w;x+=step){
-          const a=alphaAt(x,y);
-          if(a<40) continue;
-          if(alphaAt(x-step,y)<40 || alphaAt(x+step,y)<40 || alphaAt(x,y-step)<40 || alphaAt(x,y+step)<40){
-            for(let yy=y-step;yy<=y+step;yy++) for(let xx=x-step;xx<=x+step;xx++){
-              if(xx<0||yy<0||xx>=w||yy>=h) continue;
-              const k=(yy*w+xx)*4; od[k]=55; od[k+1]=45; od[k+2]=70; od[k+3]=95;
-            }
-          }
-        }
-      }
-      g.clearRect(0,0,w,h);
-      g.putImageData(out,0,0);
-      ctx.drawImage(guide,0,0,w,h);
-    }catch(err){ console.warn('mask guide skipped',err); }
-  }
-  window.pp95DrawMaskGuide=pp95DrawMaskGuide;
+  // them). Removed as dead code. Also removed (2026): window.pp95MaybeShrinkDataUrl
+  // and pp95DrawMaskGuide/window.pp95DrawMaskGuide, which a prior consolidation
+  // pass's comment here claimed were "NOT superseded and remain live" - a
+  // whole-file grep found zero callers for either, so that claim no longer
+  // held (whatever last called them was apparently removed in an even
+  // earlier round without updating this note). save() above is still live.
 
   // NOTE(consolidation): window.createCustomMockupFromMask used to also be
   // defined here, fully superseded by the v163/createClean generation later
@@ -9867,7 +9819,6 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
       l._autoNamed=true;
     }
   }
-  function imgSrcFor(l){return l&&(l.customMockup?(l.customMockupPatternSrc||l.thumbSrc||''):(l.thumbSrc||l.src||l.previewSrc||l.maskSrc||''));}
   window.ppNameLayerFromFile=function(l,name,force){if(!l)return;l.sourceName=name||l.sourceName||l.fileName||'';ensureName(l,page(),!!force);};
   window.ppAutoNamePage=function(p){arr(p||page()).forEach(function(l){ensureName(l,p||page(),false);});};
 
@@ -11315,16 +11266,11 @@ window.addEventListener('DOMContentLoaded',function(){
 /* v164 — Real multiply restore for caught custom mock-up.
    The clean mask/pattern area is a separate transparent layer, so CSS blend must happen
    between that layer and the mock-up background underneath. */
-.layer.customMockupLayer,
-.layer.customMockupLayer.customMockupMultiply{
-  background:transparent!important;
-  isolation:auto!important;
-}
-.layer.customMockupLayer > img{
-  background:transparent!important;
-  mix-blend-mode:multiply!important;
-  -webkit-mix-blend-mode:multiply!important;
-}
+/* NOTE(consolidation): the .layer.customMockupLayer / .layer.customMockupLayer > img rules that
+   used to live here are a strict subset of pp-v167-custom-mockup-button-rescue-style's rules of
+   the same specificity further down (which cover the same properties/values plus more, and win
+   any tie by source order) - removed. .stage.mockup{isolation:isolate} is NOT covered by v167
+   (which never touches .stage.mockup), so it stays. */
 .stage.mockup{
   isolation:isolate!important;
 }
@@ -16364,51 +16310,10 @@ else install();
 
 <!-- v177 HARD FIX: custom mock-up rows must show the raw pattern tile, never the tumbler/mask render. -->
 <style id="pp-v177-custom-mockup-raw-thumb-css">
-  #layerList .layerItem.ppV177LayerRow{
-    display:grid!important;
-    grid-template-columns:22px 42px 28px minmax(0,1fr) 28px!important;
-    gap:7px!important;
-    align-items:center!important;
-    min-height:56px!important;
-    padding:7px 8px!important;
-    border-radius:13px!important;
-  }
-  #layerList .ppV177Thumb{
-    width:42px!important;
-    height:42px!important;
-    border-radius:9px!important;
-    overflow:hidden!important;
-    display:grid!important;
-    place-items:center!important;
-    background:rgba(255,255,255,.92)!important;
-    border:1px solid rgba(255,232,248,.20)!important;
-    color:#6d6178!important;
-    font-size:12px!important;
-    font-weight:900!important;
-    flex:0 0 42px!important;
-  }
-  #layerList .ppV177Thumb img{
-    width:100%!important;
-    height:100%!important;
-    object-fit:cover!important;
-    display:block!important;
-    image-rendering:auto!important;
-  }
-  #layerList .ppV177Thumb.contain img{object-fit:contain!important;}
-  #layerList .layerItem.ppV177LayerRow.active{
-    outline:2px solid rgba(255,142,214,.82)!important;
-    box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)!important;
-  }
-  #layerList .layerItem.ppV177LayerRow.customMockupRow .layerName::after{
-    content:"on mock-up";
-    display:block;
-    font-size:10.5px;
-    font-weight:800;
-    color:rgba(255,248,252,.55);
-    line-height:1.05;
-    margin-top:2px;
-  }
-
+/* NOTE(consolidation): dead #layerList .layerItem.ppV177LayerRow / .ppV177Thumb rules used to
+   live here - they targeted classes no live script ever assigns (the live layer-row thumbnail
+   pipeline, pp-v167-clean-thumbs-js/pp-v170-layer-row-select-js, stamps ppCleanThumbRow, never
+   ppV177LayerRow/ppV177Thumb). Confirmed via whole-file grep. */
 /* v178: uploaded image assets keep proportions when corner-resized. */
 .layer.image .resizeHint::after,
 .layer.banner .resizeHint::after,
@@ -16600,12 +16505,9 @@ else install();
      This patch replaces the too-aggressive v181 broom. It never removes real canvas layers,
      images, or canvases. It only fixes project loading and cleans stale thumbnail plumbing. -->
 <style id="ppages-v182-safe-paparazzi-css">
-.ppagesImportNotice{
-  position:fixed;left:50%;bottom:70px;transform:translateX(-50%);z-index:9999999;
-  background:rgba(22,15,34,.96);border:1px solid rgba(255,232,248,.18);color:#fff8fb;
-  border-radius:999px;padding:10px 15px;font-size:12px;font-weight:850;box-shadow:0 14px 34px rgba(0,0,0,.32);
-  max-width:calc(100vw - 28px);text-align:center;pointer-events:none;
-}
+/* NOTE(consolidation): .ppagesImportNotice used to be styled here - its JS creator (notice())
+   was already removed in a prior consolidation round, and nothing else in the file creates an
+   element with this class, so the CSS was orphaned. */
 /* Calm Safari/iPad compositing without hiding or deleting the real placed pattern. */
 .stage .layer,
 .stage .layer img,
