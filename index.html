@@ -10450,63 +10450,17 @@ window.addEventListener('DOMContentLoaded',function(){
   // of each fully replaces with no fallback to a previous version), so they were dead code.
   // window.placePatternOnPage above stays - it's still the live base a later wrap builds on.
 
-  // Clean accordion panels: one tap, no double event.
-  function wireAccordions(){
-    document.querySelectorAll('.box > h2').forEach(function(h){
-      if(h.dataset.ppAccordion106==='yes') return;
-      h.dataset.ppAccordion106='yes';
-      var last=0;
-      function toggle(e){
-        stop(e);
-        var now=Date.now();
-        if(now-last<320) return false;
-        last=now;
-        var box=h.closest('.box');
-        if(box) box.classList.toggle('collapsed');
-        return false;
-      }
-      h.addEventListener('pointerdown', stop, {capture:true, passive:false});
-      h.addEventListener('touchstart', stop, {capture:true, passive:false});
-      h.addEventListener('pointerup', toggle, {capture:true, passive:false});
-      h.addEventListener('touchend', toggle, {capture:true, passive:false});
-      h.addEventListener('click', toggle, {capture:true, passive:false});
-    });
-  }
-
-  function wireArrows(){
-    [['toggleLeftPanel','left'],['toggleRightPanel','right']].forEach(function(pair){
-      var old=$(pair[0]); if(!old || old.dataset.ppArrow106==='yes') return;
-      var btn=old.cloneNode(true);
-      old.parentNode.replaceChild(btn,old);
-      btn.dataset.ppArrow106='yes';
-      btn.setAttribute('type','button');
-      btn.removeAttribute('onclick');
-      var side=pair[1], last=0;
-      function toggle(e){
-        stop(e);
-        var now=Date.now();
-        if(now-last<360) return false;
-        last=now;
-        document.body.classList.toggle(side==='left'?'leftCollapsed':'rightCollapsed');
-        var s=st();
-        if(s){
-          if(side==='left') s.leftCollapsed=document.body.classList.contains('leftCollapsed');
-          else s.rightCollapsed=document.body.classList.contains('rightCollapsed');
-        }
-        return false;
-      }
-      btn.addEventListener('pointerdown', stop, {capture:true, passive:false});
-      btn.addEventListener('touchstart', stop, {capture:true, passive:false});
-      btn.addEventListener('pointerup', toggle, {capture:true, passive:false});
-      btn.addEventListener('touchend', toggle, {capture:true, passive:false});
-      btn.addEventListener('click', toggle, {capture:true, passive:false});
-    });
-  }
+  // NOTE(consolidation): wireAccordions() and wireArrows() used to live here - each attached its
+  // own capture-phase listeners to .box>h2 / #toggleLeftPanel/#toggleRightPanel (wireArrows also
+  // cloned and replaced those buttons). Confirmed dead: ppages-v182q-all-panels-tap-only-js's
+  // document-level capture-phase listener always fires first (document is an ancestor of every
+  // node these functions touch - a DOM-tree-position guarantee, not a timing coincidence) and
+  // calls stopPropagation(), so these node-level listeners never actually ran. Verified live: one
+  // click reliably produces exactly one collapse toggle, not a double-toggle-cancels-out pattern,
+  // which would show if both handlers fired. Removed both functions and their init() call sites.
 
   function init(){
     ensureState();
-    wireAccordions();
-    wireArrows();
     safeRenderTrays();
   }
 
