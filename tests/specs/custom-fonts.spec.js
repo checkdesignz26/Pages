@@ -334,3 +334,40 @@ test('the font dropdown refreshes to match each new document selection (not stuc
   const paragraphHtml = docHtml.match(/<p>[\s\S]*?<\/p>/)[0];
   expect(paragraphHtml).toContain(fontName);
 });
+
+test('switching fonts clears a stale nested font-family instead of leaving it winning', async ({ page }) => {
+  // Couldn't reproduce the reported "can switch to custom but not to standard/handwritten fonts"
+  // failure directly in Chromium (both directions applied cleanly in the two tests above) - this
+  // points to a WebKit/iOS Safari-specific execCommand('fontName') quirk: some engines can nest a
+  // NEW font-family span around text that's already wrapped in an OLDER one from a previous
+  // choice, instead of replacing it - the older, more deeply nested declaration then keeps
+  // winning via ordinary CSS inheritance even though a different font was just "applied". This
+  // constructs that exact stale-nesting scenario directly (since Chromium won't produce it on its
+  // own) to verify exec()'s cleanup pass actually resolves the conflict regardless of engine
+  // behavior: it strips any font-family left inside the selection that isn't the one just picked.
+  await expandAllBoxes(page);
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("add document page")'));
+  await page.waitForSelector('.documentEditor');
+
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.focus();
+    const h1 = ed.querySelector('h1');
+    h1.innerHTML = '<span style="font-family: Georgia;"><span style="font-family: \'Custom OldFont\';">Title</span></span>';
+    const r = document.createRange();
+    r.selectNodeContents(h1);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
+
+  await page.selectOption('#fontFamily', 'Impact');
+  await page.waitForTimeout(100);
+
+  const html = await page.evaluate(() => document.querySelector('.documentEditor h1').innerHTML);
+  expect(html).not.toContain('Custom OldFont');
+  const computed = await page.evaluate(() =>
+    getComputedStyle(document.querySelector('.documentEditor h1 span') || document.querySelector('.documentEditor h1')).fontFamily
+  );
+  expect(computed).toContain('Impact');
+});

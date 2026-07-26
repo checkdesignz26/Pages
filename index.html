@@ -17710,6 +17710,26 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     restoreRange();
     try{document.execCommand('styleWithCSS',false,true)}catch(e){}
     try{document.execCommand(command,false,value===undefined?null:value)}catch(e){return false}
+    if(command==='fontName'){
+      // Some engines nest a new font-family span around (rather than replacing) text that's
+      // already wrapped in one from a previous font choice, instead of updating it in place -
+      // the old, more deeply nested font-family then keeps winning via ordinary CSS inheritance
+      // even though a new one was just "applied". Clean up: strip any OTHER font-family left
+      // inside the current selection so the one just picked always actually wins.
+      try{
+        var sel2=window.getSelection();
+        if(sel2&&sel2.rangeCount){
+          var root=sel2.getRangeAt(0).commonAncestorContainer;
+          if(root.nodeType!==1) root=root.parentElement;
+          if(root&&activeEditor.contains(root)){
+            root.querySelectorAll('[style*="font-family"]').forEach(function(el){
+              var ff=(el.style.fontFamily||'').replace(/^["']|["']$/g,'');
+              if(ff && ff!==value) el.style.fontFamily='';
+            });
+          }
+        }
+      }catch(e){}
+    }
     rememberRange();
     saveEditor(activeEditor,false);
     return true;
