@@ -264,11 +264,14 @@ test('a custom mock-up marked as a placeholder survives save-template/load-templ
     })
     .toBe(true);
 
+  // restoreCustomMockupPlaceholderShapes() regenerates the plain mask-shaped cutout right after
+  // load (strippedLayer can't decode images synchronously to do this at save time), so the mock-up
+  // shows its real silhouette again instead of staying blank.
   const reloadedMockupSrc = await page.evaluate(() => {
     const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
     return l && l.src;
   });
-  expect(reloadedMockupSrc).toBeFalsy();
+  expect(reloadedMockupSrc).toMatch(/^data:image\/png/);
 
   // Now pick a brand new pattern and hit the one-button fill-all, the actual seller workflow.
   const secondPattern = Buffer.from(
@@ -370,28 +373,32 @@ test('a custom mock-up survives save-template/load-template WITHOUT manually mar
     })
     .toBe(true);
 
-  const reloadedMockupSrc = await page.evaluate(() => {
-    const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
-    return l && l.src;
-  });
-  expect(reloadedMockupSrc).toBeFalsy();
-
-  // The blanked mock-up should render with the same dashed "drop pattern here" slot look as
-  // every other placeholder (patternSlot:true), not a plain box showing its raw internal layer
-  // name ("custom mock-up pattern area") on top of the product photo.
+  // Real bug found via the seller's own (non-rectangular) mask file: strippedLayer() used to also
+  // tag every placeholder patternSlot:true, including mock-ups, for the dashed "empty slot" look.
+  // But .layer.patternSlot.filledSlot carries a hard-coded background:#fff!important +
+  // object-fit:cover!important meant for plain rectangular pattern swatches - applied to a
+  // mock-up, it painted opaque white behind the shaped cutout's transparent corners and force-
+  // stretched it, turning a real silhouette (e.g. a mug body) into a flat white rectangle, both
+  // while empty AND after being filled with a real pattern (nothing ever cleared the class).
+  // restoreCustomMockupPlaceholderShapes() now regenerates the plain mask-shaped cutout right
+  // after load (strippedLayer can't decode images synchronously to do this at save time) without
+  // patternSlot, so it renders as a plain <img> that respects its own alpha shape.
   await page.evaluate(() => render());
   const reloadedMockupVisual = await page.evaluate(() => {
     const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
     const el = document.querySelector(`.layer[data-id="${l.id}"]`);
+    const img = el && el.querySelector('img');
     return {
+      src: l.src,
       patternSlotFlag: l.patternSlot,
       hasPatternSlotClass: el ? el.classList.contains('patternSlot') : null,
-      placeholderText: el ? (el.querySelector('.placeholder') || {}).textContent : null,
+      objectFit: img ? getComputedStyle(img).objectFit : null,
     };
   });
-  expect(reloadedMockupVisual.patternSlotFlag).toBe(true);
-  expect(reloadedMockupVisual.hasPatternSlotClass).toBe(true);
-  expect(reloadedMockupVisual.placeholderText).toBe('');
+  expect(reloadedMockupVisual.src).toMatch(/^data:image\/png/);
+  expect(reloadedMockupVisual.patternSlotFlag).toBeFalsy();
+  expect(reloadedMockupVisual.hasPatternSlotClass).toBe(false);
+  expect(reloadedMockupVisual.objectFit).toBe('contain');
 
   const secondPattern = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFhAJ/wlseKgAAAABJRU5ErkJggg==',

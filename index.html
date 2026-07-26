@@ -11065,7 +11065,7 @@ window.addEventListener('DOMContentLoaded',function(){
   async function updateClean(){
     const l=selectedCroppedLayer(); if(!l){ status('select the custom mock-up pattern area first'); return; }
     const rec=recipe(l.customMockupRecipe||{}); const ticket=++cage.ticket;
-    try{ status('recropping clean thumbnail…'); const r=await renderCropped(rec); if(ticket!==cage.ticket)return; l.src=r.maskSrc; l.x=r.bounds.x/r.pageW*100; l.y=r.bounds.y/r.pageH*100; l.w=r.bounds.w/r.pageW*100; l.h=r.bounds.h/r.pageH*100; l.aspect=r.bounds.w/Math.max(1,r.bounds.h); l.customMockupRecipe=rec; l.customMockup=true; l.customMockupLive=true; l.customMockupCropped=true; redraw(); status('clean thumbnail + tight box updated ✨'); }
+    try{ status('recropping clean thumbnail…'); const r=await renderCropped(rec); if(ticket!==cage.ticket)return; l.src=r.maskSrc; l.x=r.bounds.x/r.pageW*100; l.y=r.bounds.y/r.pageH*100; l.w=r.bounds.w/r.pageW*100; l.h=r.bounds.h/r.pageH*100; l.aspect=r.bounds.w/Math.max(1,r.bounds.h); l.customMockupRecipe=rec; l.customMockup=true; l.customMockupLive=true; l.customMockupCropped=true; delete l.patternSlot; redraw(); status('clean thumbnail + tight box updated ✨'); }
     catch(err){ console.error(err); status('mock-up update failed'); }
   }
   function schedule(e){ if(e){ e.preventDefault&&e.preventDefault(); e.stopPropagation&&e.stopPropagation(); e.stopImmediatePropagation&&e.stopImmediatePropagation(); } clearTimeout(cage.timer); cage.timer=setTimeout(updateClean,150); return false; }
@@ -11085,8 +11085,28 @@ window.addEventListener('DOMContentLoaded',function(){
     const r=await renderCropped(rec);
     l.src=r.maskSrc; l.x=r.bounds.x/r.pageW*100; l.y=r.bounds.y/r.pageH*100; l.w=r.bounds.w/r.pageW*100; l.h=r.bounds.h/r.pageH*100; l.aspect=r.bounds.w/Math.max(1,r.bounds.h);
     l.customMockupRecipe=rec; l.customMockup=true; l.customMockupLive=true; l.customMockupCropped=true;
+    delete l.patternSlot;
     return true;
   }
+  // Loading a .ptemplate strips a mock-up's src entirely (strippedLayer runs synchronously and
+  // can't decode images to regenerate the shape preview) - this restores the plain mask-shaped
+  // cutout for a stripped mock-up layer right after load, so it shows the real silhouette instead
+  // of falling back to a plain rectangle.
+  async function restorePlaceholderShape(l){
+    if(!l||l.src||!l.customMockupRecipe) return false;
+    const rec=l.customMockupRecipe;
+    if(!rec.bg||!rec.mask) return false;
+    const r=await renderMaskPlaceholder(rec);
+    l.src=r.maskSrc; l.x=r.bounds.x/r.pageW*100; l.y=r.bounds.y/r.pageH*100; l.w=r.bounds.w/r.pageW*100; l.h=r.bounds.h/r.pageH*100; l.aspect=r.bounds.w/Math.max(1,r.bounds.h);
+    delete l.patternSlot;
+    return true;
+  }
+  window.restoreCustomMockupPlaceholderShapes=async function(pages){
+    const list=[];
+    (pages||[]).forEach(p=>{ (p.layers||[]).forEach(l=>{ if(l&&l.customMockupCropped&&!l.src) list.push(l); }); });
+    for(const l of list){ try{ await restorePlaceholderShape(l); }catch(e){ console.error(e); } }
+    return list.length;
+  };
   async function loadPart(e,part){
     if(e){ e.stopPropagation&&e.stopPropagation(); e.stopImmediatePropagation&&e.stopImmediatePropagation(); }
     const f=e&&e.target&&e.target.files&&e.target.files[0]; if(!f)return false;
@@ -16131,8 +16151,11 @@ else install();
     // Custom mock-ups (customMockupCropped) are always treated as placeholders too, with no manual
     // "mark placeholder" step required - a mock-up's whole point is to be refilled with a new
     // pattern per template use, and its bg/mask/settings survive on customMockupRecipe below even
-    // though the baked-in pattern src gets stripped like any other placeholder.
-    const explicitPlaceholder=!!(copy.isPlaceholder || copy.templatePlaceholder || copy.patternSlot || copy.customMockupCropped || String(copy.name||'').toLowerCase().includes('placeholder'));
+    // though the baked-in pattern src gets stripped like any other placeholder. Loading the
+    // template regenerates a plain mask-shaped preview image asynchronously (see
+    // loadPatternPagesTemplate) since strippedLayer runs synchronously and can't decode images.
+    const isMockup=!!copy.customMockupCropped;
+    const explicitPlaceholder=!!(copy.isPlaceholder || copy.templatePlaceholder || copy.patternSlot || isMockup || String(copy.name||'').toLowerCase().includes('placeholder'));
     const isTemplateAsset=!!(copy.keepInTemplate || copy.templateAsset || copy.type==='banner' || copy.type==='overlay' || copy.type==='label' || copy.type==='text' || copy.type==='shape' || copy.type==='frame');
 
     copy.isPlaceholder=explicitPlaceholder && !isTemplateAsset;
@@ -16147,9 +16170,14 @@ else install();
         copy.type='image'; copy.fit=copy.fit||'cover';
       }
       // Match markSelectedAsPlaceholder()'s own convention (patternSlot:true) so a blanked
-      // mock-up gets the same dashed "drop pattern here" slot look as every other placeholder,
+      // placeholder gets the same dashed "drop pattern here" slot look as every other placeholder,
       // instead of rendering as a plain box with its raw internal layer name on top of the photo.
-      copy.patternSlot=true;
+      // NOT for mock-ups: .layer.patternSlot.filledSlot carries a hard-coded
+      // background:#fff!important + object-fit:cover!important meant for plain rectangular
+      // pattern swatches, which flattens a mock-up's real (often non-rectangular) mask shape into
+      // a solid white rectangle - both while empty and, since nothing clears the class again,
+      // even after it's filled with a real pattern.
+      if(!isMockup) copy.patternSlot=true;
     }else{
       // Keep visible artwork that belongs to the template itself, especially overlay/banner PNGs.
       copy.templateAsset=true;
@@ -16183,7 +16211,7 @@ else install();
       return;
     }
     const reader=new FileReader();
-    reader.onload=function(e){
+    reader.onload=async function(e){
       try{
         const data=JSON.parse(e.target.result);
         if(!data.pages || !Array.isArray(data.pages)) throw new Error('no pages');
@@ -16196,6 +16224,13 @@ else install();
           const h=byId('handModeBtn'); if(h)h.textContent=state.leftHanded?'right-handed layout':'left-handed layout';
         }
         if(typeof render==='function')render();
+        // Custom mock-ups lose their src on save (strippedLayer can't decode images
+        // synchronously) - regenerate the plain mask-shaped placeholder now that images can be
+        // decoded, so they show their real silhouette instead of a plain rectangle.
+        if(typeof window.restoreCustomMockupPlaceholderShapes==='function'){
+          const restored=await window.restoreCustomMockupPlaceholderShapes(state.pages);
+          if(restored && typeof render==='function') render();
+        }
         alert('Template loaded. Placeholder labels are visible while editing and will not export.');
       }catch(err){console.error(err);alert('Could not load this .ptemplate file.'+(err&&err.message?(' ('+err.message+')'):''));}
       event.target.value='';
