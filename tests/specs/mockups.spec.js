@@ -437,6 +437,15 @@ test('creating a mock-up with no pattern selected places a plain white mask-shap
   // will land - no fill, no blend. customMockup stays false (no multiply, not locked, a plain
   // selectable image) until fillLayerWithSelectedPattern()/updateClean() run the real pipeline
   // once a pattern is chosen.
+  //
+  // Real bug found by testing with an actual (non-rectangular) mask: the layer was also tagged
+  // patternSlot:true for the dashed "empty slot" look, but .layer.patternSlot.filledSlot carries
+  // a hard-coded background:#fff!important + object-fit:cover!important meant for plain
+  // rectangular pattern swatches - it painted opaque white behind the PNG's transparent corners
+  // and stretched the image to cover the box, turning a correctly-shaped cutout (e.g. a mug body
+  // silhouette) into a flat white rectangle. Fixed by not tagging this layer patternSlot at all -
+  // it doesn't need that class for anything functional, only a plain <img> that respects its own
+  // alpha.
   page.on('dialog', (d) => d.accept());
   await expandAllBoxes(page);
 
@@ -473,19 +482,29 @@ test('creating a mock-up with no pattern selected places a plain white mask-shap
   expect(created.src).not.toBe(created.recipeMask);
   // Not treated as a "live" locked mock-up yet, so no multiply blend and normally selectable.
   expect(created.customMockup).toBe(false);
-  expect(created.patternSlot).toBe(true);
+  // No patternSlot class - that's what carries the background:#fff!important/object-fit:cover
+  // rules that flattened a real shaped mask into a solid rectangle.
+  expect(created.patternSlot).toBeFalsy();
   expect(created.hasRecipe).toBe(true);
   expect(created.recipeBg).toBeTruthy();
   expect(created.recipeMask).toBeTruthy();
   // No real pattern applied yet - still waiting to be filled.
   expect(created.recipePattern).toBeFalsy();
 
-  const hasBlendClass = await page.evaluate(() => {
+  const domInfo = await page.evaluate(() => {
     const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
     const el = document.querySelector(`.layer[data-id="${l.id}"]`);
-    return el ? el.classList.contains('customMockupLayer') : null;
+    const img = el && el.querySelector('img');
+    return {
+      hasBlendClass: el ? el.classList.contains('customMockupLayer') : null,
+      hasPatternSlotClass: el ? el.classList.contains('patternSlot') : null,
+      objectFit: img ? getComputedStyle(img).objectFit : null,
+    };
   });
-  expect(hasBlendClass).toBe(false);
+  expect(domInfo.hasBlendClass).toBe(false);
+  expect(domInfo.hasPatternSlotClass).toBe(false);
+  // contain (not the patternSlot.filledSlot rule's forced cover) - respects the PNG's own shape.
+  expect(domInfo.objectFit).toBe('contain');
 
   // Now pick a pattern and fill it in via the normal listing-placeholders "fill all" flow.
   const patternInput = page.locator('input[onchange*="loadTray"][onchange*="pattern"]');

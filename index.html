@@ -11024,7 +11024,14 @@ window.addEventListener('DOMContentLoaded',function(){
     const s=appState(); if(!s||!Array.isArray(s.pages)) throw new Error('no app pages');
     const p={type:'mockup',title:'custom mock-up',w:r.pageW,h:r.pageH,layers:[]};
     const bg=newLayer('image',{name:'mock-up background',src:r.bgSrc,fit:'cover',x:0,y:0,w:100,h:100,z:1,opacity:1,lockedMockupBackground:true});
-    const item=newLayer('image',{name:'custom mock-up pattern area',src:r.maskSrc,fit:'contain',x:r.bounds.x/r.pageW*100,y:r.bounds.y/r.pageH*100,w:r.bounds.w/r.pageW*100,h:r.bounds.h/r.pageH*100,z:2,opacity:1,patternSlot:true,customMockup:false,customMockupCropped:true,customMockupRecipe:r.recipe,aspect:r.bounds.w/Math.max(1,r.bounds.h)});
+    // No patternSlot here (unlike the template-save "blanked" state, which has no image at all
+    // and wants the dashed empty-box look): .layer.patternSlot.filledSlot carries a hard-coded
+    // background:#fff!important + object-fit:cover!important meant for plain rectangular pattern
+    // swatches, which paints solid white behind - and stretches over - this PNG's actual
+    // transparent corners, turning the mask's real shape into a flat white rectangle. A plain
+    // image layer respects the PNG's own alpha (contain, no forced background), showing the mask's
+    // true silhouette with the photo visible around it.
+    const item=newLayer('image',{name:'custom mock-up pattern area',src:r.maskSrc,fit:'contain',x:r.bounds.x/r.pageW*100,y:r.bounds.y/r.pageH*100,w:r.bounds.w/r.pageW*100,h:r.bounds.h/r.pageH*100,z:2,opacity:1,customMockup:false,customMockupCropped:true,customMockupRecipe:r.recipe,aspect:r.bounds.w/Math.max(1,r.bounds.h)});
     p.layers.push(bg,item); s.pages.push(p); s.selectedPage=s.pages.length-1; s.selected=item.id; cage.lastLayerId=item.id; return item;
   }
   function selectedCroppedLayer(){
