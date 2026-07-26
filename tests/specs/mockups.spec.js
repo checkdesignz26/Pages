@@ -425,6 +425,26 @@ test('a custom mock-up survives save-template/load-template WITHOUT manually mar
     )
     .toBe(newPatternSrc);
 
+  // Real bug: a reloaded template's mock-up keeps isPlaceholder/templatePlaceholder true (set by
+  // loadPatternPagesTemplate from templateHadArtwork), and nothing ever cleared them once the
+  // mock-up got filled with a real pattern - so the dashed "still needs a pattern" template
+  // indicator (.templatePlaceholder) stuck around forever, even after deselecting, because it's
+  // driven by these flags, not by selection state at all. Filling should clear it.
+  await page.evaluate(() => { state.selected = null; render(); });
+  await page.waitForTimeout(50);
+  const afterFillFlags = await page.evaluate(() => {
+    const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
+    const el = document.querySelector(`.layer[data-id="${l.id}"]`);
+    return {
+      isPlaceholder: l.isPlaceholder,
+      templatePlaceholder: l.templatePlaceholder,
+      hasTemplatePlaceholderClass: el ? el.classList.contains('templatePlaceholder') : null,
+    };
+  });
+  expect(afterFillFlags.isPlaceholder).toBeFalsy();
+  expect(afterFillFlags.templatePlaceholder).toBeFalsy();
+  expect(afterFillFlags.hasTemplatePlaceholderClass).toBe(false);
+
   // Let the fill-all confirmation alert (setTimeout(...,40)) fire and get dismissed before
   // the test ends, so it doesn't try to accept a dialog on an already-closed page.
   await page.waitForTimeout(150);

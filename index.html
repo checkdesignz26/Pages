@@ -11065,7 +11065,7 @@ window.addEventListener('DOMContentLoaded',function(){
   async function updateClean(){
     const l=selectedCroppedLayer(); if(!l){ status('select the custom mock-up pattern area first'); return; }
     const rec=recipe(l.customMockupRecipe||{}); const ticket=++cage.ticket;
-    try{ status('recropping clean thumbnail…'); const r=await renderCropped(rec); if(ticket!==cage.ticket)return; l.src=r.maskSrc; l.x=r.bounds.x/r.pageW*100; l.y=r.bounds.y/r.pageH*100; l.w=r.bounds.w/r.pageW*100; l.h=r.bounds.h/r.pageH*100; l.aspect=r.bounds.w/Math.max(1,r.bounds.h); l.customMockupRecipe=rec; l.customMockup=true; l.customMockupLive=true; l.customMockupCropped=true; delete l.patternSlot; redraw(); status('clean thumbnail + tight box updated ✨'); }
+    try{ status('recropping clean thumbnail…'); const r=await renderCropped(rec); if(ticket!==cage.ticket)return; l.src=r.maskSrc; l.x=r.bounds.x/r.pageW*100; l.y=r.bounds.y/r.pageH*100; l.w=r.bounds.w/r.pageW*100; l.h=r.bounds.h/r.pageH*100; l.aspect=r.bounds.w/Math.max(1,r.bounds.h); l.customMockupRecipe=rec; l.customMockup=true; l.customMockupLive=true; l.customMockupCropped=true; delete l.patternSlot; delete l.isPlaceholder; delete l.templatePlaceholder; redraw(); status('clean thumbnail + tight box updated ✨'); }
     catch(err){ console.error(err); status('mock-up update failed'); }
   }
   function schedule(e){ if(e){ e.preventDefault&&e.preventDefault(); e.stopPropagation&&e.stopPropagation(); e.stopImmediatePropagation&&e.stopImmediatePropagation(); } clearTimeout(cage.timer); cage.timer=setTimeout(updateClean,150); return false; }
@@ -11086,6 +11086,8 @@ window.addEventListener('DOMContentLoaded',function(){
     l.src=r.maskSrc; l.x=r.bounds.x/r.pageW*100; l.y=r.bounds.y/r.pageH*100; l.w=r.bounds.w/r.pageW*100; l.h=r.bounds.h/r.pageH*100; l.aspect=r.bounds.w/Math.max(1,r.bounds.h);
     l.customMockupRecipe=rec; l.customMockup=true; l.customMockupLive=true; l.customMockupCropped=true;
     delete l.patternSlot;
+    delete l.isPlaceholder;
+    delete l.templatePlaceholder;
     return true;
   }
   // Loading a .ptemplate strips a mock-up's src entirely (strippedLayer runs synchronously and
