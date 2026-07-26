@@ -423,20 +423,20 @@ test('a custom mock-up survives save-template/load-template WITHOUT manually mar
   await page.waitForTimeout(150);
 });
 
-test('creating a mock-up with no pattern selected places the plain white mask as the placeholder', async ({ page }) => {
+test('creating a mock-up with no pattern selected places the raw white mask file, uncropped', async ({ page }) => {
   // Real request: the mock-up used to require a pattern to be selected at creation time
   // (createClean threw an alert otherwise), forcing the seller to pick one of their 450+
   // patterns before they could even lay out the mock-up in a template. The white-mask crop
   // bounds only depend on the background + mask (fillPattern just paints pixels inside that
   // area later) - a pattern was never actually needed to know where and how big the slot is.
   //
-  // Two earlier attempts generated a stand-in texture (a diagonal stripe, then a checkerboard)
-  // and ran it through the full pattern-fill + multiply-blend pipeline - both read as "some kind
-  // of pattern" rather than an honest placeholder. Direct feedback: just place the white mask
-  // itself on the background, cropped to its own shape, with no fill and no blending - literally
-  // what's already on the canvas, standing in for the pattern until one is chosen. So the
-  // resulting layer keeps customMockup:false (no multiply, not locked, a plain selectable image)
-  // until fillLayerWithSelectedPattern()/updateClean() turn it into a real mock-up.
+  // Earlier attempts all tried to generate or extract *something* to show (a stand-in texture,
+  // then a cropped/alpha-extracted version of the mask) - direct feedback was simpler still: just
+  // place the white mask PNG on the background exactly as uploaded, full-canvas like the
+  // background itself, no bounds detection, no alpha extraction, no cropping. So the resulting
+  // layer's src is the exact same file as customMockupRecipe.mask, positioned at 0,0/100x100, and
+  // stays customMockup:false (no multiply, not locked, a plain selectable image) until
+  // fillLayerWithSelectedPattern()/updateClean() run the real pipeline once a pattern is chosen.
   page.on('dialog', (d) => d.accept());
   await expandAllBoxes(page);
 
@@ -460,6 +460,10 @@ test('creating a mock-up with no pattern selected places the plain white mask as
     const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
     return {
       src: l.src,
+      x: l.x,
+      y: l.y,
+      w: l.w,
+      h: l.h,
       patternSlot: l.patternSlot,
       customMockup: l.customMockup,
       hasRecipe: !!l.customMockupRecipe,
@@ -468,8 +472,13 @@ test('creating a mock-up with no pattern selected places the plain white mask as
       recipePattern: l.customMockupRecipe && l.customMockupRecipe.pattern,
     };
   });
-  // Rendered as the cropped white mask itself - real pixel content, not blank.
-  expect(created.src).toMatch(/^data:image\/png/);
+  // The layer's src is the exact raw mask file - not a processed/cropped derivative.
+  expect(created.src).toBe(created.recipeMask);
+  // Full-canvas placement, same as the background layer - no bounds detection.
+  expect(created.x).toBe(0);
+  expect(created.y).toBe(0);
+  expect(created.w).toBe(100);
+  expect(created.h).toBe(100);
   // Not treated as a "live" locked mock-up yet, so no multiply blend and normally selectable.
   expect(created.customMockup).toBe(false);
   expect(created.patternSlot).toBe(true);

@@ -11005,29 +11005,24 @@ window.addEventListener('DOMContentLoaded',function(){
     const item=newLayer('image',{name:'custom mock-up pattern area',src:r.maskSrc,fit:'contain',x:r.bounds.x/r.pageW*100,y:r.bounds.y/r.pageH*100,w:r.bounds.w/r.pageW*100,h:r.bounds.h/r.pageH*100,z:2,opacity:1,customMockup:true,customMockupLive:true,customMockupCropped:true,customMockupRecipe:r.recipe,aspect:r.bounds.w/Math.max(1,r.bounds.h)});
     p.layers.push(bg,item); s.pages.push(p); s.selectedPage=s.pages.length-1; s.selected=item.id; cage.lastLayerId=item.id; return item;
   }
-  // No pattern picked yet: two earlier attempts (a diagonal stripe, then a checkerboard) both
-  // generated a stand-in texture and ran it through the full pattern-fill + multiply-blend
-  // pipeline - closer to "guessing at a pattern" than an honest placeholder. Simpler and clearer
-  // per direct feedback: just place the white mask itself on the background, cropped to its own
-  // silhouette, with no fill and no blending - literally what's on the canvas already, standing
-  // in for the pattern until one is chosen. customMockup stays false (no multiply, not locked) so
-  // it's a plain selectable image until fillLayerWithSelectedPattern()/updateClean() turn it into
-  // a real clipped+blended mock-up.
-  async function renderMaskPlaceholder(recipe){
+  // No pattern picked yet: earlier attempts all tried to generate or extract *something* to show
+  // (a stand-in texture, then a cropped/alpha-extracted version of the mask) - direct feedback was
+  // simpler still: just place the white mask PNG on the background exactly as uploaded, at the
+  // same full-canvas position as the background itself. No bounds detection, no alpha extraction,
+  // no cropping - the mask file's own content is the placeholder. customMockup stays false (no
+  // multiply, not locked) so it's a plain selectable image until fillLayerWithSelectedPattern()/
+  // updateClean() run the real bounds-detection + pattern-fill pipeline once a pattern is chosen.
+  async function renderRawMaskPlaceholder(recipe){
     if(!recipe.bg||!recipe.mask) throw new Error('incomplete mock-up recipe');
-    const [bg,mask]=await Promise.all([image(recipe.bg),image(recipe.mask)]);
+    const bg=await image(recipe.bg);
     const w=bg.naturalWidth||bg.width, h=bg.naturalHeight||bg.height;
-    const bounds=findWhiteBounds(mask,w,h), alpha=alphaFromWhite(mask,w,h);
-    const crop=document.createElement('canvas'); crop.width=bounds.w; crop.height=bounds.h;
-    const cc=crop.getContext('2d'); cc.imageSmoothingEnabled=true; cc.imageSmoothingQuality='high';
-    cc.clearRect(0,0,bounds.w,bounds.h); cc.drawImage(alpha,bounds.x,bounds.y,bounds.w,bounds.h,0,0,bounds.w,bounds.h);
-    return {bgSrc:recipe.bg, maskSrc:crop.toDataURL('image/png'), pageW:w, pageH:h, bounds, recipe:Object.assign({},recipe,{pattern:null})};
+    return {bgSrc:recipe.bg, maskSrc:recipe.mask, pageW:w, pageH:h, recipe:Object.assign({},recipe,{pattern:null})};
   }
-  function buildMaskPlaceholderPage(r){
+  function buildRawMaskPlaceholderPage(r){
     const s=appState(); if(!s||!Array.isArray(s.pages)) throw new Error('no app pages');
     const p={type:'mockup',title:'custom mock-up',w:r.pageW,h:r.pageH,layers:[]};
     const bg=newLayer('image',{name:'mock-up background',src:r.bgSrc,fit:'cover',x:0,y:0,w:100,h:100,z:1,opacity:1,lockedMockupBackground:true});
-    const item=newLayer('image',{name:'custom mock-up pattern area',src:r.maskSrc,fit:'contain',x:r.bounds.x/r.pageW*100,y:r.bounds.y/r.pageH*100,w:r.bounds.w/r.pageW*100,h:r.bounds.h/r.pageH*100,z:2,opacity:1,patternSlot:true,customMockup:false,customMockupCropped:true,customMockupRecipe:r.recipe,aspect:r.bounds.w/Math.max(1,r.bounds.h)});
+    const item=newLayer('image',{name:'custom mock-up pattern area',src:r.maskSrc,fit:'cover',x:0,y:0,w:100,h:100,z:2,opacity:1,patternSlot:true,customMockup:false,customMockupCropped:true,customMockupRecipe:r.recipe});
     p.layers.push(bg,item); s.pages.push(p); s.selectedPage=s.pages.length-1; s.selected=item.id; cage.lastLayerId=item.id; return item;
   }
   function selectedCroppedLayer(){
@@ -11048,11 +11043,11 @@ window.addEventListener('DOMContentLoaded',function(){
       if(rec.pattern){
         status('creating mock-up…'); const r=await renderCropped(rec); buildPage(r); redraw(); status('mock-up created ✨');
       }else{
-        // No pattern picked yet - place the white mask itself on the background as the stand-in,
-        // cropped to its own shape, no fill or blend. It's ready to fill later, either from the
-        // mock-up sliders once a pattern is selected, or via the listing placeholders panel's
+        // No pattern picked yet - place the white mask PNG on the background exactly as uploaded,
+        // no bounds detection or cropping. It's ready to fill later, either from the mock-up
+        // sliders once a pattern is selected, or via the listing placeholders panel's
         // "fill all with selected pattern".
-        status('creating mock-up placeholder…'); const r=await renderMaskPlaceholder(rec); buildMaskPlaceholderPage(r); redraw(); status('mock-up placeholder created — pick a pattern, then update it or use "fill all with selected pattern"');
+        status('creating mock-up placeholder…'); const r=await renderRawMaskPlaceholder(rec); buildRawMaskPlaceholderPage(r); redraw(); status('mock-up placeholder created — pick a pattern, then update it or use "fill all with selected pattern"');
       }
     }catch(err){ console.error(err); status('mock-up failed'); alert('Could not create the clean mock-up. Try PNG/JPG files and a clear white mask.'); }
     finally{ setTimeout(()=>{cage.busy=false;},500); }
