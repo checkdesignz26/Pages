@@ -230,8 +230,9 @@ test('a custom mock-up marked as a placeholder survives save-template/load-templ
 
   await page.evaluate(() => window.addLkmPlaceholder('main pattern'));
 
-  // Save a real .ptemplate via the actual save function, capturing the Blob instead of letting
-  // the browser download it.
+  // Save a real .ptemplate via the actual save function (which now shows the Save As modal
+  // instead of downloading immediately - confirm it with the default name), capturing the Blob
+  // instead of letting the browser download it.
   const templateJson = await page.evaluate(async () => {
     const orig = URL.createObjectURL;
     let captured = null;
@@ -240,6 +241,9 @@ test('a custom mock-up marked as a placeholder survives save-template/load-templ
       return orig.call(URL, blob);
     };
     window.downloadPatternPagesTemplate();
+    await new Promise((r) => setTimeout(r, 50));
+    document.getElementById('ppSaveAsConfirm').click();
+    await new Promise((r) => setTimeout(r, 50));
     URL.createObjectURL = orig;
     return await captured.text();
   });
@@ -352,6 +356,9 @@ test('a custom mock-up survives save-template/load-template WITHOUT manually mar
       return orig.call(URL, blob);
     };
     window.downloadPatternPagesTemplate();
+    await new Promise((r) => setTimeout(r, 50));
+    document.getElementById('ppSaveAsConfirm').click();
+    await new Promise((r) => setTimeout(r, 50));
     URL.createObjectURL = orig;
     return await captured.text();
   });

@@ -48,6 +48,38 @@ test('the Save As modal downloads a .ppages file with the chosen name, no native
   expect(dialogFired).toBe(false);
 });
 
+test('save template also uses the Save As modal with a short default name, not a long auto-generated one', async ({ page }) => {
+  // Real request: "save template" always downloaded with a long auto-generated name
+  // (<page-title>-template.ptemplate) and no way to rename it. It now reuses the same
+  // ppShowSaveAsDialog() modal "save .ppages" already uses (a custom in-page dialog, not the
+  // native prompt() - prompt() can invalidate the "trusted user gesture" a tap established on
+  // iOS Safari, silently dropping the download that follows).
+  let dialogFired = false;
+  page.on('dialog', async (d) => {
+    dialogFired = true;
+    await d.dismiss();
+  });
+
+  await page.click('header button:has-text("save template")');
+  await expect(page.locator('#ppSaveAsOverlay')).toHaveCount(1);
+  const defaultValue = await page.locator('#ppSaveAsInput').inputValue();
+  expect(defaultValue).toBe('my-template');
+
+  await page.fill('#ppSaveAsInput', 'mug listing template');
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 5000 }),
+    page.click('#ppSaveAsConfirm'),
+  ]);
+
+  expect(download.suggestedFilename()).toBe('mug listing template.ptemplate');
+  expect(dialogFired).toBe(false);
+
+  // Saving again should default to the name just used, not fall back to the generic one.
+  await page.click('header button:has-text("save template")');
+  await expect(page.locator('#ppSaveAsInput')).toHaveValue('mug listing template');
+  await page.click('#ppSaveAsCancel');
+});
+
 test('identical images used multiple times are deduplicated when saving, and restore correctly', async ({ page }) => {
   const result = await page.evaluate(async () => {
     function makePatternDataUrl(seed) {

@@ -6321,6 +6321,7 @@ document.addEventListener('click', function(e){
     box.querySelector('#ppSaveAsConfirm').addEventListener('click',confirm);
     input.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();confirm();} else if(e.key==='Escape'){close();} });
   }
+  window.ppShowSaveAsDialog=ppShowSaveAsDialog;
   const oldDownloadPstudio=window.downloadPstudio;
   window.downloadPstudio=function(){
     const defaultName=(window.ppLastSavedName||'pattern-pages-project');
@@ -16198,11 +16199,25 @@ else install();
     };
   }
   window.downloadPatternPagesTemplate=function(){
-    const data=makeTemplateSnapshot();
-    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/x-ptemplate'});
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-    const base=(document.title||'pattern-pages').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'pattern-pages';
-    a.download=base+'-template.ptemplate';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},500);
+    const defaultName=window.ppLastSavedTemplateName||'my-template';
+    function saveWithName(rawName){
+      let name=String(rawName||'').trim().replace(/[\\/:*?"<>|]/g,'').replace(/\.ptemplate$/i,'');
+      if(!name) name='my-template';
+      window.ppLastSavedTemplateName=name;
+      const data=makeTemplateSnapshot();
+      const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/x-ptemplate'});
+      const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+      a.download=name+'.ptemplate';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},500);
+    }
+    // ppShowSaveAsDialog (a custom in-page modal, not the native prompt()) lets the seller pick
+    // their own short, memorable name instead of always getting a long auto-generated one - and
+    // avoids native prompt()'s known issue of invalidating the "trusted user gesture" a tap
+    // established, which can silently drop the download that follows on iOS Safari.
+    if(typeof window.ppShowSaveAsDialog==='function'){
+      window.ppShowSaveAsDialog(defaultName,saveWithName);
+      return;
+    }
+    saveWithName(defaultName);
   };
   window.loadPatternPagesTemplate=function(event){
     const file=event.target.files&&event.target.files[0]; if(!file)return;
