@@ -3043,7 +3043,18 @@ function importFont(e){
   let file=e.target.files[0];if(!file)return;
   let name='Custom '+file.name.replace(/\.[^.]+$/,'').slice(0,18);
   let reader=new FileReader();
-  reader.onload=function(ev){ registerCustomFont(name,ev.target.result); $('fontFamily').value=name; applyTextControls(); };
+  reader.onload=function(ev){
+    registerCustomFont(name,ev.target.result);
+    let sel=$('fontFamily');
+    sel.value=name;
+    // A real 'change' event (not calling applyTextControls() directly) routes through whichever
+    // context is actually active - a focused document editor (applies via execCommand so the
+    // font lands in the document's own HTML) or a selected text layer - exactly like manually
+    // picking a font from this dropdown already does. Calling applyTextControls() unconditionally
+    // only ever updated a selected LAYER, so uploading a new font while editing a document (no
+    // layer selected) silently never applied to the document text at all.
+    sel.dispatchEvent(new Event('change',{bubbles:true}));
+  };
   reader.readAsDataURL(file);
   e.target.value='';
 }

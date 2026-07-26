@@ -4,7 +4,7 @@
 // reload lost the font entirely; saving to .ppages, a .ptemplate, or autosave and reloading always
 // silently fell back to the default font. registerCustomFont() (a data: URL, not blob:) plus
 // customFonts entries on every save/restore snapshot fixes all four paths.
-const { test, expect } = require('../support/fixtures');
+const { test, expect, expandAllBoxes, clickResilient } = require('../support/fixtures');
 
 const TINY_FONT = Buffer.from('AAECAwQFBgcICQ==', 'base64');
 // Large enough that its base64 data: URL clears ppDedupeAssetsForSave's 800-char pooling
@@ -239,4 +239,40 @@ test('a custom font survives auto-save -> restore autosave', async ({ page }) =>
     fontName
   );
   expect(hasStyle).toBe(true);
+});
+
+test('uploading a new font while editing a document applies it to the selected document text', async ({ page }) => {
+  // Real bug report: a seller selected the title inside a document page and uploaded a custom
+  // font for it. Live in the editor the dropdown updated correctly, but the font was never
+  // actually applied to the document's own HTML - importFont() always called
+  // applyTextControls(), which only ever acts on a selected LAYER (getLayer()). Editing a
+  // document leaves state.selected null, so that call silently did nothing; the document's font
+  // application instead goes through a separate execCommand('fontName', ...) path keyed off
+  // whichever editor is currently focused. Since nothing was ever written into the document's
+  // docHtml, saving and reloading correctly reproduced... the untouched default font, because
+  // there was never anything else to restore. Fixed by dispatching a real 'change' event on the
+  // font dropdown after registering the font, routing through whichever context (document editor
+  // or selected layer) is actually active - exactly like manually picking a font already does.
+  await expandAllBoxes(page);
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("add document page")'));
+  await page.waitForSelector('.documentEditor');
+
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.focus();
+    const h1 = ed.querySelector('h1');
+    const r = document.createRange();
+    r.selectNodeContents(h1);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
+
+  await page.setInputFiles('#fontFile', { name: 'TitleFont.ttf', mimeType: 'font/ttf', buffer: TINY_FONT });
+  await expect.poll(() => page.evaluate(() => Object.keys(window.ppCustomFonts || {}).length)).toBeGreaterThan(0);
+
+  const fontName = await page.evaluate(() => Object.keys(window.ppCustomFonts)[0]);
+  const docHtml = await page.evaluate(() => state.pages[state.selectedPage].docHtml);
+  expect(docHtml).toContain(fontName);
+  expect(docHtml).not.toBe('<h1>Title</h1><p>Start writing here…</p>');
 });
