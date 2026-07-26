@@ -16057,6 +16057,7 @@ else install();
 .templateToolsBox{border-color:rgba(255,142,214,.30)!important;background:linear-gradient(180deg,rgba(255,142,214,.070),rgba(255,255,255,.035))!important}
 .templateToolsBox .templateNote{font-size:12px;line-height:1.35;color:rgba(255,248,252,.86);margin:8px 0 10px}
 .templateToolsBox .templateGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:8px 0}
+.templateToolsBox .templateAdvancedLabel{margin:16px 0 6px;font-size:11px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;color:rgba(255,248,252,.5);border-top:1px solid rgba(255,232,248,.14);padding-top:12px}
 .templateToolsBox input[type=file]{width:100%;font-size:12px;color:#fff8fb;text-transform:none!important}
 .layer.templatePlaceholder:not(.selected){outline:2px dashed rgba(155,107,255,.50)!important;outline-offset:3px!important}
 .layer.templatePlaceholder .ppPlaceholderLabel{
@@ -16123,11 +16124,12 @@ else install();
       <p class="templateNote">Build a layout once with pattern placeholders and custom mock-ups mixed in, save it as a <strong>.ptemplate</strong>, then reuse it for every new pattern - load the template, pick a pattern, and fill everything at once.</p>\
       <div class="templateGrid"><button type="button" class="primary" onclick="addNotebookPlaceholderPair()">2 cover placeholders</button><button type="button" onclick="addLkmPlaceholder(\'main pattern\')">one placeholder</button></div>\
       <div class="templateGrid"><button type="button" class="primary" onclick="fillLinkedPlaceholdersFromTray()">fill all with selected pattern</button><button type="button" onclick="clearLinkedPlaceholders()">clear slots</button></div>\
-      <div class="lkmTagRow"><span class="lkmTag">source: main pattern</span><span class="lkmTag">keeps size</span><span class="lkmTag">keeps opacity</span><span class="lkmTag">includes mock-ups</span></div>\
+      <div class="lkmTagRow"><span class="lkmTag">source: main pattern</span><span class="lkmTag">includes mock-ups</span></div>\
+      <div class="templateGrid"><button type="button" onclick="downloadPatternPagesTemplate()">save template</button><button type="button" onclick="openPatternPagesTemplateLoader()">load template</button></div>\
+      <div class="templateAdvancedLabel">advanced: mark other layers as placeholders</div>\
+      <p class="smallText">Banners, frames or other image layers can be marked as placeholders too. Custom mock-ups are always included automatically - no marking needed for those.</p>\
       <div class="templateGrid"><button type="button" onclick="markSelectedAsPlaceholder()">mark placeholder</button><button type="button" onclick="clearSelectedPlaceholder()">clear mark</button></div>\
       <button type="button" class="full" onclick="renameSelectedPlaceholder()">rename placeholder</button>\
-      <div class="templateGrid"><button type="button" onclick="downloadPatternPagesTemplate()">save template</button><button type="button" onclick="openPatternPagesTemplateLoader()">load template</button></div>\
-      <p class="smallText">Tip: banners, frames or other image layers can be marked as placeholders too - select one, tap "mark placeholder", then rename it (Hero Cover, Pattern Tile, Close-up...). Custom mock-ups are always included automatically, no marking needed.</p>\
     </div>';
     const intro=left.querySelector('.panelIntro');
     if(intro && intro.nextSibling) left.insertBefore(box,intro.nextSibling); else left.prepend(box);
