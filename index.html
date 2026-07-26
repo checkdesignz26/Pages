@@ -11005,32 +11005,30 @@ window.addEventListener('DOMContentLoaded',function(){
     const item=newLayer('image',{name:'custom mock-up pattern area',src:r.maskSrc,fit:'contain',x:r.bounds.x/r.pageW*100,y:r.bounds.y/r.pageH*100,w:r.bounds.w/r.pageW*100,h:r.bounds.h/r.pageH*100,z:2,opacity:1,customMockup:true,customMockupLive:true,customMockupCropped:true,customMockupRecipe:r.recipe,aspect:r.bounds.w/Math.max(1,r.bounds.h)});
     p.layers.push(bg,item); s.pages.push(p); s.selectedPage=s.pages.length-1; s.selected=item.id; cage.lastLayerId=item.id; return item;
   }
-  // No pattern picked yet: render the crop through the exact same pipeline as a real fill (so it
-  // comes out clipped to the mask shape and multiply-blended over the background, not a plain
-  // opaque rectangle sitting on top of the photo), just using a generated placeholder tile in
-  // place of a real pattern. The stored recipe keeps pattern:null so it's clearly still waiting
-  // for a real one - fillLinkedPlaceholdersFromTray()/updateClean() overwrite it exactly like any
-  // other mock-up once a pattern is chosen.
-  // A diagonal-stripe tile here first read as an actual fabric/wallpaper design rather than an
-  // empty slot, risking confusion about where "the pattern" came from. A checkerboard is the
-  // universal design-tool convention for "nothing here yet" (Photoshop/Figma transparency grid),
-  // so it can't be mistaken for a real pattern choice.
-  function dummyPatternTile(){
-    if(cage.dummyPatternSrc) return cage.dummyPatternSrc;
-    const cell=28, size=cell*2;
-    const c=document.createElement('canvas'); c.width=size; c.height=size;
-    const ctx=c.getContext('2d');
-    ctx.fillStyle='#e7e1ee'; ctx.fillRect(0,0,size,size);
-    ctx.fillStyle='#d2c7e0';
-    ctx.fillRect(0,0,cell,cell);
-    ctx.fillRect(cell,cell,cell,cell);
-    cage.dummyPatternSrc=c.toDataURL('image/png');
-    return cage.dummyPatternSrc;
+  // No pattern picked yet: two earlier attempts (a diagonal stripe, then a checkerboard) both
+  // generated a stand-in texture and ran it through the full pattern-fill + multiply-blend
+  // pipeline - closer to "guessing at a pattern" than an honest placeholder. Simpler and clearer
+  // per direct feedback: just place the white mask itself on the background, cropped to its own
+  // silhouette, with no fill and no blending - literally what's on the canvas already, standing
+  // in for the pattern until one is chosen. customMockup stays false (no multiply, not locked) so
+  // it's a plain selectable image until fillLayerWithSelectedPattern()/updateClean() turn it into
+  // a real clipped+blended mock-up.
+  async function renderMaskPlaceholder(recipe){
+    if(!recipe.bg||!recipe.mask) throw new Error('incomplete mock-up recipe');
+    const [bg,mask]=await Promise.all([image(recipe.bg),image(recipe.mask)]);
+    const w=bg.naturalWidth||bg.width, h=bg.naturalHeight||bg.height;
+    const bounds=findWhiteBounds(mask,w,h), alpha=alphaFromWhite(mask,w,h);
+    const crop=document.createElement('canvas'); crop.width=bounds.w; crop.height=bounds.h;
+    const cc=crop.getContext('2d'); cc.imageSmoothingEnabled=true; cc.imageSmoothingQuality='high';
+    cc.clearRect(0,0,bounds.w,bounds.h); cc.drawImage(alpha,bounds.x,bounds.y,bounds.w,bounds.h,0,0,bounds.w,bounds.h);
+    return {bgSrc:recipe.bg, maskSrc:crop.toDataURL('image/png'), pageW:w, pageH:h, bounds, recipe:Object.assign({},recipe,{pattern:null})};
   }
-  async function renderPlaceholderMockup(recipe){
-    const r=await renderCropped(Object.assign({},recipe,{pattern:dummyPatternTile()}));
-    r.recipe=Object.assign({},r.recipe,{pattern:null});
-    return r;
+  function buildMaskPlaceholderPage(r){
+    const s=appState(); if(!s||!Array.isArray(s.pages)) throw new Error('no app pages');
+    const p={type:'mockup',title:'custom mock-up',w:r.pageW,h:r.pageH,layers:[]};
+    const bg=newLayer('image',{name:'mock-up background',src:r.bgSrc,fit:'cover',x:0,y:0,w:100,h:100,z:1,opacity:1,lockedMockupBackground:true});
+    const item=newLayer('image',{name:'custom mock-up pattern area',src:r.maskSrc,fit:'contain',x:r.bounds.x/r.pageW*100,y:r.bounds.y/r.pageH*100,w:r.bounds.w/r.pageW*100,h:r.bounds.h/r.pageH*100,z:2,opacity:1,patternSlot:true,customMockup:false,customMockupCropped:true,customMockupRecipe:r.recipe,aspect:r.bounds.w/Math.max(1,r.bounds.h)});
+    p.layers.push(bg,item); s.pages.push(p); s.selectedPage=s.pages.length-1; s.selected=item.id; cage.lastLayerId=item.id; return item;
   }
   function selectedCroppedLayer(){
     const s=appState(), p=page(); if(!s||!p||!p.layers)return null;
@@ -11050,11 +11048,11 @@ window.addEventListener('DOMContentLoaded',function(){
       if(rec.pattern){
         status('creating mock-up…'); const r=await renderCropped(rec); buildPage(r); redraw(); status('mock-up created ✨');
       }else{
-        // No pattern picked yet - create the slot with a neutral placeholder fill anyway, clipped
-        // and multiply-blended exactly like a real mock-up. It's ready to fill later, either from
-        // the mock-up sliders once a pattern is selected, or via the listing placeholders panel's
+        // No pattern picked yet - place the white mask itself on the background as the stand-in,
+        // cropped to its own shape, no fill or blend. It's ready to fill later, either from the
+        // mock-up sliders once a pattern is selected, or via the listing placeholders panel's
         // "fill all with selected pattern".
-        status('creating mock-up placeholder…'); const r=await renderPlaceholderMockup(rec); buildPage(r); redraw(); status('mock-up placeholder created — pick a pattern, then update it or use "fill all with selected pattern"');
+        status('creating mock-up placeholder…'); const r=await renderMaskPlaceholder(rec); buildMaskPlaceholderPage(r); redraw(); status('mock-up placeholder created — pick a pattern, then update it or use "fill all with selected pattern"');
       }
     }catch(err){ console.error(err); status('mock-up failed'); alert('Could not create the clean mock-up. Try PNG/JPG files and a clear white mask.'); }
     finally{ setTimeout(()=>{cage.busy=false;},500); }
