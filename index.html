@@ -11007,18 +11007,23 @@ window.addEventListener('DOMContentLoaded',function(){
   }
   // No pattern picked yet: render the crop through the exact same pipeline as a real fill (so it
   // comes out clipped to the mask shape and multiply-blended over the background, not a plain
-  // opaque rectangle sitting on top of the photo), just using a generated neutral diagonal-hatch
-  // tile in place of a real pattern. The stored recipe keeps pattern:null so it's clearly still
-  // waiting for a real one - fillLinkedPlaceholdersFromTray()/updateClean() overwrite it exactly
-  // like any other mock-up once a pattern is chosen.
+  // opaque rectangle sitting on top of the photo), just using a generated placeholder tile in
+  // place of a real pattern. The stored recipe keeps pattern:null so it's clearly still waiting
+  // for a real one - fillLinkedPlaceholdersFromTray()/updateClean() overwrite it exactly like any
+  // other mock-up once a pattern is chosen.
+  // A diagonal-stripe tile here first read as an actual fabric/wallpaper design rather than an
+  // empty slot, risking confusion about where "the pattern" came from. A checkerboard is the
+  // universal design-tool convention for "nothing here yet" (Photoshop/Figma transparency grid),
+  // so it can't be mistaken for a real pattern choice.
   function dummyPatternTile(){
     if(cage.dummyPatternSrc) return cage.dummyPatternSrc;
-    const size=120;
+    const cell=28, size=cell*2;
     const c=document.createElement('canvas'); c.width=size; c.height=size;
     const ctx=c.getContext('2d');
-    ctx.fillStyle='#ece3f4'; ctx.fillRect(0,0,size,size);
-    ctx.strokeStyle='#c9b3e3'; ctx.lineWidth=16; ctx.lineCap='square';
-    for(let x=-size;x<size*2;x+=size/3){ ctx.beginPath(); ctx.moveTo(x,size); ctx.lineTo(x+size,0); ctx.stroke(); }
+    ctx.fillStyle='#e7e1ee'; ctx.fillRect(0,0,size,size);
+    ctx.fillStyle='#d2c7e0';
+    ctx.fillRect(0,0,cell,cell);
+    ctx.fillRect(cell,cell,cell,cell);
     cage.dummyPatternSrc=c.toDataURL('image/png');
     return cage.dummyPatternSrc;
   }
