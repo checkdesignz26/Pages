@@ -3021,7 +3021,32 @@ function deleteLayerById(id,pageIndex){
   if(state.selected===id)state.selected=null;
   render();
 }
-function importFont(e){let file=e.target.files[0];if(!file)return;let name='Custom '+file.name.replace(/\.[^.]+$/,'').slice(0,18);let url=URL.createObjectURL(file);let style=document.createElement('style');style.textContent=`@font-face{font-family:'${name}';src:url('${url}');}`;document.head.appendChild(style);let opt=document.createElement('option');opt.value=name;opt.textContent=name;$('fontFamily').appendChild(opt);$('fontFamily').value=name;applyTextControls();e.target.value=''}
+// registerCustomFont is also called when restoring a saved .ppages/autosave/template, so a
+// custom font stays usable after reload - a blob: URL only lives as long as the tab that created
+// it, so it can never be reloaded from a saved file; a data: URL is a real, storable string.
+function registerCustomFont(name,dataUrl){
+  window.ppCustomFonts=window.ppCustomFonts||{};
+  if(!document.querySelector('style[data-custom-font="'+CSS.escape(name)+'"]')){
+    let style=document.createElement('style');
+    style.setAttribute('data-custom-font',name);
+    style.textContent=`@font-face{font-family:'${name}';src:url('${dataUrl}');}`;
+    document.head.appendChild(style);
+  }
+  window.ppCustomFonts[name]=dataUrl;
+  let sel=$('fontFamily');
+  if(sel && ![...sel.options].some(o=>o.value===name)){
+    let opt=document.createElement('option');opt.value=name;opt.textContent=name;sel.appendChild(opt);
+  }
+}
+window.registerCustomFont=registerCustomFont;
+function importFont(e){
+  let file=e.target.files[0];if(!file)return;
+  let name='Custom '+file.name.replace(/\.[^.]+$/,'').slice(0,18);
+  let reader=new FileReader();
+  reader.onload=function(ev){ registerCustomFont(name,ev.target.result); $('fontFamily').value=name; applyTextControls(); };
+  reader.readAsDataURL(file);
+  e.target.value='';
+}
 
 function toggleSidePanel(side){
   if(side==='left'){
@@ -6017,6 +6042,7 @@ document.addEventListener('click', function(e){
       app:'Pattern Pages', version:'v183-real-ppages-save',
       pages:st.pages||[], selectedPage:st.selectedPage||0, trays:st.trays||{pattern:[],asset:[]},
       zoom:st.zoom||1, leftHanded:!!st.leftHanded, leftCollapsed:!!st.leftCollapsed, rightCollapsed:!!st.rightCollapsed,
+      customFonts:Object.assign({},window.ppCustomFonts||{}),
       listingAssistant:{
         patternName:getListingField('listingPatternName'), keywords:getListingField('listingKeywords'), etsyTags:getListingField('etsyTagsOutput'),
         longTail:getListingField('longTailKeywordsOutput'), title:getListingField('listingTitleOutput'), pinterest:getListingField('pinterestKeywordsOutput'), instagram:getListingField('instagramHashtagsOutput')
@@ -6089,6 +6115,9 @@ document.addEventListener('click', function(e){
     state.pages=data.pages; state.selectedPage=typeof data.selectedPage==='number'?data.selectedPage:0; state.selected=null;
     if(data.trays) state.trays=data.trays;
     if(data.zoom) state.zoom=data.zoom;
+    if(data.customFonts && typeof window.registerCustomFont==='function'){
+      Object.keys(data.customFonts).forEach(name=>window.registerCustomFont(name,data.customFonts[name]));
+    }
     ['leftHanded','leftCollapsed','rightCollapsed'].forEach(k=>{ if(typeof data[k]==='boolean'){state[k]=data[k]; document.body.classList.toggle(k,data[k]);} });
     if(safe$('handModeBtn')) safe$('handModeBtn').textContent=state.leftHanded?'right-handed layout':'left-handed layout';
     const la=data.listingAssistant||{};
@@ -16187,6 +16216,7 @@ else install();
       app:'Pattern Pages',kind:'ptemplate',templateVersion:PP_TEMPLATE_VERSION,savedAt:new Date().toISOString(),
       pages:(state.pages||[]).map(function(p){return Object.assign({},p,{layers:(p.layers||[]).map(strippedLayer)})}),
       selectedPage:state.selectedPage||0,zoom:state.zoom||1,leftHanded:!!state.leftHanded,
+      customFonts:Object.assign({},window.ppCustomFonts||{}),
       note:'Pattern Pages template file. Placeholder artwork is removed, but template banners and overlays are kept.'
     };
   }
@@ -16225,6 +16255,9 @@ else install();
         const data=JSON.parse(e.target.result);
         if(!data.pages || !Array.isArray(data.pages)) throw new Error('no pages');
         if(typeof save==='function')save();
+        if(data.customFonts && typeof window.registerCustomFont==='function'){
+          Object.keys(data.customFonts).forEach(function(name){ window.registerCustomFont(name,data.customFonts[name]); });
+        }
         state.pages=data.pages.map(function(p){return Object.assign({},p,{layers:(p.layers||[]).map(function(l){l.isPlaceholder=!!(l.isPlaceholder||l.templatePlaceholder||l.patternSlot||l.templateHadArtwork);l.templatePlaceholder=l.isPlaceholder;l.placeholderName=l.placeholderName||l.name||'placeholder'; if(!l.src && (l.type==='image'||l.type==='mockup'||l.patternSlot)){l.src=null;} return l;})})});
         state.selectedPage=Math.min(Math.max(0,data.selectedPage||0),Math.max(0,state.pages.length-1));
         state.selected=null;state.selectedLayerIds=[];
@@ -16371,12 +16404,15 @@ else install();
     if(!pages.length) pages=[basePage()];
     var root=(data&&data.state)?data.state:data;
     var sel=Math.max(0,Math.min(pages.length-1,Number(root&&root.selectedPage)||0));
-    return {pages:pages,selectedPage:sel,trays:(root&&root.trays)||(data&&data.trays)||{pattern:[],asset:[]},zoom:Number((root&&root.zoom)||(data&&data.zoom)||1)||1,leftHanded:!!(root&&root.leftHanded),leftCollapsed:!!(root&&root.leftCollapsed),rightCollapsed:!!(root&&root.rightCollapsed)};
+    return {pages:pages,selectedPage:sel,trays:(root&&root.trays)||(data&&data.trays)||{pattern:[],asset:[]},zoom:Number((root&&root.zoom)||(data&&data.zoom)||1)||1,leftHanded:!!(root&&root.leftHanded),leftCollapsed:!!(root&&root.leftCollapsed),rightCollapsed:!!(root&&root.rightCollapsed),customFonts:(root&&root.customFonts)||(data&&data.customFonts)||{}};
   }
   function applyProject(project){
     var st=S(); if(!st) throw new Error('Pattern Pages state is not ready yet. Please wait one second and tap load again.');
     st.pages=project.pages; st.selectedPage=project.selectedPage; st.selected=null; st.lastDeselected=null;
     st.trays=project.trays||st.trays||{pattern:[],asset:[]}; st.zoom=project.zoom||1;
+    if(project.customFonts && typeof window.registerCustomFont==='function'){
+      Object.keys(project.customFonts).forEach(function(name){ window.registerCustomFont(name,project.customFonts[name]); });
+    }
     st.leftHanded=project.leftHanded; st.leftCollapsed=project.leftCollapsed; st.rightCollapsed=project.rightCollapsed;
     document.body.classList.toggle('leftHanded',!!st.leftHanded);
     document.body.classList.toggle('leftCollapsed',!!st.leftCollapsed);
