@@ -1425,7 +1425,8 @@ body.autoGroupEditing .layer.collectionGrouped{
   <div class="grid2"><button onclick="addPastedTextBlock()">add pasted text</button><button onclick="pasteFromClipboardIntoPage()">paste clipboard</button></div>
   <div class="textSectionTitle">font</div>
   <select id="fontFamily">
-<option value="system-ui">System</option><option value="Arial Rounded MT Bold">Rounded</option><option value="Georgia">Georgia</option><option value="Palatino">Palatino</option><option value="Didot">Didot</option><option value="Avenir Next">Avenir Next</option><option value="Futura">Futura</option><option value="Times New Roman">Times</option><option value="Trebuchet MS">Trebuchet</option><option value="Verdana">Verdana</option><option value="Courier New">Courier</option><option value="Impact">Impact</option><option value="cursive">Cursive</option><option value="serif">Serif</option><option value="sans-serif">Sans</option>
+<optgroup label="Standard"><option value="system-ui">System</option><option value="Arial Rounded MT Bold">Rounded</option><option value="Georgia">Georgia</option><option value="Palatino">Palatino</option><option value="Didot">Didot</option><option value="Avenir Next">Avenir Next</option><option value="Futura">Futura</option><option value="Times New Roman">Times</option><option value="Trebuchet MS">Trebuchet</option><option value="Verdana">Verdana</option><option value="Courier New">Courier</option><option value="Impact">Impact</option><option value="cursive">Cursive</option><option value="serif">Serif</option><option value="sans-serif">Sans</option></optgroup>
+<optgroup label="Handwritten &amp; script"><option value="Snell Roundhand">Snell Roundhand</option><option value="Bradley Hand">Bradley Hand</option><option value="Noteworthy">Noteworthy</option><option value="Marker Felt">Marker Felt</option><option value="Chalkboard SE">Chalkboard SE</option><option value="American Typewriter">Typewriter</option><option value="Papyrus">Papyrus</option></optgroup>
 </select>
   <input id="fontFile" class="hidden" type="file" accept=".ttf,.otf,.woff,.woff2" onchange="importFont(event)">
   <button class="full" onclick="fontFile.click()">import own font</button>
@@ -17691,6 +17692,18 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     set('letterSpacing',parseFloat(cs.letterSpacing)||0);
     var fs=parseFloat(cs.fontSize)||20,lh=parseFloat(cs.lineHeight)||fs*1.55;
     set('lineHeight',Math.round(lh/fs*100));
+    // Real bug: the font dropdown was never refreshed here, only fontSize/letterSpacing/
+    // lineHeight - so it kept showing whatever font was last picked anywhere, regardless of what
+    // the newly selected text actually uses. Picking that same still-displayed value again (e.g.
+    // a just-uploaded custom font, for a second piece of text) fires no 'change' event at all
+    // since the <select>'s value doesn't change, so nothing applied - the only workaround was
+    // picking a different font first (forcing a real change), then picking the custom one again.
+    var ffSel=byId('fontFamily');
+    if(ffSel){
+      var raw=(cs.fontFamily||'').split(',')[0].trim().replace(/^["']|["']$/g,'');
+      var known=[...ffSel.options].some(function(o){return o.value===raw});
+      ffSel.value=known?raw:'system-ui';
+    }
   }
   function exec(command,value){
     if(!activeEditor||!document.contains(activeEditor))return false;

@@ -276,3 +276,61 @@ test('uploading a new font while editing a document applies it to the selected d
   expect(docHtml).toContain(fontName);
   expect(docHtml).not.toBe('<h1>Title</h1><p>Start writing here…</p>');
 });
+
+test('the font dropdown refreshes to match each new document selection (not stuck on the last pick)', async ({ page }) => {
+  // Real bug report: after applying a custom font to one piece of text, selecting a DIFFERENT
+  // piece of text (with a different actual font) and picking that same custom font again did
+  // nothing - the workaround was picking some other font first, then picking the custom one
+  // again. Root cause: syncPanel() (which runs on every tap/keystroke in a document editor)
+  // refreshed fontSize/letterSpacing/lineHeight but never fontFamily, so the dropdown just kept
+  // showing whatever was last picked anywhere, never reflecting the new selection's real font.
+  // Re-picking that already-displayed value fires no 'change' event (the <select>'s value never
+  // actually changes), so nothing applied.
+  await expandAllBoxes(page);
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("add document page")'));
+  await page.waitForSelector('.documentEditor');
+
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.focus();
+    const h1 = ed.querySelector('h1');
+    const r = document.createRange();
+    r.selectNodeContents(h1);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
+  await page.setInputFiles('#fontFile', { name: 'TitleFont.ttf', mimeType: 'font/ttf', buffer: TINY_FONT });
+  await expect.poll(() => page.evaluate(() => Object.keys(window.ppCustomFonts || {}).length)).toBeGreaterThan(0);
+  const fontName = await page.evaluate(() => Object.keys(window.ppCustomFonts)[0]);
+  expect(await page.evaluate(() => document.getElementById('fontFamily').value)).toBe(fontName);
+
+  // Move the selection to the paragraph (still on the default font) via a real interaction, the
+  // same way a tap/click does in the real app.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    const p = ed.querySelector('p');
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    ed.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await page.waitForTimeout(50);
+
+  const ffAfterMove = await page.evaluate(() => document.getElementById('fontFamily').value);
+  expect(ffAfterMove).not.toBe(fontName);
+
+  // Now pick the custom font for this new selection - a real 'change' fires because the dropdown
+  // correctly reset first, so this must actually apply this time.
+  await page.evaluate((name) => {
+    const sel = document.getElementById('fontFamily');
+    sel.value = name;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  }, fontName);
+
+  const docHtml = await page.evaluate(() => state.pages[state.selectedPage].docHtml);
+  const paragraphHtml = docHtml.match(/<p>[\s\S]*?<\/p>/)[0];
+  expect(paragraphHtml).toContain(fontName);
+});
