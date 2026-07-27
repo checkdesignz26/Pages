@@ -202,3 +202,65 @@ test('loading a fresh .ppages project file restores its pages and layers', async
   expect(result.layerCount).toBe(1);
   expect(result.firstLayerName).toBe('loaded text');
 });
+
+test('quick save overwrites the same in-browser slot instead of creating new downloads', async ({ page }) => {
+  // A web page can never overwrite an arbitrary file on disk (a real browser security boundary),
+  // so every "save .ppages" is necessarily a new download - the request behind quick save was
+  // exactly to avoid that pile-up. It keeps the project entirely inside this browser's own
+  // IndexedDB storage (the same store autosave already uses, under its own key), so hitting it
+  // repeatedly always overwrites the same slot.
+  await page.evaluate(() => {
+    save();
+    addText('text');
+    const l = current().layers[current().layers.length - 1];
+    l.text = 'first version';
+    render();
+  });
+
+  await page.evaluate(async () => {
+    await new Promise((resolve) => {
+      window.quickSaveProject();
+      setTimeout(resolve, 300);
+    });
+  });
+
+  await page.evaluate(() => {
+    save();
+    current().layers[current().layers.length - 1].text = 'second version';
+    render();
+  });
+
+  await page.evaluate(async () => {
+    await new Promise((resolve) => {
+      window.quickSaveProject();
+      setTimeout(resolve, 300);
+    });
+  });
+
+  // Clear live state, then quick load - should come back with the SECOND (overwritten) version,
+  // not the first, and not both (proving it's one slot, not an accumulating list).
+  await page.evaluate(() => {
+    state.pages = [{ type: 'listing', w: 3000, h: 2250, layers: [] }];
+    state.selectedPage = 0;
+    render();
+  });
+
+  await page.evaluate(() => window.quickLoadProject());
+  await expect
+    .poll(() => page.evaluate(() => current().layers.some((l) => l.text === 'second version')))
+    .toBe(true);
+
+  const hasFirst = await page.evaluate(() => current().layers.some((l) => l.text === 'first version'));
+  expect(hasFirst).toBe(false);
+});
+
+test('quick load without a prior quick save shows a clear message, no crash', async ({ page }) => {
+  let alertMsg = null;
+  page.on('dialog', async (d) => {
+    alertMsg = d.message();
+    await d.accept();
+  });
+  // A fresh test page has no quick save yet (each test gets a clean IndexedDB).
+  await page.evaluate(() => window.quickLoadProject());
+  await expect.poll(() => alertMsg).toBe('No quick save found yet.');
+});

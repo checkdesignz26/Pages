@@ -1280,6 +1280,8 @@ body.autoGroupEditing .layer.collectionGrouped{
       <input id="pstudioLoader" type="file" accept=".ppages,.pstudio,.json" style="display:none" onchange="loadPstudioFile(event)">
       <button onclick="document.getElementById('pstudioLoader').click()">load .ppages</button>
       <button onclick="restoreAutoSave()">restore autosave</button>
+      <button onclick="quickSaveProject()">quick save</button>
+      <button onclick="quickLoadProject()">quick load</button>
     </div>
     <div class="actionGroup softGroup compactTools">
       <button onclick="zoomPage(-0.05)">−</button>
@@ -6212,6 +6214,29 @@ document.addEventListener('click', function(e){
       }catch(err){}
       alert('No auto-save found yet.');
     }).catch(err=>{ alert('Could not restore auto-save.'); console.error(err); });
+  };
+  // Quick save/load: a browser web page can never overwrite an arbitrary file on disk (a real
+  // security boundary, not a missing feature) - every "save .ppages" is necessarily a brand new
+  // download. Quick save sidesteps that by keeping the project entirely inside this browser's own
+  // storage (the same IndexedDB autosave already uses, under its own key), so hitting it
+  // repeatedly always overwrites the same slot instead of piling up files. It's a deliberate,
+  // explicit checkpoint the user controls - distinct from the silent automatic autosave, which
+  // exists purely as a crash/reload safety net. Not a substitute for "save .ppages": this stays
+  // local to the browser/device until actually exported as a file.
+  const QUICKSAVE_KEY='patternPages.quickSave.v1';
+  window.quickSaveProject=function(){
+    idbSet(QUICKSAVE_KEY, makeProjectSnapshot()).then(()=>{
+      showAutoSaveNotice('quick saved');
+    }).catch(err=>{
+      console.error('Quick save failed',err);
+      alert('Could not quick save: '+(err&&err.message||err));
+    });
+  };
+  window.quickLoadProject=function(){
+    idbGet(QUICKSAVE_KEY).then(data=>{
+      if(data){ applyProjectSnapshot(data,'Quick save'); return; }
+      alert('No quick save found yet.');
+    }).catch(err=>{ alert('Could not load the quick save.'); console.error(err); });
   };
   // One-time migration: carry forward any old localStorage autosave (from
   // small projects that fit under its quota) into IndexedDB, then stop
