@@ -5792,6 +5792,8 @@ aside:last-of-type .shadowSliderBox{
     return new Blob([bytes],{type:'application/pdf'});
   }
   function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);}
+  window.makePdfBlobFromPages=makePdfBlobFromPages;
+  window.downloadBlob=downloadBlob;
   async function pageToPdfItem(p){
     const c=await renderPageToCanvas(p);
     return {w:p.w,h:p.h,dataUrl:c.toDataURL('image/jpeg',0.94),links:p.layers.filter(l=>l.href).map(l=>({x:l.x,y:l.y,w:l.w,h:l.h,href:l.href}))};
@@ -14689,8 +14691,6 @@ else install();
 .documentOverflowWarning{position:absolute;right:12px;bottom:11px;background:#7b3f91;color:white;border-radius:999px;padding:5px 9px;font:800 10px system-ui;display:none}.documentPaper.hasOverflow .documentOverflowWarning{display:block}
 .documentTOC{height:100%;overflow:hidden}.documentTOC h1{font-size:2em;margin:0 0 .8em}.documentTOCRow{display:grid;grid-template-columns:1fr auto;gap:12px;border-bottom:1px dotted #b6aaba;padding:7px 0;font-size:16px}.documentTOCRow.level2{padding-left:22px;font-size:14px}
 .documentLiteBox{border-color:rgba(255,142,214,.25)!important;background:linear-gradient(180deg,rgba(255,142,214,.055),rgba(255,255,255,.03))!important}.documentLiteBox .docQuickStyles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}.documentLiteBox .docQuickStyles button{font-size:11px!important;padding:7px 4px!important}.documentLiteBox input[type=file]{display:none}.documentLiteStatus{font-size:11px;line-height:1.3;color:#d8cede;margin-top:7px}
-#ppDocumentPrintRoot{display:none}
-@media print{@page{size:A4;margin:0}body>*{display:none!important}#ppDocumentPrintRoot{display:block!important}.ppPrintPage{position:relative;width:210mm;height:297mm;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;background:#fff;color:#222;padding:22mm 18mm 20mm;font-family:Georgia,serif;overflow:hidden}.ppPrintPage:last-child{page-break-after:auto;break-after:auto}.ppPrintPage h1{font-size:26pt}.ppPrintPage h2{font-size:18pt}.ppPrintPage p{font-size:11.5pt;line-height:1.55}.ppPrintPage img{max-width:100%;max-height:110mm;display:block;margin:5mm auto}.ppPrintNumber{position:absolute;bottom:9mm;left:0;right:0;text-align:center;font:10pt system-ui;color:#666}}
 </style>
 <script id="pp-document-lite-script-v155">
 (function(){
@@ -14836,17 +14836,129 @@ else install();
     toc.tocTitle=name.trim();
     window.ppUpdateDocumentTOC();
   }
-  window.ppPrintDocument=function(){
+  // window.print()'s CSS pagination (page-break-after / @page sizing) turned out to be
+  // unreliable for this dynamically-built multi-page content on iOS Safari - real-device
+  // testing kept coming back with every document page flattened onto a single printed page,
+  // across more than one CSS-pagination approach. A follow-up attempt to sidestep the OS
+  // print pipeline entirely by rasterizing each page via SVG <foreignObject> hit a hard
+  // browser wall instead: canvases drawn from a foreignObject-bearing SVG image are always
+  // "tainted" and refuse to export (a spec-level restriction, not a bug - true regardless of
+  // using a same-origin blob: URL). So this draws each page with plain canvas primitives
+  // instead (the same technique renderPageToCanvas already uses for ordinary text layers),
+  // walking the parsed docHtml and manually laying out/wrapping each run of text - no
+  // foreignObject, no tainting, and unlike window.print() this can be verified end-to-end
+  // in tests instead of only on a real device.
+  function ppFlattenInlineRuns(node,style,runs){
+    style=style||{bold:false,italic:false,color:'#222'};
+    node.childNodes.forEach(function(child){
+      if(child.nodeType===3){if(child.textContent)runs.push(Object.assign({text:child.textContent},style));return}
+      if(child.nodeType!==1)return;
+      const tag=child.tagName;
+      if(tag==='BR'){runs.push(Object.assign({text:'\n'},style));return}
+      if(tag==='IMG'){runs.push(Object.assign({img:child.getAttribute('src')},style));return}
+      const cs=getComputedStyle(child);
+      ppFlattenInlineRuns(child,{
+        bold:style.bold||tag==='B'||tag==='STRONG'||parseInt(cs.fontWeight,10)>=600,
+        italic:style.italic||tag==='I'||tag==='EM'||cs.fontStyle==='italic',
+        color:tag==='A'?'#6b42bb':style.color
+      },runs);
+    });
+  }
+  function ppBlockFont(tag){
+    if(tag==='H1')return{size:54,weight:800,lineHeight:1.2};
+    if(tag==='H2')return{size:38,weight:750,lineHeight:1.3};
+    return{size:24,weight:400,lineHeight:1.55};
+  }
+  async function ppDrawDocBlock(ctx,block,y,pad,contentW){
+    if(block.classList&&block.classList.contains('documentTOCRow')){
+      const isL2=block.classList.contains('level2');
+      const left=(block.querySelector('span')||block).textContent;
+      const right=block.querySelector('strong')?block.querySelector('strong').textContent:'';
+      const size=isL2?21:24;
+      ctx.font=`400 ${size}px Georgia, serif`;ctx.fillStyle='#222';
+      ctx.textAlign='left';ctx.fillText(left,pad.left+(isL2?44:0),y+size);
+      ctx.textAlign='right';ctx.fillText(right,pad.left+contentW,y+size);
+      ctx.textAlign='left';
+      return y+size*1.6;
+    }
+    const tag=block.tagName||'DIV';
+    const font=ppBlockFont(tag);
+    const lineHeight=font.size*font.lineHeight;
+    const runs=[];ppFlattenInlineRuns(block,null,runs);
+    const tokens=[];
+    runs.forEach(function(run){
+      if(run.img){tokens.push({img:run.img});return}
+      run.text.split(/(\n)/).forEach(function(part){
+        if(part==='')return;
+        if(part==='\n'){tokens.push({brk:true});return}
+        part.split(/(\s+)/).forEach(function(w){if(w)tokens.push({text:w,bold:run.bold,italic:run.italic,color:run.color})});
+      });
+    });
+    let line=[],lineWidth=0;
+    const flush=async function(){
+      if(!line.length){y+=lineHeight;return}
+      let x=pad.left;
+      for(const t of line){
+        ctx.font=`${t.italic?'italic ':''}${t.bold?800:font.weight} ${font.size}px Georgia, serif`;
+        ctx.fillStyle=t.color||'#222';
+        ctx.fillText(t.text,x,y+font.size);
+        x+=ctx.measureText(t.text).width;
+      }
+      y+=lineHeight;line=[];lineWidth=0;
+    };
+    for(const tok of tokens){
+      if(tok.brk){await flush();continue}
+      if(tok.img){
+        await flush();
+        try{
+          const img=await new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=tok.img});
+          const maxW=contentW,maxH=650;
+          const scale=Math.min(maxW/img.width,maxH/img.height,1);
+          const dw=img.width*scale,dh=img.height*scale;
+          ctx.drawImage(img,pad.left+(contentW-dw)/2,y,dw,dh);
+          y+=dh+20;
+        }catch(e){}
+        continue;
+      }
+      ctx.font=`${tok.italic?'italic ':''}${tok.bold?800:font.weight} ${font.size}px Georgia, serif`;
+      const tw=ctx.measureText(tok.text).width;
+      if(lineWidth+tw>contentW&&line.length)await flush();
+      if(/^\s+$/.test(tok.text)&&!line.length)continue;
+      line.push(tok);lineWidth+=tw;
+    }
+    await flush();
+    return y+lineHeight*0.3;
+  }
+  async function ppRasterizeDocPage(innerHtml,w,h,pageNum){
+    const pad={top:130,right:106,bottom:118,left:106};
+    const contentW=w-pad.left-pad.right;
+    const holder=document.createElement('div');
+    holder.style.cssText='position:fixed;left:-99999px;top:0;width:1px;height:1px;overflow:hidden';
+    holder.innerHTML=innerHtml||'';
+    document.body.appendChild(holder);
+    const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.textBaseline='alphabetic';
+    let y=pad.top;
+    const blocks=holder.children.length?Array.from(holder.children):[holder];
+    for(const block of blocks){
+      if(y>h-pad.bottom)break;
+      y=await ppDrawDocBlock(ctx,block,y,pad,contentW);
+    }
+    holder.remove();
+    ctx.fillStyle='#666';ctx.font='21px system-ui, sans-serif';ctx.textAlign='center';
+    ctx.fillText(String(pageNum),w/2,h-pad.bottom+40);ctx.textAlign='left';
+    return canvas;
+  }
+  window.ppPrintDocument=async function(){
     const docs=pages().filter(isDoc);if(!docs.length){alert('Add a document page first.');return}
-    let root=document.getElementById('ppDocumentPrintRoot');if(root)root.remove();root=document.createElement('div');root.id='ppDocumentPrintRoot';
-    docs.forEach((p,i)=>{const pg=document.createElement('section');pg.className='ppPrintPage';pg.innerHTML=p.docHtml||'';const n=document.createElement('div');n.className='ppPrintNumber';n.textContent=i+1;pg.appendChild(n);root.appendChild(pg)});
-    document.body.appendChild(root);
-    // Force a full layout pass (fonts/images inside docHtml) before invoking print - some
-    // WebKit builds capture a stale/incomplete layout when print() fires immediately after
-    // a large DOM insertion like this one, which can under-count the number of pages.
-    root.getBoundingClientRect();
-    window.addEventListener('afterprint',function cleanup(){root.remove();window.removeEventListener('afterprint',cleanup)});
-    requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(()=>window.print(),60)));
+    const items=[];
+    for(let i=0;i<docs.length;i++){
+      const canvas=await ppRasterizeDocPage(docs[i].docHtml,DOC_W,DOC_H,i+1);
+      items.push({w:DOC_W,h:DOC_H,dataUrl:canvas.toDataURL('image/jpeg',0.92),links:[]});
+    }
+    if(!items.length){alert('Could not build the PDF - please try again.');return}
+    window.downloadBlob(window.makePdfBlobFromPages(items),'pattern-pages-manual.pdf');
   }
   function installPanel(){
     if(document.getElementById('ppDocumentLitePanel'))return;

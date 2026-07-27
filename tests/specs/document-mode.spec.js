@@ -207,11 +207,13 @@ test('the TOC title can be renamed and survives a later "update TOC" regeneratio
   await expect(page.locator('.documentTOC h1')).toHaveText('The Complete Mug Guide');
 });
 
-test('print / save PDF builds one print page per document/TOC page, not just the first', async ({ page }) => {
-  // Real request: printing a manual only showed the TOC in the preview, not the other pages.
-  // ppPrintDocument() builds its own off-screen #ppDocumentPrintRoot before calling
-  // window.print() - if it silently dropped pages, the built root itself would already be
-  // short, regardless of what the OS print dialog then does with it.
+test('print / save PDF downloads a real multi-page PDF with one page per document/TOC page', async ({ page }) => {
+  // Real request: printing a manual only showed the first page in the preview, not the other
+  // 19. window.print()'s CSS pagination turned out to be unreliable for this dynamically-built
+  // content on iOS Safari across more than one CSS-only fix attempt, so "print / save PDF" now
+  // rasterizes each document/TOC page with plain canvas drawing (no window.print() involved at
+  // all) and builds a real downloadable multi-page PDF file directly - this asserts the PDF
+  // byte stream itself contains one page object per document/TOC page.
   await openDocumentPage(page);
   const result = await page.evaluate(async () => {
     for (let i = 0; i < 4; i++) {
@@ -219,24 +221,27 @@ test('print / save PDF builds one print page per document/TOC page, not just the
       current().docHtml = `<h1>Chapter ${i + 1}</h1><p>Body text ${i + 1}</p>`;
     }
     window.ppUpdateDocumentTOC();
-    let printed = false;
-    window.print = () => { printed = true; };
-    window.ppPrintDocument();
-    await new Promise((r) => setTimeout(r, 250));
-    const root = document.getElementById('ppDocumentPrintRoot');
+
+    let capturedBlob = null;
+    const origDownloadBlob = window.downloadBlob;
+    window.downloadBlob = (blob) => { capturedBlob = blob; };
+    await window.ppPrintDocument();
+    window.downloadBlob = origDownloadBlob;
+
+    const docPageCount = state.pages.filter((p) => p.documentLite || p.type === 'Document' || p.type === 'Document TOC').length;
+    if (!capturedBlob) return { docPageCount, pdfPageCount: 0, isPdf: false };
+    const bytes = new Uint8Array(await capturedBlob.arrayBuffer());
+    const text = new TextDecoder('latin1').decode(bytes);
     return {
-      printed,
-      printPageCount: root ? root.querySelectorAll('.ppPrintPage').length : 0,
-      docPageCount: state.pages.filter((p) => p.documentLite || p.type === 'Document' || p.type === 'Document TOC').length,
-      rootDisplayOnScreen: root ? getComputedStyle(root).display : null,
+      docPageCount,
+      pdfPageCount: (text.match(/\/Type \/Page\b/g) || []).length,
+      isPdf: text.startsWith('%PDF-'),
     };
   });
 
-  expect(result.printed).toBe(true);
   expect(result.docPageCount).toBe(6); // openDocumentPage's page + 4 chapters + TOC
-  expect(result.printPageCount).toBe(result.docPageCount);
-  // Outside of @media print, the print root must stay hidden - it isn't part of the app UI.
-  expect(result.rootDisplayOnScreen).toBe('none');
+  expect(result.isPdf).toBe(true);
+  expect(result.pdfPageCount).toBe(result.docPageCount);
 });
 
 test('pressing Enter after a heading drops back to body text instead of leaving another heading', async ({ page }) => {
