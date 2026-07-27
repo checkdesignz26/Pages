@@ -355,3 +355,27 @@ test('creating the TOC for the first time does not clobber it with the page cont
   expect(pages[0].docHtml).not.toContain('Welcome to Pattern Pages');
   expect(pages[1].docHtml).toContain('Welcome to Pattern Pages');
 });
+
+test('the on-screen keyboard opening scrolls the focused document page back into view', async ({ page }) => {
+  // Real request: the keyboard covers the text being typed and the user has to scroll up
+  // manually to see it. 'focus' fires before the keyboard's open animation finishes, so it
+  // can't be used to compute where to scroll to - visualViewport's own height only shrinks
+  // once that animation actually completes, giving an accurate signal to act on instead.
+  await openDocumentPage(page);
+  await page.click('.documentEditor');
+  await page.waitForTimeout(200);
+
+  const scrolledInto = await page.evaluate(() => new Promise((resolve) => {
+    const ed = document.querySelector('.documentEditor');
+    const orig = ed.scrollIntoView;
+    ed.scrollIntoView = function (opts) {
+      ed.scrollIntoView = orig;
+      resolve(opts);
+    };
+    window.visualViewport.dispatchEvent(new Event('resize'));
+    setTimeout(() => resolve(null), 500);
+  }));
+
+  expect(scrolledInto).not.toBeNull();
+  expect(scrolledInto.block).toBe('center');
+});

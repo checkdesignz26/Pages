@@ -18244,6 +18244,18 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
       }
     });
     setTimeout(scan,100);
+    // Real request: the on-screen keyboard covers the text being typed, and the user has to
+    // scroll up manually to see it. visualViewport's own height shrinks once the keyboard
+    // animation finishes (unlike 'focus', which fires before that), so waiting for its resize
+    // event gives an accurate moment to nudge the focused page back into view above it.
+    if(window.visualViewport){
+      window.visualViewport.addEventListener('resize',function(){
+        if(!activeEditor||!document.contains(activeEditor))return;
+        setTimeout(function(){
+          try{activeEditor.scrollIntoView({block:'center',behavior:'smooth'})}catch(e){}
+        },60);
+      });
+    }
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});
   else boot();
