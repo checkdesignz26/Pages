@@ -5758,6 +5758,17 @@ aside:last-of-type .shadowSliderBox{
     return arr;
   }
   function escapePDF(s){return String(s).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');}
+  // Spreading an entire image's bytes as individual String.fromCharCode arguments
+  // (...imgBytes) blows the JS engine's max-arguments limit for anything beyond a small
+  // image - a real, deterministic "RangeError: Maximum call stack size exceeded" crash, not a
+  // platform quirk (confirmed via a real-device debug report: it hit this exact error building
+  // a 19-page PDF). Chunking the spread keeps each call well under any engine's limit.
+  function bytesToBinaryString(bytes){
+    let out='';
+    const chunk=8192;
+    for(let i=0;i<bytes.length;i+=chunk)out+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+    return out;
+  }
   function makePdfBlobFromPages(pageItems){
     let objects=[];
     const add=(s)=>{objects.push(s);return objects.length;};
@@ -5766,7 +5777,7 @@ aside:last-of-type .shadowSliderBox{
     const pageRefs=[];
     pageItems.forEach((item,idx)=>{
       const imgBytes=dataUrlToBinary(item.dataUrl);
-      const imgObj=add(`<< /Type /XObject /Subtype /Image /Width ${item.w} /Height ${item.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imgBytes.length} >>\nstream\n${String.fromCharCode(...imgBytes)}\nendstream`);
+      const imgObj=add(`<< /Type /XObject /Subtype /Image /Width ${item.w} /Height ${item.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imgBytes.length} >>\nstream\n${bytesToBinaryString(imgBytes)}\nendstream`);
       const content=`q\n${item.w} 0 0 ${item.h} 0 0 cm\n/Im${idx} Do\nQ`;
       const contentObj=add(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
       let annots='';

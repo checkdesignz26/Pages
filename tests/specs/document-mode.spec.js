@@ -251,6 +251,47 @@ test('print / save PDF builds a real multi-page PDF with one page per document/T
   expect(result.pdfPageCount).toBe(docPageCount);
 });
 
+test('a longer manual (~20 pages) builds a PDF without crashing on the byte-stream conversion', async ({ page }) => {
+  // Real device report: makePdfBlobFromPages() threw "RangeError: Maximum call stack size
+  // exceeded" building a 19-page manual. Root cause - it converted each page's JPEG bytes to
+  // a binary string via String.fromCharCode(...imgBytes), spreading the ENTIRE byte array as
+  // individual function arguments; anything beyond a small image blows past the JS engine's
+  // max-arguments limit. Fixed by chunking that conversion (bytesToBinaryString). This shares
+  // the exact function the pre-existing "multi-page PDF" pattern-page export also uses, so the
+  // same crash could in principle have hit that path too for large enough pages.
+  await openDocumentPage(page);
+  await page.evaluate(() => {
+    for (let i = 0; i < 18; i++) {
+      window.addDocumentLitePage();
+      current().docHtml = `<h1>Chapter ${i + 1} - A Longer Chapter Title Here</h1><p>${'This is realistic body text meant to produce a reasonably sized JPEG once rasterized, long enough to matter. '.repeat(8)}</p>`;
+    }
+    window.ppUpdateDocumentTOC();
+  });
+
+  const resultPromise = page.evaluate(() => new Promise((resolve) => {
+    const orig = window.downloadBlob;
+    window.downloadBlob = async (blob) => {
+      window.downloadBlob = orig;
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const text = new TextDecoder('latin1').decode(bytes);
+      resolve({ isPdf: text.startsWith('%PDF-'), pdfPageCount: (text.match(/\/Type \/Page\b/g) || []).length });
+    };
+  }));
+
+  let pageError = null;
+  page.once('pageerror', (e) => { pageError = e.message; });
+  await page.evaluate(() => window.ppPrintDocument());
+  await page.waitForSelector('#ppPdfReadyDownload', { timeout: 15000 });
+  await page.click('#ppPdfReadyDownload');
+  const result = await resultPromise;
+
+  const docPageCount = await page.evaluate(() => state.pages.filter((p) => p.documentLite || p.type === 'Document' || p.type === 'Document TOC').length);
+  expect(pageError).toBeNull();
+  expect(docPageCount).toBe(20); // openDocumentPage's page + 18 chapters + TOC
+  expect(result.isPdf).toBe(true);
+  expect(result.pdfPageCount).toBe(docPageCount);
+});
+
 test('pressing Enter after a heading drops back to body text instead of leaving another heading', async ({ page }) => {
   // Real request: the TOC filled up with several "Untitled heading" rows that the user never
   // knowingly created. Root cause - WebKit's default contentEditable behavior continues a
