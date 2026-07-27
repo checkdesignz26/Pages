@@ -371,3 +371,54 @@ test('switching fonts clears a stale nested font-family instead of leaving it wi
   );
   expect(computed).toContain('Impact');
 });
+
+test('switching fonts back and forth repeatedly never gets permanently stuck', async ({ page }) => {
+  // Real device report: font switching in document mode worked a couple of times, then got
+  // permanently stuck showing whatever font was first applied, no matter what the dropdown
+  // said afterward. Root cause, found via a real debug-report capture plus a controlled local
+  // repro: restoreRange() calls activeEditor.focus() to bring focus back from a toolbar control
+  // (e.g. the font <select>) - if focus had genuinely moved away, that focus() call fires a
+  // real, synchronous 'focus' event -> activate() -> rememberRange(), which overwrote the very
+  // savedRange this function was about to restore with whatever the browser's own default
+  // selection was at that instant (typically collapsed), before the restore ever ran. Every
+  // later pick then just restored and reused that same broken collapsed position forever.
+  // Separately, the <select> also fired both 'input' and 'change' for a single pick, applying
+  // the font twice and nesting a fresh span around the previous one each time.
+  await expandAllBoxes(page);
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("add document page")'));
+  await page.waitForSelector('.documentEditor');
+  await page.evaluate(() => {
+    document.getElementById('textStudioPanel').classList.remove('collapsed');
+    document.body.classList.remove('rightCollapsed');
+  });
+  // Let this app's known startup-settling renders (several independent setTimeout(...) calls
+  // scattered up to ~1.6s after load, per fixtures.js) finish before interacting - the same
+  // real-world delay expandAllBoxes()'s own retry logic exists to tolerate.
+  await page.waitForTimeout(1800);
+  await page.evaluate(() => {
+    const h1 = document.querySelector('.documentEditor h1');
+    const r = document.createRange();
+    r.selectNodeContents(h1);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    h1.closest('.documentEditor').focus();
+  });
+
+  for (let i = 0; i < 6; i++) {
+    await page.selectOption('#fontFamily', 'Arial');
+    await page.waitForTimeout(80);
+    const arial = await page.evaluate(() => document.querySelector('.documentEditor h1').innerHTML);
+    expect(arial, `cycle ${i} Arial`).toContain('Arial');
+    expect(arial, `cycle ${i} Arial has no runaway nesting`).not.toMatch(/(<span[^>]*>){3,}/);
+
+    await page.selectOption('#fontFamily', 'Georgia');
+    await page.waitForTimeout(80);
+    const georgia = await page.evaluate(() => document.querySelector('.documentEditor h1').innerHTML);
+    expect(georgia, `cycle ${i} Georgia`).toContain('Georgia');
+    expect(georgia, `cycle ${i} Georgia has no runaway nesting`).not.toMatch(/(<span[^>]*>){3,}/);
+  }
+
+  const finalText = await page.evaluate(() => document.querySelector('.documentEditor h1').textContent);
+  expect(finalText).toBe('Title');
+});

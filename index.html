@@ -17902,12 +17902,20 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   }
   function restoreRange(){
     if(!activeEditor||!document.contains(activeEditor)) return false;
+    // Capture savedRange BEFORE focus() below, not after: if focus had moved away (e.g. to a
+    // toolbar <select>), focusing the editor back fires a real, synchronous 'focus' event ->
+    // activate() -> rememberRange() - which overwrites the very savedRange this function is
+    // about to restore with whatever the browser's own default selection happens to be at that
+    // instant (typically collapsed), before the restore below ever runs. This was the actual
+    // cause of font/style changes "working" a couple of times then silently doing nothing -
+    // each restoreRange() call was clobbering its own target out from under itself.
+    var toRestore=savedRange;
     activeEditor.focus({preventScroll:true});
     var sel=window.getSelection();
-    if(savedRange){
+    if(toRestore){
       try{
         sel.removeAllRanges();
-        sel.addRange(savedRange);
+        sel.addRange(toRestore);
         return true;
       }catch(e){}
     }
@@ -17962,55 +17970,107 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     }
   }
   function exec(command,value){
+    if(!activeEditor||!document.contains(activeEditor))return false;
+    restoreRange();
+    try{document.execCommand('styleWithCSS',false,true)}catch(e){}
+    try{document.execCommand(command,false,value===undefined?null:value)}catch(e){return false}
+    rememberRange();
+    saveEditor(activeEditor,false);
+    return true;
+  }
+  // Real device bug: font switching in document mode would work once, then get permanently
+  // "stuck" showing whatever font was first applied, no matter what the dropdown said - other
+  // properties (font size, line height, letter spacing) never had this problem, and they all go
+  // through applyCss() below rather than execCommand(). Root cause, confirmed by direct
+  // repro: document.execCommand('fontName',...,'Georgia') behaves differently from other font
+  // names in WebKit specifically because Georgia is ALSO this editor's own inherited CSS
+  // default - applying it collapses the live selection instead of leaving it selecting the
+  // styled text. Once collapsed, every subsequent exec()-based command (restoreRange() ->
+  // execCommand()) just keeps restoring and reusing that same broken collapsed position
+  // forever, so nothing ever visibly changes again regardless of which font gets picked.
+  // Fixed by not routing font-family through execCommand at all - applyFontFamily()
+  // wraps the selection in a span directly (the same DOM-surgery applyCss() already uses
+  // successfully for font-size/line-height/letter-spacing) and explicitly re-selects the
+  // span's own contents afterward, so the next pick always has a real, live range to act on.
+  function applyFontFamily(value){
     if(!activeEditor||!document.contains(activeEditor)){
-      if(typeof window.ppDebugLog==='function')window.ppDebugLog('exec:no-active-editor',{command:command,value:value});
+      if(typeof window.ppDebugLog==='function')window.ppDebugLog('applyFontFamily:no-active-editor',{value:value});
       return false;
     }
     restoreRange();
-    var dbgBlockTag=null;
-    if(command==='fontName'&&typeof window.ppDebugLog==='function'){
-      try{
-        var selDbg=window.getSelection();
-        var nodeDbg=selDbg&&selDbg.anchorNode?(selDbg.anchorNode.nodeType===1?selDbg.anchorNode:selDbg.anchorNode.parentElement):null;
-        var blockDbg=nodeDbg&&nodeDbg.closest?nodeDbg.closest('h1,h2,p,div'):null;
-        dbgBlockTag=blockDbg?blockDbg.tagName:null;
-        window.ppDebugLog('exec:fontName:before',{value:value,blockTag:dbgBlockTag,computedFontBefore:nodeDbg?getComputedStyle(nodeDbg).fontFamily:null});
-      }catch(e){}
-    }
-    try{document.execCommand('styleWithCSS',false,true)}catch(e){}
-    try{document.execCommand(command,false,value===undefined?null:value)}catch(e){
-      if(typeof window.ppDebugLog==='function')window.ppDebugLog('exec:execCommand-threw',{command:command,value:value,error:String(e)});
+    var sel=window.getSelection();
+    if(!sel||!sel.rangeCount){
+      if(typeof window.ppDebugLog==='function')window.ppDebugLog('applyFontFamily:no-selection',{value:value});
       return false;
     }
-    if(command==='fontName'){
-      // Some engines nest a new font-family span around (rather than replacing) text that's
-      // already wrapped in one from a previous font choice, instead of updating it in place -
-      // the old, more deeply nested font-family then keeps winning via ordinary CSS inheritance
-      // even though a new one was just "applied". Clean up: strip any OTHER font-family left
-      // inside the current selection so the one just picked always actually wins.
-      try{
-        var sel2=window.getSelection();
-        if(sel2&&sel2.rangeCount){
-          var root=sel2.getRangeAt(0).commonAncestorContainer;
-          if(root.nodeType!==1) root=root.parentElement;
-          if(root&&activeEditor.contains(root)){
-            root.querySelectorAll('[style*="font-family"]').forEach(function(el){
-              var ff=(el.style.fontFamily||'').replace(/^["']|["']$/g,'');
-              if(ff && ff!==value) el.style.fontFamily='';
-            });
-          }
-        }
-      }catch(e){}
-      if(typeof window.ppDebugLog==='function'){
-        try{
-          var selAfter=window.getSelection();
-          var nodeAfter=selAfter&&selAfter.anchorNode?(selAfter.anchorNode.nodeType===1?selAfter.anchorNode:selAfter.anchorNode.parentElement):null;
-          window.ppDebugLog('exec:fontName:after',{value:value,blockTag:dbgBlockTag,computedFontAfter:nodeAfter?getComputedStyle(nodeAfter).fontFamily:null});
-        }catch(e){}
+    var range=sel.getRangeAt(0);
+    if(range.collapsed){
+      if(typeof window.ppDebugLog==='function')window.ppDebugLog('applyFontFamily:collapsed-caret-path',{value:value});
+      var caret=document.createElement('span');
+      caret.style.fontFamily=value;
+      caret.appendChild(document.createTextNode('\u200b'));
+      range.insertNode(caret);
+      range.setStart(caret.firstChild,1);
+      range.collapse(true);
+      sel.removeAllRanges();sel.addRange(range);
+      savedRange=range.cloneRange();
+      saveEditor(activeEditor,false);
+      return true;
+    }
+    // If the selection is exactly the full contents of a span we (or an earlier font pick)
+    // already created, update it in place instead of wrapping yet another span around it -
+    // otherwise every subsequent pick nests a fresh span around the last one, growing without
+    // bound and eventually landing the selection somewhere surroundContents() can't work with.
+    var reuseParent=range.commonAncestorContainer;
+    if(reuseParent.nodeType!==1)reuseParent=reuseParent.parentElement;
+    if(reuseParent&&reuseParent.tagName==='SPAN'&&activeEditor.contains(reuseParent)){
+      var probe=document.createRange();
+      probe.selectNodeContents(reuseParent);
+      if(probe.compareBoundaryPoints(Range.START_TO_START,range)===0&&probe.compareBoundaryPoints(Range.END_TO_END,range)===0){
+        reuseParent.style.fontFamily=value;
+        reuseParent.querySelectorAll('[style*="font-family"]').forEach(function(el){
+          var ff=(el.style.fontFamily||'').replace(/^["']|["']$/g,'');
+          if(ff && ff!==value) el.style.fontFamily='';
+        });
+        range.selectNodeContents(reuseParent);
+        sel.removeAllRanges();sel.addRange(range);
+        savedRange=range.cloneRange();
+        saveEditor(activeEditor,false);
+        if(typeof window.ppDebugLog==='function')window.ppDebugLog('applyFontFamily:reused-span',{value:value});
+        return true;
       }
     }
-    rememberRange();
+    var span=document.createElement('span');
+    span.style.fontFamily=value;
+    try{
+      range.surroundContents(span);
+    }catch(e){
+      // The selection spans multiple block-level elements (e.g. a drag across two paragraphs,
+      // or selecting the whole document) - surroundContents() can't wrap that without
+      // flattening the blocks together, so fall back to execCommand, which already handles
+      // multi-block formatting correctly on its own. The "stuck" collapse bug this function
+      // exists to avoid is specific to a single-block selection anyway.
+      try{document.execCommand('styleWithCSS',false,true)}catch(e2){}
+      try{document.execCommand('fontName',false,value)}catch(e2){return false}
+      rememberRange();
+      saveEditor(activeEditor,false);
+      if(typeof window.ppDebugLog==='function')window.ppDebugLog('applyFontFamily:multi-block-fallback',{value:value});
+      return true;
+    }
+    // Some engines nest a new font-family span around (rather than replacing) text that's
+    // already wrapped in one from a previous font choice, instead of updating it in place -
+    // the old, more deeply nested font-family then keeps winning via ordinary CSS inheritance
+    // even though a new one was just "applied". Strip any OTHER font-family left inside the
+    // span we just created so the one just picked always actually wins.
+    span.querySelectorAll('[style*="font-family"]').forEach(function(el){
+      var ff=(el.style.fontFamily||'').replace(/^["']|["']$/g,'');
+      if(ff && ff!==value) el.style.fontFamily='';
+    });
+    range.selectNodeContents(span);
+    sel.removeAllRanges();sel.addRange(range);
+    savedRange=range.cloneRange();
     saveEditor(activeEditor,false);
+    if(typeof window.ppDebugLog==='function')window.ppDebugLog('applyFontFamily:done',{value:value,computedFontAfter:getComputedStyle(span).fontFamily});
     return true;
   }
   function applyCss(prop,value){
@@ -18061,7 +18121,7 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     cleanClone('italicBtn',function(e){e.preventDefault();window.toggleItalic();});
 
     var map={
-      fontFamily:function(el){if(typeof window.ppDebugLog==='function')window.ppDebugLog('fontFamily:change',{value:el.value,hasActiveEditor:!!activeEditor});exec('fontName',el.value)},
+      fontFamily:function(el){if(typeof window.ppDebugLog==='function')window.ppDebugLog('fontFamily:change',{value:el.value,hasActiveEditor:!!activeEditor});applyFontFamily(el.value)},
       fontSize:function(el){applyCss('font-size',Number(el.value||20)+'px')},
       lineHeight:function(el){applyCss('line-height',(Number(el.value||155)/100).toString())},
       letterSpacing:function(el){applyCss('letter-spacing',Number(el.value||0)+'px')},
@@ -18072,7 +18132,11 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
       var fresh=old.cloneNode(true);
       fresh.dataset.ppPersistent183='yes';
       old.replaceWith(fresh);
-      ['input','change'].forEach(function(type){
+      // A native <select> (fontFamily) fires both 'input' and 'change' for a single pick,
+      // unlike a range <input> where 'input' fires continuously while dragging and 'change'
+      // once on release - listening to both on a select applied every pick TWICE, nesting a
+      // fresh font-family span around the previous one each time instead of replacing it.
+      (fresh.tagName==='SELECT'?['change']:['input','change']).forEach(function(type){
         fresh.addEventListener(type,function(){
           if(activeEditor){map[id](fresh);return;}
           if(typeof layerApplyTextControls==='function')layerApplyTextControls();
