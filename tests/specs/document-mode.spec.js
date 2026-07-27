@@ -238,3 +238,29 @@ test('print / save PDF builds one print page per document/TOC page, not just the
   // Outside of @media print, the print root must stay hidden - it isn't part of the app UI.
   expect(result.rootDisplayOnScreen).toBe('none');
 });
+
+test('pressing Enter after a heading drops back to body text instead of leaving another heading', async ({ page }) => {
+  // Real request: the TOC filled up with several "Untitled heading" rows that the user never
+  // knowingly created. Root cause - WebKit's default contentEditable behavior continues a
+  // heading's tag onto the next line when you press Enter, so pressing it even just to add
+  // space after a heading leaves an invisible, empty <h1>/<h2> behind.
+  await openDocumentPage(page);
+  await page.click('.documentEditor');
+  await page.keyboard.press('Control+A');
+  await page.evaluate(() => document.execCommand('formatBlock', false, 'h1'));
+  await page.keyboard.type('Welcome');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Body line after two Enters');
+
+  const tags = await page.evaluate(() => [...document.querySelector('.documentEditor').children].map((n) => n.tagName));
+  expect(tags[0]).toBe('H1');
+  expect(tags.slice(1)).not.toContain('H1');
+  expect(tags.slice(1)).not.toContain('H2');
+
+  await expandAllBoxes(page);
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("create / update toc")'));
+  await page.waitForSelector('.documentTOC');
+  await expect(page.locator('.documentTOC')).not.toContainText('Untitled heading');
+  await expect(page.locator('.documentTOCRow')).toHaveCount(1);
+});

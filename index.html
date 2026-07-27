@@ -14815,7 +14815,7 @@ else install();
   function escTitle(s){return String(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
   window.ppUpdateDocumentTOC=function(){
     if(typeof save==='function')save();
-    let headings=[];pages().forEach((p,i)=>{if(!isDoc(p)||p.docTOC)return;const d=document.createElement('div');d.innerHTML=p.docHtml||'';d.querySelectorAll('h1,h2').forEach(h=>headings.push({text:h.textContent.trim()||'Untitled heading',level:h.tagName==='H2'?2:1,page:docPageNumber(i)}))});
+    let headings=[];pages().forEach((p,i)=>{if(!isDoc(p)||p.docTOC)return;const d=document.createElement('div');d.innerHTML=p.docHtml||'';d.querySelectorAll('h1,h2').forEach(h=>{const text=h.textContent.trim();if(!text)return;headings.push({text,level:h.tagName==='H2'?2:1,page:docPageNumber(i)})})});
     let toc=pages().find(p=>p.docTOC);if(!toc){toc={type:'Document TOC',w:DOC_W,h:DOC_H,layers:[],documentLite:true,docTOC:true,docHtml:'',tocTitle:'Contents'};const first=pages().findIndex(isDoc);pages().splice(first<0?0:first,0,toc);state.selectedPage=first<0?0:first}
     toc.docHtml=`<h1>${escTitle(toc.tocTitle||'Contents')}</h1>`+headings.map(h=>`<div class="documentTOCRow level${h.level}"><span>${h.text}</span><strong>${h.page}</strong></div>`).join('')+(headings.length?'':'<p>Add Heading 1 or Heading 2 text, then update the TOC.</p>');render();if(typeof scrollSel==='function')scrollSel();
   }
@@ -17903,6 +17903,24 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
       });
       saveEditor(editor,false);
       rememberRange();
+    },true);
+    editor.addEventListener('keydown',function(e){
+      // WebKit's default Enter behavior continues a heading's tag onto the new line, so
+      // simply pressing Enter after typing a heading (even just to add space before the
+      // next line) leaves an invisible empty <h1>/<h2> behind - the TOC then lists that as
+      // a stray "Untitled heading" with no way to tell where it came from. Most editors
+      // (Docs, Notion) drop back to body text after a heading; match that instead.
+      if(e.key!=='Enter'||e.shiftKey) return;
+      var sel=window.getSelection();
+      if(!sel||!sel.rangeCount) return;
+      var node=sel.anchorNode;
+      var block=(node&&node.nodeType===1?node:(node&&node.parentElement));
+      block=block&&block.closest&&block.closest('h1,h2');
+      if(!block||!editor.contains(block)) return;
+      e.preventDefault();
+      document.execCommand('insertParagraph');
+      document.execCommand('formatBlock',false,'p');
+      saveEditor(editor,false);
     },true);
     ['keyup','mouseup','touchend','pointerup'].forEach(function(type){
       editor.addEventListener(type,function(){activate(editor);setTimeout(rememberRange,0)},true);
