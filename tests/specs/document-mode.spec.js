@@ -172,3 +172,69 @@ test('pasting a long plain-text block paginates into multiple document pages', a
   const pageCount = await page.evaluate(() => state.pages.length);
   expect(pageCount).toBeGreaterThan(1);
 });
+
+test('the TOC title can be renamed and survives a later "update TOC" regeneration', async ({ page }) => {
+  // Real request: the "Contents" heading was hardcoded and rewritten from scratch on every
+  // "create / update TOC" click, with no way to rename it (e.g. to the manual's own title),
+  // and the TOC block itself isn't editable text.
+  await openDocumentPage(page);
+  await page.evaluate(() => {
+    document.querySelector('.documentEditor').innerHTML = '<h1>Chapter 1</h1><p>Body</p>';
+    document.querySelector('.documentEditor').dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  await expandAllBoxes(page);
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("create / update TOC")'));
+  await page.waitForSelector('.documentTOC');
+  await expect(page.locator('.documentTOC h1')).toHaveText('Contents');
+
+  let promptedWith = null;
+  await page.evaluate(() => {
+    window.prompt = (msg, def) => {
+      window.__lastPromptDefault = def;
+      return 'The Complete Mug Guide';
+    };
+  });
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("rename contents title")'));
+  promptedWith = await page.evaluate(() => window.__lastPromptDefault);
+  expect(promptedWith).toBe('Contents');
+
+  await expect(page.locator('.documentTOC h1')).toHaveText('The Complete Mug Guide');
+
+  // Regenerating the TOC (e.g. after adding another heading) must keep the renamed title,
+  // not reset it back to "Contents".
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("create / update TOC")'));
+  await expect(page.locator('.documentTOC h1')).toHaveText('The Complete Mug Guide');
+});
+
+test('print / save PDF builds one print page per document/TOC page, not just the first', async ({ page }) => {
+  // Real request: printing a manual only showed the TOC in the preview, not the other pages.
+  // ppPrintDocument() builds its own off-screen #ppDocumentPrintRoot before calling
+  // window.print() - if it silently dropped pages, the built root itself would already be
+  // short, regardless of what the OS print dialog then does with it.
+  await openDocumentPage(page);
+  const result = await page.evaluate(async () => {
+    for (let i = 0; i < 4; i++) {
+      window.addDocumentLitePage();
+      current().docHtml = `<h1>Chapter ${i + 1}</h1><p>Body text ${i + 1}</p>`;
+    }
+    window.ppUpdateDocumentTOC();
+    let printed = false;
+    window.print = () => { printed = true; };
+    window.ppPrintDocument();
+    await new Promise((r) => setTimeout(r, 250));
+    const root = document.getElementById('ppDocumentPrintRoot');
+    return {
+      printed,
+      printPageCount: root ? root.querySelectorAll('.ppPrintPage').length : 0,
+      docPageCount: state.pages.filter((p) => p.documentLite || p.type === 'Document' || p.type === 'Document TOC').length,
+      rootDisplayOnScreen: root ? getComputedStyle(root).display : null,
+    };
+  });
+
+  expect(result.printed).toBe(true);
+  expect(result.docPageCount).toBe(6); // openDocumentPage's page + 4 chapters + TOC
+  expect(result.printPageCount).toBe(result.docPageCount);
+  // Outside of @media print, the print root must stay hidden - it isn't part of the app UI.
+  expect(result.rootDisplayOnScreen).toBe('none');
+});

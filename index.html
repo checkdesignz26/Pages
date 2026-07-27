@@ -14689,7 +14689,8 @@ else install();
 .documentOverflowWarning{position:absolute;right:12px;bottom:11px;background:#7b3f91;color:white;border-radius:999px;padding:5px 9px;font:800 10px system-ui;display:none}.documentPaper.hasOverflow .documentOverflowWarning{display:block}
 .documentTOC{height:100%;overflow:hidden}.documentTOC h1{font-size:2em;margin:0 0 .8em}.documentTOCRow{display:grid;grid-template-columns:1fr auto;gap:12px;border-bottom:1px dotted #b6aaba;padding:7px 0;font-size:16px}.documentTOCRow.level2{padding-left:22px;font-size:14px}
 .documentLiteBox{border-color:rgba(255,142,214,.25)!important;background:linear-gradient(180deg,rgba(255,142,214,.055),rgba(255,255,255,.03))!important}.documentLiteBox .docQuickStyles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}.documentLiteBox .docQuickStyles button{font-size:11px!important;padding:7px 4px!important}.documentLiteBox input[type=file]{display:none}.documentLiteStatus{font-size:11px;line-height:1.3;color:#d8cede;margin-top:7px}
-@media print{body>*{display:none!important}#ppDocumentPrintRoot{display:block!important}.ppPrintPage{position:relative;width:210mm;height:297mm;page-break-after:always;background:#fff;color:#222;padding:22mm 18mm 20mm;font-family:Georgia,serif;overflow:hidden}.ppPrintPage:last-child{page-break-after:auto}.ppPrintPage h1{font-size:26pt}.ppPrintPage h2{font-size:18pt}.ppPrintPage p{font-size:11.5pt;line-height:1.55}.ppPrintPage img{max-width:100%;max-height:110mm;display:block;margin:5mm auto}.ppPrintNumber{position:absolute;bottom:9mm;left:0;right:0;text-align:center;font:10pt system-ui;color:#666}}
+#ppDocumentPrintRoot{display:none}
+@media print{@page{size:A4;margin:0}body>*{display:none!important}#ppDocumentPrintRoot{display:block!important}.ppPrintPage{position:relative;width:210mm;height:297mm;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;background:#fff;color:#222;padding:22mm 18mm 20mm;font-family:Georgia,serif;overflow:hidden}.ppPrintPage:last-child{page-break-after:auto;break-after:auto}.ppPrintPage h1{font-size:26pt}.ppPrintPage h2{font-size:18pt}.ppPrintPage p{font-size:11.5pt;line-height:1.55}.ppPrintPage img{max-width:100%;max-height:110mm;display:block;margin:5mm auto}.ppPrintNumber{position:absolute;bottom:9mm;left:0;right:0;text-align:center;font:10pt system-ui;color:#666}}
 </style>
 <script id="pp-document-lite-script-v155">
 (function(){
@@ -14811,21 +14812,37 @@ else install();
   window.ppDocInsertLink=function(){const ed=selectedEditor();if(!ed){alert('Select a document page first.');return}const url=prompt('Paste the download or website link:');if(!url)return;ed.focus();document.execCommand('createLink',false,url);ed.dispatchEvent(new Event('input',{bubbles:true}));}
   window.ppDocChooseImage=function(){const f=document.getElementById('ppDocImageInput');if(f)f.click()}
   window.ppDocInsertImage=function(input){const file=input.files&&input.files[0];if(!file)return;const ed=selectedEditor();if(!ed)return;const r=new FileReader();r.onload=()=>{ed.focus();document.execCommand('insertHTML',false,`<img src="${r.result}" alt="manual image"><p><br></p>`);ed.dispatchEvent(new Event('input',{bubbles:true}));input.value=''};r.readAsDataURL(file)}
+  function escTitle(s){return String(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
   window.ppUpdateDocumentTOC=function(){
     if(typeof save==='function')save();
     let headings=[];pages().forEach((p,i)=>{if(!isDoc(p)||p.docTOC)return;const d=document.createElement('div');d.innerHTML=p.docHtml||'';d.querySelectorAll('h1,h2').forEach(h=>headings.push({text:h.textContent.trim()||'Untitled heading',level:h.tagName==='H2'?2:1,page:docPageNumber(i)}))});
-    let toc=pages().find(p=>p.docTOC);if(!toc){toc={type:'Document TOC',w:DOC_W,h:DOC_H,layers:[],documentLite:true,docTOC:true,docHtml:''};const first=pages().findIndex(isDoc);pages().splice(first<0?0:first,0,toc);state.selectedPage=first<0?0:first}
-    toc.docHtml='<h1>Contents</h1>'+headings.map(h=>`<div class="documentTOCRow level${h.level}"><span>${h.text}</span><strong>${h.page}</strong></div>`).join('')+(headings.length?'':'<p>Add Heading 1 or Heading 2 text, then update the TOC.</p>');render();if(typeof scrollSel==='function')scrollSel();
+    let toc=pages().find(p=>p.docTOC);if(!toc){toc={type:'Document TOC',w:DOC_W,h:DOC_H,layers:[],documentLite:true,docTOC:true,docHtml:'',tocTitle:'Contents'};const first=pages().findIndex(isDoc);pages().splice(first<0?0:first,0,toc);state.selectedPage=first<0?0:first}
+    toc.docHtml=`<h1>${escTitle(toc.tocTitle||'Contents')}</h1>`+headings.map(h=>`<div class="documentTOCRow level${h.level}"><span>${h.text}</span><strong>${h.page}</strong></div>`).join('')+(headings.length?'':'<p>Add Heading 1 or Heading 2 text, then update the TOC.</p>');render();if(typeof scrollSel==='function')scrollSel();
+  }
+  window.ppRenameDocTOC=function(){
+    const toc=pages().find(p=>p.docTOC);
+    if(!toc){alert('Create the TOC first with "create / update TOC".');return}
+    const name=prompt('Title for the contents page',toc.tocTitle||'Contents');
+    if(name==null||!name.trim())return;
+    toc.tocTitle=name.trim();
+    window.ppUpdateDocumentTOC();
   }
   window.ppPrintDocument=function(){
     const docs=pages().filter(isDoc);if(!docs.length){alert('Add a document page first.');return}
     let root=document.getElementById('ppDocumentPrintRoot');if(root)root.remove();root=document.createElement('div');root.id='ppDocumentPrintRoot';
-    docs.forEach((p,i)=>{const pg=document.createElement('section');pg.className='ppPrintPage';pg.innerHTML=p.docHtml||'';const n=document.createElement('div');n.className='ppPrintNumber';n.textContent=i+1;pg.appendChild(n);root.appendChild(pg)});document.body.appendChild(root);setTimeout(()=>window.print(),100)
+    docs.forEach((p,i)=>{const pg=document.createElement('section');pg.className='ppPrintPage';pg.innerHTML=p.docHtml||'';const n=document.createElement('div');n.className='ppPrintNumber';n.textContent=i+1;pg.appendChild(n);root.appendChild(pg)});
+    document.body.appendChild(root);
+    // Force a full layout pass (fonts/images inside docHtml) before invoking print - some
+    // WebKit builds capture a stale/incomplete layout when print() fires immediately after
+    // a large DOM insertion like this one, which can under-count the number of pages.
+    root.getBoundingClientRect();
+    window.addEventListener('afterprint',function cleanup(){root.remove();window.removeEventListener('afterprint',cleanup)});
+    requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(()=>window.print(),60)));
   }
   function installPanel(){
     if(document.getElementById('ppDocumentLitePanel'))return;
     const pageList=document.getElementById('pageList');const box=pageList&&pageList.closest('.box');if(!box)return;
-    const panel=document.createElement('div');panel.id='ppDocumentLitePanel';panel.className='box documentLiteBox';panel.innerHTML=`<h2>document mode lite</h2><div class="panelBody"><p class="smallText">Write a manual or welcome PDF. Text flows onto a new A4 page automatically.</p><button class="full primary" onclick="addDocumentLitePage()">add document page</button><div class="docQuickStyles"><button onclick="ppDocStyle('h1')">heading 1</button><button onclick="ppDocStyle('h2')">heading 2</button><button onclick="ppDocStyle('p')">body</button></div><div class="grid2"><button onclick="ppDocInsertLink()">add link</button><button onclick="ppDocChooseImage()">add image</button></div><input id="ppDocImageInput" type="file" accept="image/*" onchange="ppDocInsertImage(this)"><button class="full" onclick="ppUpdateDocumentTOC()">create / update TOC</button><button class="full" onclick="ppPrintDocument()">print / save PDF</button><div class="documentLiteStatus">Automatic page numbers appear at the bottom of every document page.</div></div>`;
+    const panel=document.createElement('div');panel.id='ppDocumentLitePanel';panel.className='box documentLiteBox';panel.innerHTML=`<h2>document mode lite</h2><div class="panelBody"><p class="smallText">Write a manual or welcome PDF. Text flows onto a new A4 page automatically.</p><button class="full primary" onclick="addDocumentLitePage()">add document page</button><div class="docQuickStyles"><button onclick="ppDocStyle('h1')">heading 1</button><button onclick="ppDocStyle('h2')">heading 2</button><button onclick="ppDocStyle('p')">body</button></div><div class="grid2"><button onclick="ppDocInsertLink()">add link</button><button onclick="ppDocChooseImage()">add image</button></div><input id="ppDocImageInput" type="file" accept="image/*" onchange="ppDocInsertImage(this)"><div class="grid2"><button onclick="ppUpdateDocumentTOC()">create / update TOC</button><button onclick="ppRenameDocTOC()">rename contents title</button></div><button class="full" onclick="ppPrintDocument()">print / save PDF</button><div class="documentLiteStatus">Automatic page numbers appear at the bottom of every document page.</div></div>`;
     box.insertAdjacentElement('afterend',panel);
   }
   const oldRenderPages=window.renderPages;window.renderPages=function(){oldRenderPages.apply(this,arguments);decorate()};
