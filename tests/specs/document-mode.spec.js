@@ -264,3 +264,41 @@ test('pressing Enter after a heading drops back to body text instead of leaving 
   await expect(page.locator('.documentTOC')).not.toContainText('Untitled heading');
   await expect(page.locator('.documentTOCRow')).toHaveCount(1);
 });
+
+test('creating the TOC for the first time does not clobber it with the page content that was focused', async ({ page }) => {
+  // Real request: bolding a line of body text on a document page, then generating the TOC,
+  // left that same body text sitting on the "Contents" page instead of the generated listing.
+  // Root cause - creating the TOC for the first time inserts it at index 0, shifting every
+  // other page's array index by one. The page that was focused still had a *.documentEditor*
+  // DOM node wired up with its OLD index baked into a WeakMap/dataset lookup; the DOM rebuild
+  // that follows fires a synchronous blur on that focused, about-to-be-replaced editor, which
+  // saved its content onto whatever page now sits at that stale old index - the brand new TOC.
+  await openDocumentPage(page);
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.innerHTML = '<p>Welcome to Pattern Pages! 🎉</p><p>Second paragraph.</p>';
+    ed.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.click('.documentEditor p');
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    const p = ed.querySelector('p');
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    ed.focus();
+  });
+  await page.evaluate(() => window.toggleBold());
+
+  await expandAllBoxes(page);
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("create / update toc")'));
+  await page.waitForSelector('.documentTOC');
+  await page.waitForTimeout(300);
+
+  const pages = await page.evaluate(() => state.pages.map((p) => ({ docTOC: !!p.docTOC, docHtml: p.docHtml })));
+  expect(pages[0].docTOC).toBe(true);
+  expect(pages[0].docHtml).not.toContain('Welcome to Pattern Pages');
+  expect(pages[1].docHtml).toContain('Welcome to Pattern Pages');
+});

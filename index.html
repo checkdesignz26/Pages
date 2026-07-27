@@ -14744,6 +14744,13 @@ else install();
     return clone.outerHTML;
   }
   function moveOverflow(index,editor){
+    // A page inserted/removed elsewhere (e.g. the TOC going in at index 0) shifts every
+    // later page's array index, but a moveOverflow already scheduled via setTimeout before
+    // that happened still carries its OLD index in closure. If it fires afterward, it would
+    // otherwise write this now-orphaned editor's content onto whatever page now sits at that
+    // stale index instead of the page it actually belongs to - bailing out here if the editor
+    // has since been detached from the DOM (replaced by a fresh one) avoids that.
+    if(!editor||!document.body.contains(editor))return false;
     const paper=editor.closest('.documentPaper');
     let guard=0,moved=[];
     while(editor.scrollHeight>editor.clientHeight+2&&editor.lastElementChild&&guard++<100){
@@ -14765,6 +14772,8 @@ else install();
     return false;
   }
   function pullBack(index,editor){
+    // Same stale-index guard as moveOverflow above.
+    if(!editor||!document.body.contains(editor))return;
     const ni=nextDocIndex(index,false);if(ni<0)return;
     const np=pages()[ni];if(!np||np.docTOC)return;
     const temp=document.createElement('div');temp.innerHTML=np.docHtml||'';
@@ -17662,7 +17671,17 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   function editorFrom(node){
     return node&&node.closest ? node.closest('.documentEditor.ppPersistentDoc183') : null;
   }
+  // Inserting/removing a page anywhere (e.g. the TOC always going in at index 0) shifts every
+  // later page's array index. editor.dataset.pageIndex is only ever set once, at creation, so
+  // an editor that's still alive when that happens is left carrying a now-wrong index - a
+  // blur fired while the DOM is mid-rebuild for that same change (still "attached" by
+  // document.contains at that instant, so that alone doesn't catch it) would then save this
+  // editor's content onto whichever page now happens to sit at its stale index. Map each
+  // editor straight to the exact page object it was built for instead, so lookups stay
+  // correct no matter how the array gets reordered afterward.
+  var editorPageMap=new WeakMap();
   function pageForEditor(editor){
+    if(editorPageMap.has(editor)) return editorPageMap.get(editor);
     try{
       var i=Number(editor.dataset.pageIndex);
       return state&&state.pages&&state.pages[i] ? state.pages[i] : null;
@@ -17875,6 +17894,7 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     if(!editor||editor.dataset.ppPersistent183==='yes')return;
     var page=pageForEditor(editor);
     if(!page||page.docTOC)return;
+    editorPageMap.set(editor,page);
     editor.dataset.ppPersistent183='yes';
     editor.classList.add('ppPersistentDoc183');
     editor.contentEditable='true';
