@@ -1282,6 +1282,7 @@ body.autoGroupEditing .layer.collectionGrouped{
       <button onclick="restoreAutoSave()">restore autosave</button>
       <button onclick="quickSaveProject()">quick save</button>
       <button onclick="quickLoadProject()">quick load</button>
+      <button onclick="ppShowDebugReport()">debug report</button>
     </div>
     <div class="actionGroup softGroup compactTools">
       <button onclick="zoomPage(-0.05)">−</button>
@@ -5791,7 +5792,10 @@ aside:last-of-type .shadowSliderBox{
     const bytes=new Uint8Array(out.length);for(let i=0;i<out.length;i++)bytes[i]=out.charCodeAt(i)&255;
     return new Blob([bytes],{type:'application/pdf'});
   }
-  function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);}
+  function downloadBlob(blob,name){
+    if(typeof window.ppDebugLog==='function')window.ppDebugLog('downloadBlob:called',{name,size:blob&&blob.size,type:blob&&blob.type,trusted:!!(window.event&&window.event.isTrusted)});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+  }
   window.makePdfBlobFromPages=makePdfBlobFromPages;
   window.downloadBlob=downloadBlob;
   async function pageToPdfItem(p){
@@ -14982,19 +14986,44 @@ else install();
     function close(){overlay.remove()}
     box.querySelector('#ppPdfReadyClose').addEventListener('click',close);
     overlay.addEventListener('click',function(e){if(e.target===overlay)close()});
-    box.querySelector('#ppPdfReadyDownload').addEventListener('click',function(){window.downloadBlob(blob,filename);close()});
+    box.querySelector('#ppPdfReadyDownload').addEventListener('click',function(){
+      if(typeof window.ppDebugLog==='function')window.ppDebugLog('ppPdfReadyDialog:download-clicked',{filename:filename,size:blob.size});
+      window.downloadBlob(blob,filename);
+      close();
+    });
   }
   window.ppPrintDocument=async function(){
-    const docs=pages().filter(isDoc);if(!docs.length){alert('Add a document page first.');return}
+    const dlog=typeof window.ppDebugLog==='function'?window.ppDebugLog:function(){};
+    const docs=pages().filter(isDoc);
+    dlog('ppPrintDocument:start',{docCount:docs.length});
+    if(!docs.length){alert('Add a document page first.');return}
     const hideNotice=ppShowPdfBuildingNotice();
     const items=[];
-    for(let i=0;i<docs.length;i++){
-      const canvas=await ppRasterizeDocPage(docs[i].docHtml,DOC_W,DOC_H,i+1);
-      items.push({w:DOC_W,h:DOC_H,dataUrl:canvas.toDataURL('image/jpeg',0.92),links:[]});
+    try{
+      for(let i=0;i<docs.length;i++){
+        const canvas=await ppRasterizeDocPage(docs[i].docHtml,DOC_W,DOC_H,i+1);
+        dlog('ppPrintDocument:page-rasterized',{index:i,ok:!!canvas});
+        items.push({w:DOC_W,h:DOC_H,dataUrl:canvas.toDataURL('image/jpeg',0.92),links:[]});
+      }
+    }catch(e){
+      dlog('ppPrintDocument:rasterize-threw',{error:String(e)});
+      hideNotice();
+      alert('Could not build the PDF - please try again.');
+      return;
     }
     hideNotice();
-    if(!items.length){alert('Could not build the PDF - please try again.');return}
-    ppShowPdfReadyDialog(window.makePdfBlobFromPages(items),'pattern-pages-manual.pdf');
+    if(!items.length){dlog('ppPrintDocument:no-items');alert('Could not build the PDF - please try again.');return}
+    let blob;
+    try{
+      blob=window.makePdfBlobFromPages(items);
+    }catch(e){
+      dlog('ppPrintDocument:makePdfBlobFromPages-threw',{error:String(e)});
+      alert('Could not build the PDF - please try again.');
+      return;
+    }
+    dlog('ppPrintDocument:blob-built',{size:blob.size,pages:items.length});
+    ppShowPdfReadyDialog(blob,'pattern-pages-manual.pdf');
+    dlog('ppPrintDocument:ready-dialog-shown');
   }
   function installPanel(){
     if(document.getElementById('ppDocumentLitePanel'))return;
@@ -17915,10 +17944,26 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     }
   }
   function exec(command,value){
-    if(!activeEditor||!document.contains(activeEditor))return false;
+    if(!activeEditor||!document.contains(activeEditor)){
+      if(typeof window.ppDebugLog==='function')window.ppDebugLog('exec:no-active-editor',{command:command,value:value});
+      return false;
+    }
     restoreRange();
+    var dbgBlockTag=null;
+    if(command==='fontName'&&typeof window.ppDebugLog==='function'){
+      try{
+        var selDbg=window.getSelection();
+        var nodeDbg=selDbg&&selDbg.anchorNode?(selDbg.anchorNode.nodeType===1?selDbg.anchorNode:selDbg.anchorNode.parentElement):null;
+        var blockDbg=nodeDbg&&nodeDbg.closest?nodeDbg.closest('h1,h2,p,div'):null;
+        dbgBlockTag=blockDbg?blockDbg.tagName:null;
+        window.ppDebugLog('exec:fontName:before',{value:value,blockTag:dbgBlockTag,computedFontBefore:nodeDbg?getComputedStyle(nodeDbg).fontFamily:null});
+      }catch(e){}
+    }
     try{document.execCommand('styleWithCSS',false,true)}catch(e){}
-    try{document.execCommand(command,false,value===undefined?null:value)}catch(e){return false}
+    try{document.execCommand(command,false,value===undefined?null:value)}catch(e){
+      if(typeof window.ppDebugLog==='function')window.ppDebugLog('exec:execCommand-threw',{command:command,value:value,error:String(e)});
+      return false;
+    }
     if(command==='fontName'){
       // Some engines nest a new font-family span around (rather than replacing) text that's
       // already wrapped in one from a previous font choice, instead of updating it in place -
@@ -17938,6 +17983,13 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
           }
         }
       }catch(e){}
+      if(typeof window.ppDebugLog==='function'){
+        try{
+          var selAfter=window.getSelection();
+          var nodeAfter=selAfter&&selAfter.anchorNode?(selAfter.anchorNode.nodeType===1?selAfter.anchorNode:selAfter.anchorNode.parentElement):null;
+          window.ppDebugLog('exec:fontName:after',{value:value,blockTag:dbgBlockTag,computedFontAfter:nodeAfter?getComputedStyle(nodeAfter).fontFamily:null});
+        }catch(e){}
+      }
     }
     rememberRange();
     saveEditor(activeEditor,false);
@@ -17991,7 +18043,7 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     cleanClone('italicBtn',function(e){e.preventDefault();window.toggleItalic();});
 
     var map={
-      fontFamily:function(el){exec('fontName',el.value)},
+      fontFamily:function(el){if(typeof window.ppDebugLog==='function')window.ppDebugLog('fontFamily:change',{value:el.value,hasActiveEditor:!!activeEditor});exec('fontName',el.value)},
       fontSize:function(el){applyCss('font-size',Number(el.value||20)+'px')},
       lineHeight:function(el){applyCss('line-height',(Number(el.value||155)/100).toString())},
       letterSpacing:function(el){applyCss('letter-spacing',Number(el.value||0)+'px')},
@@ -18529,6 +18581,84 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     showcase.forEach(function(l){ l.z = z++; });
     others.forEach(function(l){ l.z = z++; });
   };
+})();
+</script>
+
+<!-- Debug report tool: a couple of real-device bugs (font switching in document mode, PDF
+     export) have resisted several rounds of blind fixes because they can't be reproduced in
+     headless testing. This gives a way to actually see what happened on the real device: a
+     small in-memory log of key events plus any uncaught JS errors, exportable as text. -->
+<script id="pp-debug-report-tool">
+(function(){
+  'use strict';
+  if(window.__PP_DEBUG_REPORT__)return;
+  window.__PP_DEBUG_REPORT__=true;
+  var LOG_MAX=300;
+  var log=[];
+  function fmtTime(t){return new Date(t).toISOString().split('T')[1].replace('Z','')}
+  window.ppDebugLog=function(msg,data){
+    try{
+      var entry={t:Date.now(),msg:msg};
+      if(data!==undefined){try{entry.data=JSON.stringify(data)}catch(e){entry.data=String(data)}}
+      log.push(entry);
+      if(log.length>LOG_MAX)log.shift();
+    }catch(e){}
+  };
+  window.addEventListener('error',function(e){
+    window.ppDebugLog('window.error',{message:e.message,source:(e.filename||'').split('/').pop(),line:e.lineno});
+  });
+  window.addEventListener('unhandledrejection',function(e){
+    window.ppDebugLog('unhandledrejection',{reason:String((e.reason&&e.reason.message)||e.reason)});
+  });
+  function buildReportText(){
+    var lines=[];
+    lines.push('Pattern Pages debug report');
+    lines.push('Generated: '+new Date().toString());
+    lines.push('User agent: '+navigator.userAgent);
+    lines.push('Viewport: '+window.innerWidth+'x'+window.innerHeight);
+    lines.push('');
+    lines.push('--- Log ('+log.length+' entries) ---');
+    log.forEach(function(e){lines.push('['+fmtTime(e.t)+'] '+e.msg+(e.data?' '+e.data:''))});
+    return lines.join('\n');
+  }
+  function showReportDialog(){
+    var old=document.getElementById('ppDebugReportOverlay');if(old)old.remove();
+    var overlay=document.createElement('div');
+    overlay.id='ppDebugReportOverlay';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(10,8,18,.55);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:20px;';
+    var box=document.createElement('div');
+    box.style.cssText='background:#1c1626;border:1px solid rgba(255,232,248,.18);border-radius:16px;padding:20px;max-width:520px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.5);';
+    var text=buildReportText();
+    box.innerHTML='<div style="color:#fff8fb;font:900 15px system-ui;margin-bottom:10px;">Debug report</div>'+
+      '<div style="color:rgba(216,206,222,.8);font-size:12px;margin-bottom:10px;line-height:1.4;">Reproduce the issue first, then open this and send the text below.</div>'+
+      '<textarea id="ppDebugReportText" readonly style="width:100%;height:260px;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid rgba(255,232,248,.24);background:rgba(255,255,255,.06);color:#fff8fb;font-size:11px;font-family:monospace;margin-bottom:14px;"></textarea>'+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">'+
+      '<button type="button" id="ppDebugReportClose" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:#fff8fb;font-weight:700;">Close</button>'+
+      '<button type="button" id="ppDebugReportCopy" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.3);background:rgba(255,255,255,.08);color:#fff8fb;font-weight:800;">Copy</button>'+
+      '<button type="button" id="ppDebugReportDownload" style="padding:9px 16px;border-radius:10px;border:0;background:linear-gradient(135deg,#9b6bff,#ff8ed6);color:#fff;font-weight:800;">Download .txt</button>'+
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    var ta=box.querySelector('#ppDebugReportText');
+    ta.value=text;
+    function close(){overlay.remove()}
+    box.querySelector('#ppDebugReportClose').addEventListener('click',close);
+    overlay.addEventListener('click',function(e){if(e.target===overlay)close()});
+    box.querySelector('#ppDebugReportCopy').addEventListener('click',function(){
+      ta.focus();ta.select();
+      try{document.execCommand('copy')}catch(e){}
+      try{navigator.clipboard&&navigator.clipboard.writeText(text)}catch(e){}
+    });
+    box.querySelector('#ppDebugReportDownload').addEventListener('click',function(){
+      var blob=new Blob([text],{type:'text/plain'});
+      var a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download='pattern-pages-debug-report.txt';
+      document.body.appendChild(a);a.click();a.remove();
+      setTimeout(function(){URL.revokeObjectURL(a.href)},1500);
+    });
+  }
+  window.ppShowDebugReport=showReportDialog;
 })();
 </script>
 
