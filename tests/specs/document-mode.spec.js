@@ -207,7 +207,7 @@ test('the TOC title can be renamed and survives a later "update TOC" regeneratio
   await expect(page.locator('.documentTOC h1')).toHaveText('The Complete Mug Guide');
 });
 
-test('print / save PDF downloads a real multi-page PDF with one page per document/TOC page', async ({ page }) => {
+test('print / save PDF builds a real multi-page PDF with one page per document/TOC page', async ({ page }) => {
   // Real request: printing a manual only showed the first page in the preview, not the other
   // 19. window.print()'s CSS pagination turned out to be unreliable for this dynamically-built
   // content on iOS Safari across more than one CSS-only fix attempt, so "print / save PDF" now
@@ -215,33 +215,40 @@ test('print / save PDF downloads a real multi-page PDF with one page per documen
   // all) and builds a real downloadable multi-page PDF file directly - this asserts the PDF
   // byte stream itself contains one page object per document/TOC page.
   await openDocumentPage(page);
-  const result = await page.evaluate(async () => {
+  await page.evaluate(() => {
     for (let i = 0; i < 4; i++) {
       window.addDocumentLitePage();
       current().docHtml = `<h1>Chapter ${i + 1}</h1><p>Body text ${i + 1}</p>`;
     }
     window.ppUpdateDocumentTOC();
-
-    let capturedBlob = null;
-    const origDownloadBlob = window.downloadBlob;
-    window.downloadBlob = (blob) => { capturedBlob = blob; };
-    await window.ppPrintDocument();
-    window.downloadBlob = origDownloadBlob;
-
-    const docPageCount = state.pages.filter((p) => p.documentLite || p.type === 'Document' || p.type === 'Document TOC').length;
-    if (!capturedBlob) return { docPageCount, pdfPageCount: 0, isPdf: false };
-    const bytes = new Uint8Array(await capturedBlob.arrayBuffer());
-    const text = new TextDecoder('latin1').decode(bytes);
-    return {
-      docPageCount,
-      pdfPageCount: (text.match(/\/Type \/Page\b/g) || []).length,
-      isPdf: text.startsWith('%PDF-'),
-    };
   });
 
-  expect(result.docPageCount).toBe(6); // openDocumentPage's page + 4 chapters + TOC
+  const resultPromise = page.evaluate(() => new Promise((resolve) => {
+    const orig = window.downloadBlob;
+    window.downloadBlob = async (blob) => {
+      window.downloadBlob = orig;
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const text = new TextDecoder('latin1').decode(bytes);
+      resolve({
+        isPdf: text.startsWith('%PDF-'),
+        pdfPageCount: (text.match(/\/Type \/Page\b/g) || []).length,
+      });
+    };
+  }));
+
+  await expandAllBoxes(page);
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("print / save pdf")'));
+  // The PDF is built (rasterized page by page) before the ready dialog appears, so the actual
+  // download only fires from that dialog's own button - a fresh tap, not a stale one carried
+  // over from the original click through however long rasterization took.
+  await page.waitForSelector('#ppPdfReadyDownload', { timeout: 10000 });
+  await page.click('#ppPdfReadyDownload');
+  const result = await resultPromise;
+
+  const docPageCount = await page.evaluate(() => state.pages.filter((p) => p.documentLite || p.type === 'Document' || p.type === 'Document TOC').length);
+  expect(docPageCount).toBe(6); // openDocumentPage's page + 4 chapters + TOC
   expect(result.isPdf).toBe(true);
-  expect(result.pdfPageCount).toBe(result.docPageCount);
+  expect(result.pdfPageCount).toBe(docPageCount);
 });
 
 test('pressing Enter after a heading drops back to body text instead of leaving another heading', async ({ page }) => {

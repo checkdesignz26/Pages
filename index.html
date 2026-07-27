@@ -14950,15 +14950,51 @@ else install();
     ctx.fillText(String(pageNum),w/2,h-pad.bottom+40);ctx.textAlign='left';
     return canvas;
   }
+  function ppShowPdfBuildingNotice(){
+    const old=document.getElementById('ppPdfNoticeOverlay');if(old)old.remove();
+    const overlay=document.createElement('div');
+    overlay.id='ppPdfNoticeOverlay';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(10,8,18,.55);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML='<div style="background:#1c1626;border:1px solid rgba(255,232,248,.18);border-radius:16px;padding:20px 28px;color:#fff8fb;font:800 15px system-ui;box-shadow:0 20px 50px rgba(0,0,0,.5);">Building your PDF…</div>';
+    document.body.appendChild(overlay);
+    return function(){overlay.remove()};
+  }
+  // Rasterizing every page takes real, visible time for a long manual - by the time that
+  // finishes, the tap that started it is no longer a "fresh" gesture. iOS Safari can silently
+  // drop a download triggered from a stale gesture (the exact same class of bug already fixed
+  // once in this app for the Save As flow - see the NOTE above ppShowSaveAsDialog). So the PDF
+  // is built first, then offered via its own button; THAT click is a brand new gesture, so the
+  // download it triggers is never at risk of being silently dropped.
+  function ppShowPdfReadyDialog(blob,filename){
+    const old=document.getElementById('ppPdfNoticeOverlay');if(old)old.remove();
+    const overlay=document.createElement('div');
+    overlay.id='ppPdfReadyOverlay';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(10,8,18,.55);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:20px;';
+    const box=document.createElement('div');
+    box.style.cssText='background:#1c1626;border:1px solid rgba(255,232,248,.18);border-radius:16px;padding:20px;max-width:340px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.5);text-align:center;';
+    box.innerHTML='<div style="color:#fff8fb;font:900 15px system-ui;margin-bottom:14px;">Your PDF is ready</div>'+
+      '<div style="display:flex;gap:8px;justify-content:center;">'+
+      '<button type="button" id="ppPdfReadyClose" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:#fff8fb;font-weight:700;">Close</button>'+
+      '<button type="button" id="ppPdfReadyDownload" style="padding:9px 16px;border-radius:10px;border:0;background:linear-gradient(135deg,#9b6bff,#ff8ed6);color:#fff;font-weight:800;">Download PDF</button>'+
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function close(){overlay.remove()}
+    box.querySelector('#ppPdfReadyClose').addEventListener('click',close);
+    overlay.addEventListener('click',function(e){if(e.target===overlay)close()});
+    box.querySelector('#ppPdfReadyDownload').addEventListener('click',function(){window.downloadBlob(blob,filename);close()});
+  }
   window.ppPrintDocument=async function(){
     const docs=pages().filter(isDoc);if(!docs.length){alert('Add a document page first.');return}
+    const hideNotice=ppShowPdfBuildingNotice();
     const items=[];
     for(let i=0;i<docs.length;i++){
       const canvas=await ppRasterizeDocPage(docs[i].docHtml,DOC_W,DOC_H,i+1);
       items.push({w:DOC_W,h:DOC_H,dataUrl:canvas.toDataURL('image/jpeg',0.92),links:[]});
     }
+    hideNotice();
     if(!items.length){alert('Could not build the PDF - please try again.');return}
-    window.downloadBlob(window.makePdfBlobFromPages(items),'pattern-pages-manual.pdf');
+    ppShowPdfReadyDialog(window.makePdfBlobFromPages(items),'pattern-pages-manual.pdf');
   }
   function installPanel(){
     if(document.getElementById('ppDocumentLitePanel'))return;
