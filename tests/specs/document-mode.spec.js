@@ -379,3 +379,22 @@ test('the on-screen keyboard opening scrolls the focused document page back into
   expect(scrolledInto).not.toBeNull();
   expect(scrolledInto.block).toBe('center');
 });
+
+test('PDF export renders the actual font applied to each run, not always Georgia', async ({ page }) => {
+  // Real request: the downloaded PDF always came out in the default font, ignoring whatever
+  // font was applied to the text in the editor. Root cause - ppDrawDocBlock() hardcoded
+  // "Georgia, serif" into every ctx.font string it built, and ppFlattenInlineRuns() never even
+  // read a span's font-family in the first place. Fixed by tracking font-family per inline run
+  // (from the span's own inline style, since this off-screen rasterization holder never gets
+  // the app's real CSS classes) and using it when drawing. Verified here by rendering the same
+  // text in two different fonts and confirming the rasterized pixels actually differ - if the
+  // font were still hardcoded, both renders would be pixel-identical.
+  const htmlFor = (font) => `<p><span style="font-family: '${font}';">The quick brown fox jumps.</span></p>`;
+  const [georgiaPng, courierPng] = await page.evaluate(async ([hGeorgia, hCourier]) => {
+    const c1 = await window.ppRasterizeDocPage(hGeorgia, 1240, 1754, 1);
+    const c2 = await window.ppRasterizeDocPage(hCourier, 1240, 1754, 1);
+    return [c1.toDataURL('image/png'), c2.toDataURL('image/png')];
+  }, [htmlFor('Georgia'), htmlFor('Courier New')]);
+
+  expect(georgiaPng).not.toBe(courierPng);
+});

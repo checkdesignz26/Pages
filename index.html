@@ -14871,7 +14871,7 @@ else install();
   // foreignObject, no tainting, and unlike window.print() this can be verified end-to-end
   // in tests instead of only on a real device.
   function ppFlattenInlineRuns(node,style,runs){
-    style=style||{bold:false,italic:false,color:'#222'};
+    style=style||{bold:false,italic:false,color:'#222',fontFamily:'Georgia'};
     node.childNodes.forEach(function(child){
       if(child.nodeType===3){if(child.textContent)runs.push(Object.assign({text:child.textContent},style));return}
       if(child.nodeType!==1)return;
@@ -14879,10 +14879,16 @@ else install();
       if(tag==='BR'){runs.push(Object.assign({text:'\n'},style));return}
       if(tag==='IMG'){runs.push(Object.assign({img:child.getAttribute('src')},style));return}
       const cs=getComputedStyle(child);
+      // Read the element's OWN inline font-family directly rather than its computed style -
+      // this detached off-screen holder never gets the app's real .documentEditor/.documentPaper
+      // classes, so getComputedStyle's fallback for plain untouched text would be whatever the
+      // browser's bare UA default is, not this app's actual Georgia default.
+      const inlineFont=(child.style&&child.style.fontFamily)?child.style.fontFamily.replace(/^["']|["']$/g,''):null;
       ppFlattenInlineRuns(child,{
         bold:style.bold||tag==='B'||tag==='STRONG'||parseInt(cs.fontWeight,10)>=600,
         italic:style.italic||tag==='I'||tag==='EM'||cs.fontStyle==='italic',
-        color:tag==='A'?'#6b42bb':style.color
+        color:tag==='A'?'#6b42bb':style.color,
+        fontFamily:inlineFont||style.fontFamily
       },runs);
     });
   }
@@ -14913,7 +14919,7 @@ else install();
       run.text.split(/(\n)/).forEach(function(part){
         if(part==='')return;
         if(part==='\n'){tokens.push({brk:true});return}
-        part.split(/(\s+)/).forEach(function(w){if(w)tokens.push({text:w,bold:run.bold,italic:run.italic,color:run.color})});
+        part.split(/(\s+)/).forEach(function(w){if(w)tokens.push({text:w,bold:run.bold,italic:run.italic,color:run.color,fontFamily:run.fontFamily})});
       });
     });
     let line=[],lineWidth=0;
@@ -14921,7 +14927,7 @@ else install();
       if(!line.length){y+=lineHeight;return}
       let x=pad.left;
       for(const t of line){
-        ctx.font=`${t.italic?'italic ':''}${t.bold?800:font.weight} ${font.size}px Georgia, serif`;
+        ctx.font=`${t.italic?'italic ':''}${t.bold?800:font.weight} ${font.size}px "${t.fontFamily||'Georgia'}", Georgia, serif`;
         ctx.fillStyle=t.color||'#222';
         ctx.fillText(t.text,x,y+font.size);
         x+=ctx.measureText(t.text).width;
@@ -14942,7 +14948,7 @@ else install();
         }catch(e){}
         continue;
       }
-      ctx.font=`${tok.italic?'italic ':''}${tok.bold?800:font.weight} ${font.size}px Georgia, serif`;
+      ctx.font=`${tok.italic?'italic ':''}${tok.bold?800:font.weight} ${font.size}px "${tok.fontFamily||'Georgia'}", Georgia, serif`;
       const tw=ctx.measureText(tok.text).width;
       if(lineWidth+tw>contentW&&line.length)await flush();
       if(/^\s+$/.test(tok.text)&&!line.length)continue;
@@ -14972,6 +14978,7 @@ else install();
     ctx.fillText(String(pageNum),w/2,h-pad.bottom+40);ctx.textAlign='left';
     return canvas;
   }
+  window.ppRasterizeDocPage=ppRasterizeDocPage;
   function ppShowPdfBuildingNotice(){
     const old=document.getElementById('ppPdfNoticeOverlay');if(old)old.remove();
     const overlay=document.createElement('div');
@@ -15016,6 +15023,17 @@ else install();
     dlog('ppPrintDocument:start',{docCount:docs.length});
     if(!docs.length){alert('Add a document page first.');return}
     const hideNotice=ppShowPdfBuildingNotice();
+    // A custom font that's only ever been applied off-screen (e.g. a page that was never
+    // actually visible/rendered since the upload) may not have finished loading yet - canvas
+    // text silently falls back to the default font for one that isn't ready, with no error.
+    try{
+      if(window.ppCustomFonts){
+        await Promise.all(Object.keys(window.ppCustomFonts).map(function(name){
+          return document.fonts.load('16px "'+name+'"').catch(function(){});
+        }));
+      }
+      await document.fonts.ready;
+    }catch(e){}
     const items=[];
     try{
       for(let i=0;i<docs.length;i++){
