@@ -264,3 +264,23 @@ test('quick load without a prior quick save shows a clear message, no crash', as
   await page.evaluate(() => window.quickLoadProject());
   await expect.poll(() => alertMsg).toBe('No quick save found yet.');
 });
+
+test('downloadBlob opens its link in a new tab, never navigating the app away', async ({ page }) => {
+  // Real report: downloading a PDF opened it in the SAME tab (Safari previewing a PDF blob
+  // instead of honoring the download attribute), replacing the app entirely with no way back.
+  // target=_blank is a no-op when the browser actually downloads the file (no navigation
+  // happens either way), but keeps the app tab alive on the rarer path where a browser
+  // insists on opening/previewing the content instead.
+  const target = await page.evaluate(() => {
+    let captured = null;
+    const origAppend = Node.prototype.appendChild;
+    Node.prototype.appendChild = function (node) {
+      if (node && node.tagName === 'A' && node.download) captured = node.target;
+      return origAppend.call(this, node);
+    };
+    window.downloadBlob(new Blob(['hello'], { type: 'text/plain' }), 'test.txt');
+    Node.prototype.appendChild = origAppend;
+    return captured;
+  });
+  expect(target).toBe('_blank');
+});

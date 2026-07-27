@@ -5805,7 +5805,14 @@ aside:last-of-type .shadowSliderBox{
   }
   function downloadBlob(blob,name){
     if(typeof window.ppDebugLog==='function')window.ppDebugLog('downloadBlob:called',{name,size:blob&&blob.size,type:blob&&blob.type,trusted:!!(window.event&&window.event.isTrusted)});
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;
+    // Real report: downloading the PDF opened it in the SAME tab (Safari previewing a PDF
+    // blob instead of honoring `download`), navigating away from the app entirely with no way
+    // back. target=_blank doesn't change anything when a browser actually downloads the file
+    // (no navigation happens either way), but if it insists on opening/previewing the content
+    // instead, this keeps that in a new tab so the app itself is never navigated away from.
+    a.target='_blank';
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
   }
   window.makePdfBlobFromPages=makePdfBlobFromPages;
   window.downloadBlob=downloadBlob;
