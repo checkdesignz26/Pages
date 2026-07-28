@@ -253,3 +253,80 @@ test('the parked-page preview crops images with object-fit like the real layer, 
   expect(isCloseTo(samples.nearRightEdge[2], 0)).toBe(true);
   expect(isCloseTo(samples.nearRightEdge[1], 255)).toBe(true);
 });
+
+test('the parked-page preview applies mix-blend-mode:multiply for custom mock-ups, instead of drawing the pattern as a flat opaque rectangle', async ({ page }) => {
+  // Real bug (screenshot): a custom mock-up's pattern overlay looked like a flat sticker
+  // slapped on the mug in the parked preview, instead of following the mug's curve like the
+  // real page. The app renders custom mock-ups as two stacked image layers - a background
+  // mock-up photo, plus a masked/warped pattern image on top with CSS
+  // mix-blend-mode:multiply (.layer.customMockupLayer > img, index.html ~line 11314) - which
+  // is what actually blends the pattern into the photo's shape/shading. The old snapshot code
+  // only understood plain source-over compositing, so the overlay came out as an opaque block.
+  // Canvas supports the same blend modes natively via globalCompositeOperation, so use a solid
+  // mid-gray "photo" background and a solid red "pattern" overlay: multiplying red (255,0,0)
+  // with mid-gray (128,128,128) gives a darkened (~128,0,0) result, distinct from both a flat
+  // opaque red rectangle (the bug) and the plain gray backdrop.
+  const graySrc = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 40; c.height = 40;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = 'rgb(128,128,128)';
+    ctx.fillRect(0, 0, 40, 40);
+    return c.toDataURL('image/png');
+  });
+  const redSrc = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 40; c.height = 40;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = 'rgb(255,0,0)';
+    ctx.fillRect(0, 0, 40, 40);
+    return c.toDataURL('image/png');
+  });
+
+  await page.evaluate(({ graySrc, redSrc }) => {
+    save();
+    const bg = { id: 'bg1', type: 'image', src: graySrc, x: 20, y: 20, w: 40, h: 40, z: 1, opacity: 1, r: 0, fit: 'cover' };
+    const overlay = {
+      id: 'mock1', type: 'image', src: redSrc, x: 20, y: 20, w: 40, h: 40, z: 2, opacity: 1, r: 0, fit: 'contain',
+      customMockup: true, customMockupPatternSrc: redSrc, aspect: 1,
+    };
+    state.pages = [
+      { type: 'listing', w: 3000, h: 2250, layers: [bg, overlay] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+    ];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+  }, { graySrc, redSrc });
+
+  await expect(page.locator('.stage[data-page="0"] .layer.customMockupLayer img')).toHaveCount(1);
+  await page.evaluate(() => { state.selectedPage = 2; state.selected = null; render(); });
+
+  const previewImg = page.locator('.stage[data-page="0"] .pp95ParkedPreviewImg');
+  await expect(previewImg).toHaveCount(1, { timeout: 5000 });
+  const previewSrc = await previewImg.getAttribute('src');
+
+  const pixel = await page.evaluate((src) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const x = Math.round(0.4 * c.width);
+      const y = Math.round(0.4 * c.height);
+      resolve(Array.from(ctx.getImageData(x, y, 1, 1).data));
+    };
+    img.onerror = reject;
+    img.src = src;
+  }), previewSrc);
+
+  function isCloseTo(channel, target) { return Math.abs(channel - target) < 40; }
+  // Multiply result (~128,0,0): red channel darkened, green/blue stay near zero.
+  expect(isCloseTo(pixel[0], 128)).toBe(true);
+  expect(isCloseTo(pixel[1], 0)).toBe(true);
+  expect(isCloseTo(pixel[2], 0)).toBe(true);
+  // Must not be a flat opaque red rectangle (the bug: plain source-over would give ~255,0,0).
+  expect(pixel[0]).toBeLessThan(200);
+});

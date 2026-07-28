@@ -15105,6 +15105,8 @@ else install();
   window.__PP_PARKED_PAGE_PREVIEW__=true;
 
   const VISIBLE_RADIUS=1; // must match the core renderPages' own visibleRadius
+  // CSS mix-blend-mode keywords that map 1:1 onto canvas globalCompositeOperation values.
+  const VALID_BLEND_MODES=new Set(['multiply','screen','overlay','darken','lighten','color-dodge','color-burn','hard-light','soft-light','difference','exclusion','hue','saturation','color','luminosity']);
 
   const style=document.createElement('style');
   style.textContent=`
@@ -15178,8 +15180,19 @@ else install();
         // into the box, which is why a banner/photo previewed noticeably different from how
         // it actually looks on the real page. Replicate object-fit manually instead.
         let fit='cover';
-        try{ const ics=getComputedStyle(img); if(ics.objectFit==='contain') fit='contain'; }catch(e){}
+        let blend='source-over';
+        try{
+          const ics=getComputedStyle(img);
+          if(ics.objectFit==='contain') fit='contain';
+          // Custom mock-ups layer their masked/warped pattern image over the mock-up photo
+          // with CSS mix-blend-mode:multiply (so the pattern follows the mug/product curve
+          // instead of sitting on top as a flat rectangle) - canvas supports the exact same
+          // blend modes natively via globalCompositeOperation, using the same keyword.
+          if(ics.mixBlendMode && VALID_BLEND_MODES.has(ics.mixBlendMode)) blend=ics.mixBlendMode;
+        }catch(e){}
+        ctx.globalCompositeOperation=blend;
         try{ drawImageFitted(ctx, img, fit, x, y, w, h); drewImg=true; }catch(e){}
+        ctx.globalCompositeOperation='source-over';
       }
       if(!drewImg){
         const bg=cs.backgroundColor;
