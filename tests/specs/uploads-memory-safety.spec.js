@@ -175,3 +175,81 @@ test('a page that has never been rendered still gets a preview via background wa
   );
   expect(leftoverHolders).toBe(0);
 });
+
+test('the parked-page preview crops images with object-fit like the real layer, instead of stretching the whole source image into the box', async ({ page }) => {
+  // Real bug: a plain ctx.drawImage(img,x,y,w,h) ignores the CSS object-fit:cover the live
+  // layer actually renders with, so a wide/tall source image got squashed to fit the box
+  // instead of being center-cropped - this is why a banner "wasn't looking like in real life"
+  // in the preview. Build a 5:1 wide image that's red near its left edge, blue near its right
+  // edge, and green everywhere else, then place it in a near-square (~1:1) layer box. Under
+  // correct object-fit:cover cropping, the visible source slice never reaches the red/blue
+  // edges (only the green middle is visible) - under the old stretch behavior it would.
+  const wideImageSrc = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 300;
+    c.height = 60;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#00ff00';
+    ctx.fillRect(0, 0, 300, 60);
+    ctx.fillStyle = '#ff0000';
+    ctx.fillRect(0, 0, 20, 60);
+    ctx.fillStyle = '#0000ff';
+    ctx.fillRect(280, 0, 20, 60);
+    return c.toDataURL('image/png');
+  });
+
+  const layer = { id: 'l1', type: 'image', src: wideImageSrc, x: 10, y: 10, w: 30, h: 40, z: 1, opacity: 1, r: 0 };
+  await page.evaluate(({ src, l }) => {
+    save();
+    // w:30 * pageW:3000 = 900, h:40 * pageH:2250 = 900 -> a square (~1:1) on-screen box, very
+    // different from the 5:1 source image, so object-fit:cover must crop noticeably.
+    state.pages = [
+      { type: 'listing', w: 3000, h: 2250, layers: [l] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+    ];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+  }, { src: wideImageSrc, l: layer });
+
+  await expect(page.locator('.stage[data-page="0"] .layer.image img')).toHaveCount(1);
+  await page.evaluate(() => { state.selectedPage = 2; state.selected = null; render(); });
+
+  const previewImg = page.locator('.stage[data-page="0"] .pp95ParkedPreviewImg');
+  await expect(previewImg).toHaveCount(1, { timeout: 5000 });
+  const previewSrc = await previewImg.getAttribute('src');
+
+  const samples = await page.evaluate(({ previewSrc, l }) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      function sampleAt(fracX, fracY) {
+        const x = Math.round(fracX * c.width);
+        const y = Math.round(fracY * c.height);
+        return Array.from(ctx.getImageData(x, y, 1, 1).data);
+      }
+      const yMid = (l.y + l.h / 2) / 100;
+      resolve({
+        nearLeftEdge: sampleAt((l.x + l.w * 0.02) / 100, yMid),
+        nearRightEdge: sampleAt((l.x + l.w * 0.98) / 100, yMid),
+      });
+    };
+    img.onerror = reject;
+    img.src = previewSrc;
+  }), { previewSrc, l: layer });
+
+  function isCloseTo(channel, target) { return Math.abs(channel - target) < 40; }
+  // Near the left edge of the box: should be green (cropped source ~x120-180), not red
+  // (which only exists at the true source's left edge, x0-20, and would only show up under
+  // the old stretch-the-whole-image bug).
+  expect(isCloseTo(samples.nearLeftEdge[0], 0)).toBe(true);
+  expect(isCloseTo(samples.nearLeftEdge[1], 255)).toBe(true);
+  // Near the right edge of the box: should also be green, not blue.
+  expect(isCloseTo(samples.nearRightEdge[2], 0)).toBe(true);
+  expect(isCloseTo(samples.nearRightEdge[1], 255)).toBe(true);
+});
