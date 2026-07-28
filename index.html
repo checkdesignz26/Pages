@@ -15120,6 +15120,31 @@ else install();
   let warmTimer=null;
   let prevHot=new Set();
 
+  function clipRoundedBox(ctx, x, y, w, h, radiusStr, k){
+    if(!radiusStr) return false;
+    const first=(radiusStr.split(' ')[0]||'').trim();
+    if(!first || parseFloat(first)===0) return false;
+    ctx.save();
+    ctx.beginPath();
+    if(first.indexOf('%')!==-1){
+      const pct=Math.min(50, parseFloat(first))/100;
+      if(!pct){ ctx.restore(); return false; }
+      ctx.ellipse(x+w/2, y+h/2, w*pct, h*pct, 0, 0, Math.PI*2);
+    }else{
+      let r=parseFloat(first)*k;
+      if(!r){ ctx.restore(); return false; }
+      r=Math.max(0, Math.min(r, w/2, h/2));
+      ctx.moveTo(x+r,y);
+      ctx.arcTo(x+w,y,x+w,y+h,r);
+      ctx.arcTo(x+w,y+h,x,y+h,r);
+      ctx.arcTo(x,y+h,x,y,r);
+      ctx.arcTo(x,y,x+w,y,r);
+    }
+    ctx.closePath();
+    ctx.clip();
+    return true;
+  }
+
   function drawImageFitted(ctx, img, fit, dx, dy, dw, dh){
     const iw=img.naturalWidth, ih=img.naturalHeight;
     if(!iw||!ih){ return; }
@@ -15195,17 +15220,27 @@ else install();
         ctx.globalCompositeOperation='source-over';
       }
       if(!drewImg){
-        const bg=cs.backgroundColor;
+        // Shape/label/circle layers put their actual visual styling (background, border-
+        // radius, text color/font) on an inner .shapeText div, not the outer .layer wrapper -
+        // reading the wrapper's own (usually transparent) computed style drew nothing useful.
+        // Pattern-slot circle tiles style the .layer wrapper itself instead (border-radius:50%
+        // straight from CSS). Check both, and clip to the actual border-radius either way so a
+        // circle/pill shape doesn't come out as a flat rectangle.
+        let styleSrc=cs;
+        try{ const shapeEl=node.querySelector('.shapeText'); if(shapeEl) styleSrc=getComputedStyle(shapeEl); }catch(e){}
+        const bg=styleSrc.backgroundColor;
+        const clipped=clipRoundedBox(ctx, x, y, w, h, styleSrc.borderRadius, k);
         ctx.fillStyle=(bg&&bg!=='rgba(0, 0, 0, 0)'&&bg!=='transparent')?bg:'rgba(0,0,0,.05)';
         ctx.fillRect(x,y,w,h);
         const text=(node.textContent||'').trim();
         if(text){
-          ctx.fillStyle=cs.color||'#333';
-          let fs=parseFloat(cs.fontSize)*k; if(!fs||fs<4) fs=Math.max(6,h*0.35);
-          ctx.font=fs+'px '+(cs.fontFamily||'sans-serif');
+          ctx.fillStyle=styleSrc.color||'#333';
+          let fs=parseFloat(styleSrc.fontSize)*k; if(!fs||fs<4) fs=Math.max(6,h*0.35);
+          ctx.font=fs+'px '+(styleSrc.fontFamily||'sans-serif');
           ctx.textAlign='center'; ctx.textBaseline='middle';
           try{ ctx.fillText(text.slice(0,60), x+w/2, y+h/2, w); }catch(e){}
         }
+        if(clipped) ctx.restore();
       }
       ctx.restore();
     });

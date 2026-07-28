@@ -330,3 +330,77 @@ test('the parked-page preview applies mix-blend-mode:multiply for custom mock-up
   // Must not be a flat opaque red rectangle (the bug: plain source-over would give ~255,0,0).
   expect(pixel[0]).toBeLessThan(200);
 });
+
+test('the parked-page preview clips a circular pattern slot to a circle, instead of drawing its square bounding box', async ({ page }) => {
+  // Real bug (screenshot): a "pattern tile square" page has a big round pattern-fill slot in
+  // the middle (a type:'card' patternSlot layer with slotShape:'circle', styled entirely via
+  // CSS - .layer.patternSlot{background:#fff!important} + .layer.patternSlot.circleSlot
+  // {border-radius:50%!important}, both !important straight on the .layer wrapper, not an
+  // inline style). The old snapshot code read the wrapper's background color but never looked
+  // at its border-radius, so an unfilled/empty round slot came out as a flat white square
+  // instead of a circle sitting on the page. Put a solid red background under a big white
+  // circle slot: the box's own corner should show red (outside the inscribed circle) once
+  // clipping is respected, but was white before (the bug: the whole square painted over).
+  const redSrc = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 20; c.height = 20;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = 'rgb(255,0,0)';
+    ctx.fillRect(0, 0, 20, 20);
+    return c.toDataURL('image/png');
+  });
+
+  await page.evaluate((redSrc) => {
+    save();
+    const bg = { id: 'bg1', type: 'image', src: redSrc, x: 0, y: 0, w: 100, h: 100, z: 1, opacity: 1, r: 0, fit: 'cover' };
+    const slot = {
+      id: 'slot1', type: 'card', name: 'Circle Tile', src: null, fit: 'cover', patternSlot: true, slotShape: 'circle',
+      x: 10, y: 10, w: 80, h: 80, z: 2, opacity: 1, r: 0,
+    };
+    state.pages = [
+      { type: 'listing', w: 3000, h: 3000, layers: [bg, slot] },
+      { type: 'listing', w: 3000, h: 3000, layers: [] },
+      { type: 'listing', w: 3000, h: 3000, layers: [] },
+    ];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+  }, redSrc);
+
+  await expect(page.locator('.stage[data-page="0"] .layer.patternSlot.circleSlot')).toHaveCount(1);
+  await page.evaluate(() => { state.selectedPage = 2; state.selected = null; render(); });
+
+  const previewImg = page.locator('.stage[data-page="0"] .pp95ParkedPreviewImg');
+  await expect(previewImg).toHaveCount(1, { timeout: 5000 });
+  const previewSrc = await previewImg.getAttribute('src');
+
+  const pixels = await page.evaluate((src) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      function sampleAt(fracX, fracY) {
+        return Array.from(ctx.getImageData(Math.round(fracX * c.width), Math.round(fracY * c.height), 1, 1).data);
+      }
+      resolve({
+        center: sampleAt(0.5, 0.5),
+        boxCorner: sampleAt(0.12, 0.12),
+      });
+    };
+    img.onerror = reject;
+    img.src = src;
+  }), previewSrc);
+
+  function isCloseTo(channel, target) { return Math.abs(channel - target) < 40; }
+  // Center of the slot: inside the circle either way - should be white.
+  expect(isCloseTo(pixels.center[0], 255)).toBe(true);
+  expect(isCloseTo(pixels.center[1], 255)).toBe(true);
+  // Near the slot box's own corner: outside the inscribed circle, so the red background should
+  // show through once the shape is actually clipped to a circle (the bug: this came out white,
+  // because the old code just filled the whole square bounding box).
+  expect(isCloseTo(pixels.boxCorner[0], 255)).toBe(true);
+  expect(isCloseTo(pixels.boxCorner[1], 0)).toBe(true);
+  expect(isCloseTo(pixels.boxCorner[2], 0)).toBe(true);
+});
