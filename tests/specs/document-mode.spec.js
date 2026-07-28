@@ -403,3 +403,115 @@ test('PDF export renders the actual font applied to each run, not always Georgia
 
   expect(georgiaPng).not.toBe(courierPng);
 });
+
+test('document image: select, resize via handle, rotate via handle, align, delete', async ({ page }) => {
+  // Real request: wire real resize/rotate/move controls into document mode images, matching
+  // canvas layers. A document image lives inline in flowing text rather than free-floating like
+  // a layer, so free x/y positioning was ruled out (user's choice) in favor of drag-to-resize,
+  // drag-to-rotate (both via the same .handle/.rotateHandle overlay elements used for layers,
+  // tracked to the image's live rect every frame since it isn't absolutely positioned like a
+  // layer is), and left/centre/right alignment standing in for "move". The shared
+  // "edit & adjust" panel's x move/y move/width/height/fit* controls don't apply to an inline
+  // image at all, so they're hidden while one is selected rather than left visibly broken, and
+  // restored on deselect.
+  await openDocumentPage(page);
+  await page.waitForTimeout(1800);
+
+  const png1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+  await page.setInputFiles('#ppDocImageInput', { name: 'test.png', mimeType: 'image/png', buffer: png1x1 });
+  await page.waitForSelector('.documentEditor img');
+
+  await page.click('.documentEditor img');
+  await page.waitForTimeout(150);
+  const afterSelect = await page.evaluate(() => ({
+    hasOverlay: !!document.getElementById('ppDocImgOverlay'),
+    hint: document.getElementById('selectedHint').textContent,
+    boxHasClass: Array.from(document.querySelectorAll('.box')).some((b) => {
+      const h = b.querySelector('h2');
+      return h && h.textContent.trim().toLowerCase() === 'edit & adjust' && b.classList.contains('ppDocImageActive');
+    }),
+    scaleRowHidden: getComputedStyle(document.querySelector('.rangeRow:has(#scale)')).display === 'none',
+  }));
+  expect(afterSelect.hasOverlay).toBe(true);
+  expect(afterSelect.hint).toBe('Document image selected');
+  expect(afterSelect.boxHasClass).toBe(true);
+  expect(afterSelect.scaleRowHidden).toBe(true);
+
+  const handleBox = await page.locator('#ppDocImgOverlay .handle').boundingBox();
+  const widthBefore = await page.evaluate(() => document.querySelector('.documentEditor img').getBoundingClientRect().width);
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handleBox.x + handleBox.width / 2 + 100, handleBox.y + handleBox.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  const widthAfter = await page.evaluate(() => document.querySelector('.documentEditor img').getBoundingClientRect().width);
+  expect(widthAfter).toBeGreaterThan(widthBefore);
+
+  const rotHandleBox = await page.locator('#ppDocImgOverlay .rotateHandle').boundingBox();
+  await page.mouse.move(rotHandleBox.x + rotHandleBox.width / 2, rotHandleBox.y + rotHandleBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(rotHandleBox.x + rotHandleBox.width / 2 + 80, rotHandleBox.y + rotHandleBox.height / 2 + 40, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  const transform = await page.evaluate(() => document.querySelector('.documentEditor img').style.transform);
+  expect(transform).toMatch(/rotate\(/);
+
+  await page.click('#ppDocImgAlignRight');
+  const margins = await page.evaluate(() => {
+    const img = document.querySelector('.documentEditor img');
+    return { left: img.style.marginLeft, right: img.style.marginRight };
+  });
+  expect(margins.left).toBe('auto');
+  expect(parseFloat(margins.right)).toBe(0);
+
+  await page.click('.documentEditor p, .documentEditor');
+  await page.waitForTimeout(150);
+  const afterDeselect = await page.evaluate(() => ({
+    overlayGone: !document.getElementById('ppDocImgOverlay'),
+    scaleRowVisible: getComputedStyle(document.querySelector('.rangeRow:has(#scale)')).display !== 'none',
+  }));
+  expect(afterDeselect.overlayGone).toBe(true);
+  expect(afterDeselect.scaleRowVisible).toBe(true);
+
+  await page.click('.documentEditor img');
+  await page.waitForTimeout(100);
+  await page.click('#ppDocImgDeleteBtn');
+  await page.waitForTimeout(100);
+  const stillThere = await page.evaluate(() => !!document.querySelector('.documentEditor img'));
+  expect(stillThere).toBe(false);
+});
+
+test('the shared opacity control still drives a normal layer after being used on a document image', async ({ page }) => {
+  // selectImage() replaces the shared #opacity slider's oninput with a document-image-specific
+  // handler (since it isn't wired through the normal layer-based applyControls() at all); this
+  // confirms deselecting restores the original handler rather than leaving ordinary layers
+  // permanently unable to change opacity through that control.
+  await openDocumentPage(page);
+  await page.waitForTimeout(1800);
+  const png1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+  await page.setInputFiles('#ppDocImageInput', { name: 'test.png', mimeType: 'image/png', buffer: png1x1 });
+  await page.waitForSelector('.documentEditor img');
+  await page.click('.documentEditor img');
+  await page.waitForTimeout(150);
+  await page.evaluate(() => {
+    document.getElementById('opacity').value = 40;
+    document.getElementById('opacity').dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForTimeout(100);
+  await page.evaluate(() => window.deselect());
+
+  await page.evaluate(() => {
+    addText('text');
+    state.selected = current().layers[current().layers.length - 1].id;
+    render();
+  });
+  await page.waitForTimeout(200);
+
+  const layerOpacityAfter = await page.evaluate(() => {
+    document.getElementById('opacity').disabled = false;
+    document.getElementById('opacity').value = 55;
+    document.getElementById('opacity').dispatchEvent(new Event('input', { bubbles: true }));
+    return current().layers[current().layers.length - 1].opacity;
+  });
+  expect(layerOpacityAfter).toBeCloseTo(0.55, 2);
+});

@@ -18293,6 +18293,21 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
 
 <style id="pp-document-image-adjust-css">
 .documentEditor img.ppDocImgSelected{outline:3px solid #7b3f91;outline-offset:2px;cursor:pointer!important;}
+/* A document image lives inline in flowing text, not free-floating like a canvas layer, so
+   x/y position, width/height, and the fit/fill/cover-page buttons don't apply to it - scale and
+   rotate now happen via drag handles directly on the image instead of these sliders. Hide the
+   controls that don't work in this context rather than leave them sitting there doing nothing. */
+.ppDocImageActive .rangeRow:has(#scale),
+.ppDocImageActive .rangeRow:has(#xpos),
+.ppDocImageActive .rangeRow:has(#ypos),
+.ppDocImageActive .rangeRow:has(#width),
+.ppDocImageActive .rangeRow:has(#height),
+.ppDocImageActive .rangeRow:has(#rotate),
+.ppDocImageActive .grid2:has([onclick*="fitSelected"]),
+.ppDocImageActive .editMiniGroup,
+.ppDocImageActive .gestureHint{display:none!important}
+#ppDocImgOverlay{position:fixed;pointer-events:none;z-index:10001}
+#ppDocImgOverlay .handle,#ppDocImgOverlay .rotateHandle{pointer-events:auto;touch-action:none}
 </style>
 <script id="pp-document-image-adjust-js">
 (function(){
@@ -18304,15 +18319,93 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   function editAdjustBox(){return Array.from(document.querySelectorAll('.box')).find(function(b){var h=b.querySelector('h2');return h&&(h.textContent||'').trim().toLowerCase()==='edit & adjust';});}
 
   var selectedImg=null;
-  var origApplyControls=window.applyControls;
   var origDeleteSelected=window.deleteSelected;
   var origDeselect=window.deselect;
+  var overlayRAF=null;
+
+  function stopTrackingOverlay(){
+    if(overlayRAF){cancelAnimationFrame(overlayRAF);overlayRAF=null;}
+    var ov=$('ppDocImgOverlay');
+    if(ov)ov.remove();
+  }
+
+  function trackOverlay(){
+    if(!selectedImg||!document.contains(selectedImg)){stopTrackingOverlay();return;}
+    var ov=ensureOverlay();
+    var r=selectedImg.getBoundingClientRect();
+    ov.style.left=r.left+'px';ov.style.top=r.top+'px';ov.style.width=r.width+'px';ov.style.height=r.height+'px';
+    overlayRAF=requestAnimationFrame(trackOverlay);
+  }
+
+  var imgDrag=null;
+  function ensureOverlay(){
+    var ov=$('ppDocImgOverlay');
+    if(ov)return ov;
+    ov=document.createElement('div');
+    ov.id='ppDocImgOverlay';
+    ov.className='selected';
+    ov.innerHTML='<div class="rotateHandle"></div><div class="handle"></div><div class="resizeHint">drag to resize · top handle rotates</div>';
+    document.body.appendChild(ov);
+    var handle=ov.querySelector('.handle'),rotateHandle=ov.querySelector('.rotateHandle');
+    function startDrag(mode){
+      return function(e){
+        if(!selectedImg)return;
+        e.preventDefault();e.stopPropagation();
+        var editor=selectedImg.closest('.documentEditor');
+        var editorRect=editor?editor.getBoundingClientRect():null;
+        var imgRect=selectedImg.getBoundingClientRect();
+        var w=parseFloat(selectedImg.style.width);
+        if(!w||isNaN(w))w=editorRect?(imgRect.width/editorRect.width*100):100;
+        var m=/rotate\(([-\d.]+)deg\)/.exec(selectedImg.style.transform||'');
+        imgDrag={
+          mode:mode,startX:e.clientX,startY:e.clientY,startWidthPct:w,
+          startRotate:m?parseFloat(m[1]):0,
+          cx:imgRect.left+imgRect.width/2,cy:imgRect.top+imgRect.height/2,
+          editorWidth:editorRect?editorRect.width:imgRect.width,
+          saved:false
+        };
+        try{e.target.setPointerCapture(e.pointerId);}catch(err){}
+      };
+    }
+    handle.addEventListener('pointerdown',startDrag('resize'));
+    rotateHandle.addEventListener('pointerdown',startDrag('rotate'));
+    document.addEventListener('pointermove',function(e){
+      if(!imgDrag||!selectedImg)return;
+      if(!imgDrag.saved){try{if(typeof save==='function')save();}catch(err){}imgDrag.saved=true;}
+      if(imgDrag.mode==='resize'){
+        var dx=e.clientX-imgDrag.startX;
+        var pct=Math.max(5,Math.min(100,imgDrag.startWidthPct+dx/imgDrag.editorWidth*100));
+        selectedImg.style.width=pct+'%';
+        selectedImg.style.height='auto';
+      }else{
+        var a1=Math.atan2(imgDrag.startY-imgDrag.cy,imgDrag.startX-imgDrag.cx);
+        var a2=Math.atan2(e.clientY-imgDrag.cy,e.clientX-imgDrag.cx);
+        var rot=imgDrag.startRotate+(a2-a1)*180/Math.PI;
+        selectedImg.style.transform=rot?('rotate('+rot+'deg)'):'';
+      }
+    });
+    document.addEventListener('pointerup',function(){
+      if(imgDrag){notifyEditor(selectedImg);imgDrag=null;}
+    });
+    return ov;
+  }
 
   function clearSelection(){
     if(selectedImg)selectedImg.classList.remove('ppDocImgSelected');
     selectedImg=null;
+    imgDrag=null;
+    stopTrackingOverlay();
+    var box=editAdjustBox();
+    if(box)box.classList.remove('ppDocImageActive');
+    // Restore the opacity slider's normal canvas-layer behavior - selectImage() replaces its
+    // oninput with a document-image-specific handler, which would otherwise permanently
+    // override the shared applyControls() wiring used for ordinary layers.
+    if($('opacity'))$('opacity').oninput=function(){if(typeof window.applyControls==='function')window.applyControls();};
+    if(typeof syncControls==='function'){try{syncControls();}catch(e){}}
+    var row=$('ppDocImgAlignRow');
+    if(row)row.remove();
     var btn=$('ppDocImgDeleteBtn');
-    if(btn)btn.style.display='none';
+    if(btn)btn.remove();
   }
 
   function deleteSelectedImage(){
@@ -18326,43 +18419,46 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     return true;
   }
 
-  function ensureDeleteButton(){
-    var btn=$('ppDocImgDeleteBtn');
-    if(btn)return btn;
+  function alignImage(where){
+    if(!selectedImg)return;
+    selectedImg.style.display='block';
+    selectedImg.style.marginLeft=where==='left'?'0':'auto';
+    selectedImg.style.marginRight=where==='right'?'0':'auto';
+    notifyEditor(selectedImg);
+  }
+
+  function ensureImagePanel(){
     var box=editAdjustBox();
-    if(!box)return null;
-    btn=document.createElement('button');
-    btn.id='ppDocImgDeleteBtn';
-    btn.className='full';
-    btn.textContent='delete image';
-    btn.style.marginTop='8px';
-    btn.onclick=function(e){e.preventDefault();deleteSelectedImage();};
-    box.appendChild(btn);
-    return btn;
+    if(!box)return;
+    box.classList.add('ppDocImageActive');
+    var body=box.querySelector('.panelBody')||box;
+    if(!$('ppDocImgAlignRow')){
+      var row=document.createElement('div');
+      row.id='ppDocImgAlignRow';
+      row.className='grid3';
+      row.style.marginBottom='8px';
+      row.innerHTML='<button type="button" id="ppDocImgAlignLeft">align left</button><button type="button" id="ppDocImgAlignCenter">align centre</button><button type="button" id="ppDocImgAlignRight">align right</button>';
+      var opacityRow=body.querySelector('.rangeRow:has(#opacity)');
+      if(opacityRow)opacityRow.insertAdjacentElement('afterend',row);else body.appendChild(row);
+      row.querySelector('#ppDocImgAlignLeft').onclick=function(){alignImage('left')};
+      row.querySelector('#ppDocImgAlignCenter').onclick=function(){alignImage('center')};
+      row.querySelector('#ppDocImgAlignRight').onclick=function(){alignImage('right')};
+    }
+    if(!$('ppDocImgDeleteBtn')){
+      var btn=document.createElement('button');
+      btn.id='ppDocImgDeleteBtn';
+      btn.type='button';
+      btn.className='full';
+      btn.textContent='delete image';
+      btn.style.marginTop='8px';
+      btn.onclick=function(e){e.preventDefault();deleteSelectedImage();};
+      body.appendChild(btn);
+    }
   }
 
   function notifyEditor(img){
     var editor=img&&img.closest('.documentEditor');
     if(editor)editor.dispatchEvent(new Event('input',{bubbles:true}));
-  }
-
-  function syncPanelFromImage(){
-    if(!selectedImg)return;
-    var editor=selectedImg.closest('.documentEditor');
-    var editorWidth=editor?editor.getBoundingClientRect().width:0;
-    var w=parseFloat(selectedImg.style.width);
-    if(!w||isNaN(w)){
-      w=editorWidth?Math.round((selectedImg.getBoundingClientRect().width/editorWidth)*100):100;
-    }
-    var op=selectedImg.style.opacity!==''?Math.round(parseFloat(selectedImg.style.opacity)*100):100;
-    if(isNaN(op))op=100;
-    var rot=0;
-    var m=/rotate\(([-\d.]+)deg\)/.exec(selectedImg.style.transform||'');
-    if(m)rot=parseFloat(m[1]);
-    if($('scale'))$('scale').value=Math.max(20,Math.min(250,w));
-    if($('opacity'))$('opacity').value=op;
-    if($('rotate'))$('rotate').value=rot;
-    if($('selectedHint'))$('selectedHint').textContent='Document image selected';
   }
 
   function selectImage(img){
@@ -18383,25 +18479,19 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     document.body.classList.remove('rightCollapsed');
     var box=editAdjustBox();
     if(box)box.classList.remove('collapsed');
-    var btn=ensureDeleteButton();
-    if(btn)btn.style.display='';
-    syncPanelFromImage();
-  }
-
-  window.applyControls=function(){
-    if(selectedImg&&document.contains(selectedImg)){
-      var w=Math.max(5,Math.min(250,+($('scale')?$('scale').value:100)));
-      var op=Math.max(0,Math.min(100,+($('opacity')?$('opacity').value:100)))/100;
-      var rot=+($('rotate')?$('rotate').value:0)||0;
-      selectedImg.style.width=w+'%';
-      selectedImg.style.height='auto';
-      selectedImg.style.opacity=String(op);
-      selectedImg.style.transform=rot?('rotate('+rot+'deg)'):'';
-      notifyEditor(selectedImg);
-      return;
+    ensureImagePanel();
+    if($('opacity')){
+      var op=img.style.opacity!==''?Math.round(parseFloat(img.style.opacity)*100):100;
+      $('opacity').value=isNaN(op)?100:op;
+      $('opacity').disabled=false;
+      $('opacity').oninput=function(){
+        selectedImg.style.opacity=String(Math.max(0,Math.min(100,+$('opacity').value))/100);
+        notifyEditor(selectedImg);
+      };
     }
-    return origApplyControls.apply(this,arguments);
-  };
+    if($('selectedHint'))$('selectedHint').textContent='Document image selected';
+    trackOverlay();
+  }
 
   window.deleteSelected=function(){
     if(deleteSelectedImage())return;
@@ -18425,6 +18515,7 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
       selectImage(img);
       return;
     }
+    if(e.target.closest&&e.target.closest('#ppDocImgOverlay'))return;
     if(selectedImg && e.target!==selectedImg){
       var insideSidePanel=e.target.closest&&e.target.closest('.side');
       if(!insideSidePanel)clearSelection();
