@@ -196,14 +196,19 @@ test('double-tapping text calls preventDefault on both taps, blocking iOS Safari
   expect(secondTapPrevented).toBe(true);
 });
 
-test('Montserrat, Roboto, Lato, and Bebas Neue are embedded and actually load (not just listed)', async ({ page }) => {
+test('Montserrat, Roboto, Lato, Bebas Neue, Anton, League Spartan, and Inter are embedded and actually load (not just listed)', async ({ page }) => {
   // Real request: add fonts similar to Montserrat (Roboto, Lato) plus something bold for
-  // sale/promo graphics (Bebas Neue). Since this app has to keep working with zero external
-  // requests, all four are embedded directly as data: URI @font-face rules (Google Fonts, SIL
-  // Open Font License - free to embed/redistribute) rather than linked from Google's CDN. This
-  // checks they don't just appear as dropdown options but actually resolve to a loadable font
-  // face, not a silent fallback to the default.
-  const fonts = ['Montserrat', 'Roboto', 'Lato', 'Bebas Neue'];
+  // sale/promo graphics (Bebas Neue, then Anton and League Spartan after the user found them
+  // in their own research and asked whether they were actually free to use - verified each
+  // against Google Fonts directly before adding: these three plus Inter are real Google Fonts
+  // under the SIL Open Font License (free to embed/redistribute); several others the same
+  // search turned up (Wild & Youth, Glitten, Tan Horizon/Tan Mon Chéri, Glacial Indifference)
+  // are not on Google Fonts at all - paid marketplace fonts that were left out since embedding
+  // them here without a purchased license wouldn't be legal. Since this app has to keep working
+  // with zero external requests, all seven are embedded directly as data: URI @font-face rules
+  // rather than linked from Google's CDN. This checks they don't just appear as dropdown
+  // options but actually resolve to a loadable font face, not a silent fallback to the default.
+  const fonts = ['Montserrat', 'Roboto', 'Lato', 'Bebas Neue', 'Anton', 'League Spartan', 'Inter'];
   const results = {};
   for (const font of fonts) {
     results[font] = await page.evaluate(async (f) => {
