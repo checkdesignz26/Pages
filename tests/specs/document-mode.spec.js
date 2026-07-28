@@ -362,6 +362,11 @@ test('the on-screen keyboard opening scrolls the focused document page back into
   // can't be used to compute where to scroll to - visualViewport's own height only shrinks
   // once that animation actually completes, giving an accurate signal to act on instead.
   await openDocumentPage(page);
+  // Let this app's known startup-settling renders (several independent setTimeout(...) calls
+  // scattered up to ~1.6s after load, per fixtures.js) finish first - otherwise one of them can
+  // replace the .documentEditor DOM node after this test has already grabbed and monkey-patched
+  // it, out from under the still-running test.
+  await page.waitForTimeout(1800);
   await page.click('.documentEditor');
   await page.waitForTimeout(200);
 

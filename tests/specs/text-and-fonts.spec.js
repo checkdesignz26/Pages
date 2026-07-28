@@ -195,3 +195,26 @@ test('double-tapping text calls preventDefault on both taps, blocking iOS Safari
   expect(firstTapPrevented).toBe(true);
   expect(secondTapPrevented).toBe(true);
 });
+
+test('Montserrat, Roboto, and Bebas Neue are embedded and actually load (not just listed)', async ({ page }) => {
+  // Real request: add fonts similar to Montserrat (Roboto) plus something bold for sale/promo
+  // graphics (Bebas Neue). Since this app has to keep working with zero external requests, all
+  // three are embedded directly as data: URI @font-face rules (Google Fonts, SIL Open Font
+  // License - free to embed/redistribute) rather than linked from Google's CDN. This checks
+  // they don't just appear as dropdown options but actually resolve to a loadable font face,
+  // not a silent fallback to the default.
+  const results = {};
+  for (const font of ['Montserrat', 'Roboto', 'Bebas Neue']) {
+    results[font] = await page.evaluate(async (f) => {
+      await document.fonts.load(`16px "${f}"`);
+      return {
+        loaded: document.fonts.check(`16px "${f}"`),
+        hasOption: [...document.getElementById('fontFamily').options].some((o) => o.value === f),
+      };
+    }, font);
+  }
+  for (const font of ['Montserrat', 'Roboto', 'Bebas Neue']) {
+    expect(results[font].loaded, `${font} loaded`).toBe(true);
+    expect(results[font].hasOption, `${font} listed in dropdown`).toBe(true);
+  }
+});
