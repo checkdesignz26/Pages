@@ -515,3 +515,72 @@ test('the shared opacity control still drives a normal layer after being used on
   });
   expect(layerOpacityAfter).toBeCloseTo(0.55, 2);
 });
+
+test('switching to a different page without deselecting a document image first restores the shared panel', async ({ page }) => {
+  // Real report: after selecting an image in document mode, switching to a different (normal
+  // canvas) page left the "edit & adjust" panel permanently stuck showing only the document-
+  // image controls (opacity/align/delete) - the fit canvas/rotate/etc controls a real image
+  // layer on that other page needs never came back. Root cause - trackOverlay()'s rAF loop
+  // noticed the selected image's DOM node was gone (pages re-render fresh DOM on switch) and
+  // tore down the floating handle overlay, but only that: it never called the fuller
+  // clearSelection() that actually removes the ppDocImageActive class, so the panel stayed
+  // stuck in document-image mode indefinitely, even for whatever got selected on the new page.
+  await openDocumentPage(page);
+  await page.waitForTimeout(1800);
+
+  const png1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+  await page.setInputFiles('#ppDocImageInput', { name: 'test.png', mimeType: 'image/png', buffer: png1x1 });
+  await page.waitForSelector('.documentEditor img');
+  await page.click('.documentEditor img');
+  await page.waitForTimeout(150);
+
+  const activeBefore = await page.evaluate(() => Array.from(document.querySelectorAll('.box')).some((b) => {
+    const h = b.querySelector('h2');
+    return h && h.textContent.trim().toLowerCase() === 'edit & adjust' && b.classList.contains('ppDocImageActive');
+  }));
+  expect(activeBefore).toBe(true);
+
+  // Switch to a different, non-document page WITHOUT explicitly deselecting or clicking away
+  // from the image first - e.g. tapping a page thumbnail.
+  await page.evaluate(() => {
+    state.pages.push({ type: 'listing', w: 3000, h: 2250, layers: [] });
+    state.selectedPage = state.pages.length - 1;
+    state.selected = null;
+    render();
+  });
+  await page.waitForTimeout(300); // give the rAF-based overlay tracker a chance to notice
+
+  const afterSwitch = await page.evaluate(() => {
+    const box = Array.from(document.querySelectorAll('.box')).find((b) => {
+      const h = b.querySelector('h2');
+      return h && h.textContent.trim().toLowerCase() === 'edit & adjust';
+    });
+    return {
+      stillActive: box.classList.contains('ppDocImageActive'),
+      overlayGone: !document.getElementById('ppDocImgOverlay'),
+      alignRowGone: !document.getElementById('ppDocImgAlignRow'),
+      deleteBtnGone: !document.getElementById('ppDocImgDeleteBtn'),
+    };
+  });
+  expect(afterSwitch.stillActive).toBe(false);
+  expect(afterSwitch.overlayGone).toBe(true);
+  expect(afterSwitch.alignRowGone).toBe(true);
+  expect(afterSwitch.deleteBtnGone).toBe(true);
+
+  // Selecting a normal image layer on the new page must get the FULL panel (fit canvas,
+  // rotate, etc), not stay stuck showing only opacity/align.
+  await page.evaluate(() => {
+    const l = layer('rectangle', { name: 'r', x: 5, y: 5, w: 20, h: 20, fill: '#f00', z: nextZ() });
+    current().layers.push(l);
+    state.selected = l.id;
+    render();
+  });
+  await page.waitForTimeout(200);
+
+  const layerPanel = await page.evaluate(() => ({
+    rotateVisible: getComputedStyle(document.querySelector('.rangeRow:has(#rotate)')).display !== 'none',
+    fitCanvasVisible: getComputedStyle(document.querySelector('.grid2:has([onclick*="fitSelected"])')).display !== 'none',
+  }));
+  expect(layerPanel.rotateVisible).toBe(true);
+  expect(layerPanel.fitCanvasVisible).toBe(true);
+});

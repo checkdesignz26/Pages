@@ -18333,7 +18333,13 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   }
 
   function trackOverlay(){
-    if(!selectedImg||!document.contains(selectedImg)){stopTrackingOverlay();return;}
+    // Switching to a different page (tapping a page thumbnail, etc.) detaches the selected
+    // image's DOM node without ever running the click-to-deselect logic below - this runs every
+    // frame while an image is selected, so it catches that within one frame regardless of how
+    // the page changed, and fully clears the document-image state (not just the overlay) so the
+    // "edit & adjust" panel doesn't stay stuck showing align/opacity-only controls for whatever
+    // gets selected on the new page afterward.
+    if(!selectedImg||!document.contains(selectedImg)){clearSelection();return;}
     var ov=ensureOverlay();
     var r=selectedImg.getBoundingClientRect();
     ov.style.left=r.left+'px';ov.style.top=r.top+'px';ov.style.width=r.width+'px';ov.style.height=r.height+'px';
