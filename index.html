@@ -15088,6 +15088,199 @@ else install();
 </script>
 
 
+<!-- PARKED PAGE LIGHTWEIGHT PREVIEW — real request: scrolling away from a page and back always
+     showed a blank "tap to edit" placeholder (the PP95 memory-safety virtualization only renders
+     real layer DOM for the page +/-1 from state.selectedPage, to avoid Safari/iPad OOM crashes on
+     image-heavy multi-page projects). Replaces the blank placeholder with a small low-res raster
+     snapshot of the page instead, so scrolling shows actual content immediately - and, since it's
+     a single flat <img> and not real interactive layers, nothing can be accidentally nudged or
+     edited by a stray touch while scrolling past it. Wrapped around the LAST window.renderPages
+     reassignment in the file (this script must stay below every other one that reassigns it) so
+     this sees the fully-patched render output on the way out and the freshly rebuilt DOM on the
+     way back in. -->
+<script id="pp-parked-page-preview">
+(function(){
+  'use strict';
+  if(window.__PP_PARKED_PAGE_PREVIEW__) return;
+  window.__PP_PARKED_PAGE_PREVIEW__=true;
+
+  const VISIBLE_RADIUS=1; // must match the core renderPages' own visibleRadius
+
+  const style=document.createElement('style');
+  style.textContent=`
+    .pp95ParkedPage::after{content:'tap to edit';position:absolute;left:10px;top:auto;right:auto;bottom:10px;transform:none;padding:5px 11px;border-radius:999px;background:rgba(15,10,26,.62);color:#fff;font:800 11px system-ui;letter-spacing:.02em;pointer-events:none;z-index:2;}
+    .pp95ParkedPreviewImg{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none;background:#fff;}
+  `;
+  document.head.appendChild(style);
+
+  const previewCache=new WeakMap(); // page object -> {dataURL}
+  const warmQueue=[];
+  let warmTimer=null;
+  let prevHot=new Set();
+
+  function snapshotStageToDataURL(stageEl, rect){
+    const maxDim=480;
+    const scale=Math.min(1, maxDim/Math.max(rect.width,rect.height,1));
+    const cw=Math.max(1,Math.round(rect.width*scale));
+    const ch=Math.max(1,Math.round(rect.height*scale));
+    const canvas=document.createElement('canvas');
+    canvas.width=cw; canvas.height=ch;
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,cw,ch);
+    const k=cw/Math.max(rect.width,1);
+    let nodes;
+    try{ nodes=Array.from(stageEl.querySelectorAll('.layer')); }catch(e){ nodes=[]; }
+    if(nodes.length>500) nodes=nodes.slice(0,500);
+    nodes.sort(function(a,b){ return (parseFloat(a.style.zIndex)||0)-(parseFloat(b.style.zIndex)||0); });
+    nodes.forEach(function(node){
+      let cs; try{ cs=getComputedStyle(node); }catch(e){ return; }
+      if(cs.display==='none'||cs.visibility==='hidden') return;
+      const r=node.getBoundingClientRect();
+      const x=(r.left-rect.left)*k, y=(r.top-rect.top)*k, w=r.width*k, h=r.height*k;
+      if(w<1.5||h<1.5) return;
+      ctx.save();
+      const op=parseFloat(cs.opacity); ctx.globalAlpha=isNaN(op)?1:op;
+      let angle=0;
+      const tf=cs.transform;
+      if(tf&&tf!=='none'){
+        const m=tf.match(/matrix\(([^)]+)\)/);
+        if(m){ const parts=m[1].split(',').map(Number); if(parts.length>=2) angle=Math.atan2(parts[1],parts[0]); }
+      }
+      const cx=x+w/2, cy=y+h/2;
+      ctx.translate(cx,cy); ctx.rotate(angle); ctx.translate(-cx,-cy);
+      let drewImg=false;
+      const img=node.querySelector('img');
+      if(img&&img.naturalWidth){
+        try{ ctx.drawImage(img,x,y,w,h); drewImg=true; }catch(e){}
+      }
+      if(!drewImg){
+        const bg=cs.backgroundColor;
+        ctx.fillStyle=(bg&&bg!=='rgba(0, 0, 0, 0)'&&bg!=='transparent')?bg:'rgba(0,0,0,.05)';
+        ctx.fillRect(x,y,w,h);
+        const text=(node.textContent||'').trim();
+        if(text){
+          ctx.fillStyle=cs.color||'#333';
+          let fs=parseFloat(cs.fontSize)*k; if(!fs||fs<4) fs=Math.max(6,h*0.35);
+          ctx.font=fs+'px '+(cs.fontFamily||'sans-serif');
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          try{ ctx.fillText(text.slice(0,60), x+w/2, y+h/2, w); }catch(e){}
+        }
+      }
+      ctx.restore();
+    });
+    try{ return canvas.toDataURL('image/jpeg',0.72); }catch(e){ return null; }
+  }
+
+  function cachePreviewFromLiveStage(p, stageEl){
+    if(!p||!stageEl) return;
+    try{
+      const rect=stageEl.getBoundingClientRect();
+      if(!rect.width||!rect.height) return;
+      const dataURL=snapshotStageToDataURL(stageEl, rect);
+      if(dataURL) previewCache.set(p,{dataURL:dataURL});
+    }catch(e){ console.warn('parked page preview snapshot failed',e); }
+  }
+
+  function applyCachedPreview(stageEl, cached){
+    let img=stageEl.querySelector('.pp95ParkedPreviewImg');
+    if(!img){
+      img=document.createElement('img');
+      img.className='pp95ParkedPreviewImg';
+      img.draggable=false;
+      img.alt='';
+      stageEl.insertBefore(img, stageEl.firstChild);
+    }
+    if(img.src!==cached.dataURL) img.src=cached.dataURL;
+  }
+
+  function waitForImages(container, maxWait){
+    const imgs=Array.from(container.querySelectorAll('img'));
+    if(!imgs.length) return Promise.resolve();
+    const loaded=imgs.map(function(img){
+      if(img.complete && img.naturalWidth) return Promise.resolve();
+      return new Promise(function(resolve){
+        img.addEventListener('load', resolve, {once:true});
+        img.addEventListener('error', resolve, {once:true});
+      });
+    });
+    return Promise.race([
+      Promise.all(loaded),
+      new Promise(function(resolve){ setTimeout(resolve, maxWait); })
+    ]);
+  }
+
+  function warmOne(pi){
+    const p=state.pages[pi]; if(!p) return;
+    if(previewCache.has(p)) return;
+    if(Math.abs(pi-state.selectedPage)<=VISIBLE_RADIUS) return; // hot already - it'll be cached naturally when it parks
+    const holder=document.createElement('div');
+    holder.style.cssText='position:fixed;left:-99999px;top:0;pointer-events:none;overflow:hidden;';
+    const w=900, h=Math.max(1,Math.round(w*(p.h/p.w)));
+    holder.style.width=w+'px'; holder.style.height=h+'px';
+    const st=document.createElement('div');
+    st.className='stage';
+    st.style.cssText='position:relative;width:'+w+'px;height:'+h+'px;background:#fff;overflow:hidden;';
+    try{
+      (p.layers||[]).filter(function(l){return !l.hidden;}).slice().sort(function(a,b){return (a.z||0)-(b.z||0);}).forEach(function(l){
+        st.appendChild(renderLayer(l, pi));
+      });
+    }catch(e){ console.warn('parked page warm render failed',e); }
+    holder.appendChild(st);
+    document.body.appendChild(holder);
+    waitForImages(st, 1200).then(function(){
+      try{ cachePreviewFromLiveStage(p, st); }catch(e){}
+      holder.remove();
+      renderParkedPreviewsNow();
+    });
+  }
+
+  function pumpWarmQueue(){
+    warmTimer=null;
+    if(!warmQueue.length) return;
+    const pi=warmQueue.shift();
+    warmOne(pi);
+    warmTimer=setTimeout(pumpWarmQueue, 260);
+  }
+
+  function scheduleWarm(pi){
+    if(warmQueue.indexOf(pi)!==-1) return;
+    warmQueue.push(pi);
+    if(!warmTimer) warmTimer=setTimeout(pumpWarmQueue, 260);
+  }
+
+  function renderParkedPreviewsNow(){
+    const wrap=document.getElementById('pageWrap'); if(!wrap) return;
+    wrap.querySelectorAll('.stage.pp95ParkedPage').forEach(function(st){
+      const pi=Number(st.dataset.page);
+      const p=state.pages[pi]; if(!p) return;
+      const cached=previewCache.get(p);
+      if(cached) applyCachedPreview(st, cached);
+      else scheduleWarm(pi);
+    });
+  }
+
+  const oldRenderPages=window.renderPages;
+  window.renderPages=function(){
+    const wrap=document.getElementById('pageWrap');
+    const hotNow=new Set();
+    (state.pages||[]).forEach(function(p,pi){ if(Math.abs(pi-state.selectedPage)<=VISIBLE_RADIUS) hotNow.add(pi); });
+    if(wrap){
+      prevHot.forEach(function(pi){
+        if(hotNow.has(pi)) return;
+        const p=state.pages[pi]; if(!p) return;
+        const stageEl=wrap.querySelector('.stage[data-page="'+pi+'"]');
+        if(stageEl) cachePreviewFromLiveStage(p, stageEl);
+      });
+    }
+    const result=oldRenderPages.apply(this,arguments);
+    prevHot=hotNow;
+    renderParkedPreviewsNow();
+    return result;
+  };
+})();
+</script>
+
+
 <!-- v161 DOCUMENT BUTTON: CONVERT CURRENT PAGE IN PLACE BEFORE ADDING NEW PAGES -->
 <script id="pp-document-add-in-place-v161">
 (function(){
