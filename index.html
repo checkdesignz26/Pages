@@ -15244,17 +15244,29 @@ else install();
       }
       ctx.restore();
     });
-    try{ return canvas.toDataURL('image/jpeg',0.9); }catch(e){ return null; }
+    try{
+      return canvas.toDataURL('image/jpeg',0.9);
+    }catch(e){
+      if(typeof window.ppDebugLog==='function')window.ppDebugLog('parkedPreview:toDataURL-threw',{error:String(e),cw:cw,ch:ch});
+      return null;
+    }
   }
 
   function cachePreviewFromLiveStage(p, stageEl){
     if(!p||!stageEl) return;
     try{
       const rect=stageEl.getBoundingClientRect();
-      if(!rect.width||!rect.height) return;
+      if(!rect.width||!rect.height){
+        if(typeof window.ppDebugLog==='function')window.ppDebugLog('parkedPreview:zero-size-rect',{w:rect.width,h:rect.height});
+        return;
+      }
       const dataURL=snapshotStageToDataURL(stageEl, rect);
       if(dataURL) previewCache.set(p,{dataURL:dataURL});
-    }catch(e){ console.warn('parked page preview snapshot failed',e); }
+      else if(typeof window.ppDebugLog==='function') window.ppDebugLog('parkedPreview:no-dataURL-from-live-stage',{});
+    }catch(e){
+      console.warn('parked page preview snapshot failed',e);
+      if(typeof window.ppDebugLog==='function')window.ppDebugLog('parkedPreview:live-snapshot-threw',{error:String(e)});
+    }
   }
 
   function applyCachedPreview(stageEl, cached){
@@ -15300,7 +15312,10 @@ else install();
       (p.layers||[]).filter(function(l){return !l.hidden;}).slice().sort(function(a,b){return (a.z||0)-(b.z||0);}).forEach(function(l){
         st.appendChild(renderLayer(l, pi));
       });
-    }catch(e){ console.warn('parked page warm render failed',e); }
+    }catch(e){
+      console.warn('parked page warm render failed',e);
+      if(typeof window.ppDebugLog==='function')window.ppDebugLog('parkedPreview:warm-render-threw',{pi:pi,error:String(e)});
+    }
     holder.appendChild(st);
     document.body.appendChild(holder);
     waitForImages(st, 700).then(function(){
