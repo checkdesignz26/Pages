@@ -404,3 +404,48 @@ test('the parked-page preview clips a circular pattern slot to a circle, instead
   expect(isCloseTo(pixels.boxCorner[1], 0)).toBe(true);
   expect(isCloseTo(pixels.boxCorner[2], 0)).toBe(true);
 });
+
+test('the warm-up queue finishes quickly for a normal-sized project instead of taking several seconds', async ({ page }) => {
+  // Real report: "the preview scrolling seems to work sometimes and sometimes not." Scrolling
+  // itself never changes state.selectedPage (only tapping a page does), so a page that has
+  // never been hot relies entirely on the background warm-up queue for its very first preview -
+  // if the user scrolls to a page before its turn in the queue comes up, they'd see the old
+  // blank placeholder and could easily read that as "broken." The queue used to space job
+  // starts 260ms apart with up to a 1200ms wait each; for a handful of parked pages that could
+  // take several seconds to fully settle. Build an 8-page project, jump to the middle, and check
+  // every parked page gets a real preview well within what the old pacing would have allowed.
+  await page.evaluate(() => {
+    save();
+    function solid(hex) {
+      const c = document.createElement('canvas');
+      c.width = 10; c.height = 10;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = hex;
+      ctx.fillRect(0, 0, 10, 10);
+      return c.toDataURL('image/png');
+    }
+    const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffffff', '#000000'];
+    state.pages = colors.map((hex) => ({
+      type: 'listing', w: 3000, h: 2250,
+      layers: [{ id: 'l' + hex, type: 'image', src: solid(hex), x: 0, y: 0, w: 100, h: 100, z: 1, opacity: 1, r: 0, fit: 'cover' }],
+    }));
+    state.selectedPage = 4; // pages 3,4,5 are hot; 0,1,2,6,7 all need warming from scratch
+    state.selected = null;
+    render();
+  });
+
+  const start = Date.now();
+  async function previewReadyCount() {
+    return page.evaluate(() => Array.from(document.querySelectorAll('.stage.pp95ParkedPage'))
+      .filter((st) => st.querySelector('.pp95ParkedPreviewImg')).length);
+  }
+
+  await expect
+    .poll(previewReadyCount, { timeout: 3000 })
+    .toBe(5); // pages 0,1,2,6,7 - everything outside the hot radius around page 4
+
+  const elapsed = Date.now() - start;
+  // The old pacing (260ms strictly between job starts, 1200ms max wait each) could take
+  // several seconds for just 5 pages; this should comfortably finish in well under 2s.
+  expect(elapsed).toBeLessThan(2000);
+});

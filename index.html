@@ -15303,25 +15303,39 @@ else install();
     }catch(e){ console.warn('parked page warm render failed',e); }
     holder.appendChild(st);
     document.body.appendChild(holder);
-    waitForImages(st, 1200).then(function(){
-      try{ cachePreviewFromLiveStage(p, st); }catch(e){}
+    waitForImages(st, 700).then(function(){
+      try{
+        // The page may have become hot (and possibly been edited) while this ran - don't
+        // clobber whatever the real hot-parked transition path already cached for it.
+        if(Math.abs(pi-state.selectedPage)>VISIBLE_RADIUS) cachePreviewFromLiveStage(p, st);
+      }catch(e){}
       holder.remove();
       renderParkedPreviewsNow();
     });
   }
 
+  // Real report: "the preview seems to work sometimes and sometimes not" while scrolling
+  // through a template. Scrolling itself never changes state.selectedPage (only tapping a page
+  // does), so any page that has never been hot relies entirely on this warm-up queue to get a
+  // preview at all - a page the user scrolls to a moment before its turn comes up just shows
+  // the old blank placeholder until it does. Two fixes: warm the page(s) nearest the current
+  // selection first (closest to what the user is actually looking at/scrolling toward right
+  // now), not strictly in whatever order they were first requested; and cut the pacing delay
+  // way down - each job already self-paces on real async image loading, so the fixed gap
+  // between jobs was pure added latency, not a meaningful memory-safety guard.
   function pumpWarmQueue(){
     warmTimer=null;
     if(!warmQueue.length) return;
+    warmQueue.sort(function(a,b){ return Math.abs(a-state.selectedPage)-Math.abs(b-state.selectedPage); });
     const pi=warmQueue.shift();
     warmOne(pi);
-    warmTimer=setTimeout(pumpWarmQueue, 260);
+    warmTimer=setTimeout(pumpWarmQueue, 40);
   }
 
   function scheduleWarm(pi){
     if(warmQueue.indexOf(pi)!==-1) return;
     warmQueue.push(pi);
-    if(!warmTimer) warmTimer=setTimeout(pumpWarmQueue, 260);
+    if(!warmTimer) warmTimer=setTimeout(pumpWarmQueue, 40);
   }
 
   function renderParkedPreviewsNow(){
