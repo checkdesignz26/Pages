@@ -449,3 +449,46 @@ test('the warm-up queue finishes quickly for a normal-sized project instead of t
   // several seconds for just 5 pages; this should comfortably finish in well under 2s.
   expect(elapsed).toBeLessThan(2000);
 });
+
+test('a page that parks before its image finishes decoding does not get a permanently blank cached preview', async ({ page }) => {
+  // Real bug, found from a user debug report showing zero logged errors: a page parked with a
+  // plain blank "tap to edit" box even though it has real image content. The likely cause -
+  // unreproducible in a quick controlled test but consistent with the report - is a page
+  // becoming hot then parking again before its (possibly large) photo finishes decoding on a
+  // slower device: img.naturalWidth is still 0 at the exact moment the live-DOM snapshot runs,
+  // so nothing gets drawn, and because the (near-blank) result used to get cached anyway,
+  // nothing would ever repaint it - the page looked permanently empty. Simulate that exact
+  // instant by forcing naturalWidth to 0 on the real hot img right when the page parks, and
+  // confirm: (1) that moment does NOT cache a blank preview, and (2) it self-heals shortly
+  // after via the background warm-up path, which builds its own independent image and decodes
+  // normally.
+  const png1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  await page.evaluate((src) => {
+    save();
+    state.pages = [
+      { type: 'listing', w: 3000, h: 2250, layers: [{ id: 'l1', type: 'image', src, x: 10, y: 10, w: 40, h: 40, z: 1, opacity: 1, r: 0 }] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+    ];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+  }, png1x1);
+  await expect(page.locator('.stage[data-page="0"] .layer.image img')).toHaveCount(1);
+
+  const immediatelyMissing = await page.evaluate(() => {
+    const img = document.querySelector('.stage[data-page="0"] .layer.image img');
+    Object.defineProperty(img, 'naturalWidth', { value: 0, configurable: true });
+    state.selectedPage = 2;
+    state.selected = null;
+    render();
+    const st = document.querySelector('.stage[data-page="0"]');
+    return !st.querySelector('.pp95ParkedPreviewImg');
+  });
+  expect(immediatelyMissing, 'must not cache a blank preview while the image is still mid-decode').toBe(true);
+
+  const previewImg = page.locator('.stage[data-page="0"] .pp95ParkedPreviewImg');
+  await expect(previewImg).toHaveCount(1, { timeout: 3000 });
+  const src = await previewImg.getAttribute('src');
+  expect(src).toMatch(/^data:image\/jpeg;base64,/);
+});

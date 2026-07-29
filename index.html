@@ -15181,6 +15181,7 @@ else install();
     try{ nodes=Array.from(stageEl.querySelectorAll('.layer')); }catch(e){ nodes=[]; }
     if(nodes.length>500) nodes=nodes.slice(0,500);
     nodes.sort(function(a,b){ return (parseFloat(a.style.zIndex)||0)-(parseFloat(b.style.zIndex)||0); });
+    let allImagesReady=true;
     nodes.forEach(function(node){
       let cs; try{ cs=getComputedStyle(node); }catch(e){ return; }
       if(cs.display==='none'||cs.visibility==='hidden') return;
@@ -15199,6 +15200,17 @@ else install();
       ctx.translate(cx,cy); ctx.rotate(angle); ctx.translate(-cx,-cy);
       let drewImg=false;
       const img=node.querySelector('img');
+      if(img&&!img.naturalWidth){
+        // The image tag exists (this layer does have real content) but hasn't finished
+        // decoding yet - e.g. a page that became hot then parked again moments later, before
+        // its (possibly large) photo was ready. Drawing now would bake in a misleading blank/
+        // near-blank result and, since it gets cached, nothing would ever repaint it - the
+        // page would look permanently empty. Skip caching this attempt entirely instead and
+        // let a later render() call retry once the image has actually loaded.
+        allImagesReady=false;
+        ctx.restore();
+        return;
+      }
       if(img&&img.naturalWidth){
         // The live page crops/fits this image via CSS object-fit (cover/contain) - a plain
         // drawImage(img,x,y,w,h) ignores that entirely and stretches the whole source image
@@ -15244,6 +15256,10 @@ else install();
       }
       ctx.restore();
     });
+    if(!allImagesReady){
+      if(typeof window.ppDebugLog==='function')window.ppDebugLog('parkedPreview:image-not-decoded-yet',{});
+      return null;
+    }
     try{
       return canvas.toDataURL('image/jpeg',0.9);
     }catch(e){
