@@ -14826,6 +14826,36 @@ else install();
     p.docHtml=editor.innerHTML;
     clearTimeout(editor._flowTimer);editor._flowTimer=setTimeout(()=>{if(!moveOverflow(index,editor)){pullBack(index,editor);p.docHtml=editor.innerHTML;if(typeof scheduleAutosave==='function')scheduleAutosave()}},120);
   }
+  // Real bug: the last line of a page could render half-clipped. Custom/embedded fonts
+  // (docStyles, uploaded fonts) aren't necessarily ready yet at the fixed 20ms mark decorate()
+  // uses per editor - text measured against a fallback font's metrics can still fit, then
+  // reflow slightly larger once the real @font-face finishes loading, with nothing left to
+  // re-check pagination afterward. document.fonts.ready resolves once every requested font has
+  // actually finished loading (true for data: URI/embedded fonts too, not just remote ones -
+  // font decoding is always asynchronous even from an already-available source).
+  //
+  // Deliberately a single global recheck (guarded by fontsReadyRecheckScheduled), not one
+  // scheduled per editor: a page/editor index captured in a per-editor closure can go stale if
+  // an earlier page's own overflow correction triggers a render() first (moveOverflow's own
+  // moved-content branch does exactly that), invalidating every other pending closure's (index,
+  // editor) pairing before it fires - pages()[staleIndex] can then be a completely different
+  // page, or not exist at all, throwing when written to. Re-deriving each editor's current
+  // index fresh from the live DOM when fonts actually finish, instead of trusting a captured
+  // value, avoids that regardless of how much has changed since.
+  let fontsReadyRecheckScheduled=false;
+  function scheduleFontsReadyRecheck(){
+    if(fontsReadyRecheckScheduled)return;
+    if(!(window.document.fonts&&document.fonts.ready))return;
+    fontsReadyRecheckScheduled=true;
+    document.fonts.ready.then(function(){
+      document.querySelectorAll('.documentEditor').forEach(function(ed){
+        if(!document.body.contains(ed))return;
+        const idx=+ed.dataset.pageIndex;
+        if(!Number.isFinite(idx)||!pages()[idx])return;
+        try{ if(!moveOverflow(idx,ed))pullBack(idx,ed); }catch(e){}
+      });
+    });
+  }
   function decorate(){
     document.querySelectorAll('.pageBlock').forEach((block)=>{
       const i=+block.dataset.page,p=pages()[i];if(!isDoc(p))return;ensureDocProps(p);
@@ -14844,6 +14874,7 @@ else install();
         const ed=document.createElement('div');ed.className='documentEditor';ed.contentEditable='true';ed.dataset.pageIndex=i;ed.innerHTML=p.docHtml||'<p><br></p>';ed.addEventListener('input',onDocInput);ed.addEventListener('focus',()=>{state.selectedPage=i;state.selected=null;if(typeof renderPageList==='function')renderPageList()});paper.appendChild(ed);
         const warn=document.createElement('div');warn.className='documentOverflowWarning';warn.textContent='flowing to next page';paper.appendChild(warn);
         setTimeout(()=>moveOverflow(i,ed),20);
+        scheduleFontsReadyRecheck();
       }
       const num=document.createElement('div');num.className='documentPageNumber';num.textContent=docPageNumber(i);paper.appendChild(num);st.appendChild(paper);
       const title=block.querySelector('.pageTitle');if(title)title.textContent=`${i+1}. ${p.docTOC?'Document TOC':'Document'} · A4`;

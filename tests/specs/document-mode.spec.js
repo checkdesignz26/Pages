@@ -765,6 +765,11 @@ test('Backspace at the start of a non-empty document page does nothing special (
 // manual delete, and never survive into the saved docHtml as real text.
 test('"Start writing here…" is a real placeholder that disappears the moment you type, not literal text to delete', async ({ page }) => {
   await openDocumentPage(page);
+  // Known pre-existing artifact (see custom-fonts.spec.js): several independent setTimeout()
+  // calls scattered across the file can replace the .documentEditor DOM node up to ~1.6s after
+  // load - interacting before that settles can land a caret/selection on a node that's about to
+  // be swapped out from under it.
+  await page.waitForTimeout(1800);
 
   const initial = await page.evaluate(() => {
     const p = document.querySelector('.documentEditor p');
@@ -775,7 +780,20 @@ test('"Start writing here…" is a real placeholder that disappears the moment y
   // ...but it must still be visibly showing via CSS on the empty paragraph.
   expect(initial.placeholderContent).toContain('Start writing here');
 
-  await page.click('.documentEditor p');
+  // A raw click doesn't reliably land a caret inside an element that's visually just a <br> -
+  // place it via the selection API directly instead, the same fix already needed elsewhere in
+  // this file for the same reason.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    const p = ed.querySelector('p');
+    ed.focus();
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    r.collapse(true);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
   await page.keyboard.type('H');
 
   await expect
@@ -819,4 +837,45 @@ test('collapsing the right panel stays collapsed when selecting an image inside 
   await page.waitForTimeout(150);
 
   expect(await page.evaluate(() => document.body.classList.contains('rightCollapsed'))).toBe(true);
+});
+
+// Real report: the last line of text on a document page rendered half-clipped. Likely cause:
+// custom/embedded fonts (docStyles, uploaded fonts) aren't necessarily finished loading at the
+// fixed 20ms mark decorate() originally used to check pagination - text measured against a
+// fallback font's metrics can fit, then reflow slightly larger once the real @font-face
+// actually loads, with nothing left to re-check pagination afterward. Fixed by re-verifying
+// once document.fonts.ready resolves. Simulates the exact race by controlling when
+// document.fonts.ready resolves directly, then mutating the editor's content (standing in for
+// "the reflow that happens once the real font loads") before it resolves.
+test('a page that overflows only after fonts finish loading still gets its overflow corrected', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__fontsReadyPromise = new Promise((resolve) => { window.__resolveFontsReady = resolve; });
+    Object.defineProperty(document.fonts, 'ready', { get: () => window.__fontsReadyPromise, configurable: true });
+  });
+  await page.reload();
+  await page.waitForFunction(() => typeof state !== 'undefined' && state && typeof window.render === 'function');
+
+  await openDocumentPage(page);
+  const countBefore = await page.evaluate(() => state.pages.length);
+
+  // At this point the fixed-delay pagination check has already run (content fit fine then).
+  // Now simulate "the real font loaded and the text got bigger" by directly stuffing enough
+  // extra content into the live editor to overflow it - without ever telling the app via a
+  // real 'input' event, the same way a pure font-swap reflow would never fire one either.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    for (let i = 0; i < 40; i++) {
+      const p = document.createElement('p');
+      p.textContent = 'Extra reflowed line of text that did not fit before the font finished loading.';
+      ed.appendChild(p);
+    }
+  });
+  await page.waitForTimeout(100);
+  // Without the fix, nothing would ever move this overflow to a new page.
+  expect(await page.evaluate(() => state.pages.length)).toBe(countBefore);
+
+  await page.evaluate(() => { window.__resolveFontsReady(); });
+  await page.waitForFunction((before) => state.pages.length > before, countBefore, { timeout: 5000 });
+
+  expect(await page.evaluate(() => state.pages.length)).toBeGreaterThan(countBefore);
 });
