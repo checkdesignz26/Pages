@@ -1125,3 +1125,132 @@ test('a heading pulled back into a shorter page does not also survive on the pag
   expect(result.page1).not.toContain('Chapter 1');
   expect(result.page1).toContain('Pattern Pages runs directly');
 });
+
+// Real bug, confirmed from a saved user file: a heading that had its font size nudged a few
+// times ended up 12 levels deep in nested <span style="font-size:..."> wrappers - applyCss()
+// (used for font size, letter spacing, and line height) wrapped the selection in a brand new
+// span on every single change instead of updating the one it had just created. applyFontFamily
+// already avoided this for the font dropdown; applyCss needed the same fix.
+test('repeatedly changing font size on the same selection updates one span in place instead of nesting a new one each time', async ({ page }) => {
+  await openDocumentPage(page);
+  await expandAllBoxes(page);
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.innerHTML = '<h1>Title</h1><p>Some heading text</p>';
+    ed.focus();
+    const p = ed.querySelector('p');
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
+
+  // Simulate dragging the font-size slider through several values (continuous 'input' events),
+  // then releasing it (one final 'change') - exactly how a real drag interaction fires events.
+  for (const v of [22, 24, 26, 28]) {
+    await page.evaluate((val) => {
+      const el = document.getElementById('fontSize');
+      el.value = String(val);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }, v);
+  }
+  await page.evaluate(() => {
+    document.getElementById('fontSize').dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  const result = await page.evaluate(() => {
+    const p = document.querySelector('.documentEditor p');
+    let depth = 0, el = p.querySelector('span');
+    while (el) { depth++; el = el.querySelector('span'); }
+    return { depth, html: p.innerHTML, text: p.textContent };
+  });
+
+  expect(result.depth).toBeLessThanOrEqual(1);
+  expect(result.text).toBe('Some heading text'); // content itself must survive intact
+});
+
+// Real report, the day after the duplication fix above shipped: selecting text landed one
+// character short on the first attempt, correct on a second try. The duplication fix's resync
+// (moveOverflow rebuilding an editor's innerHTML from the array when a sibling page's pullBack
+// bumped its version behind its back) didn't check whether the editor being resynced was the
+// one the user currently has focused/mid-selection in - wiping it out from under a live touch
+// selection is exactly the kind of thing that would drop a character on the first try.
+test('a background cross-page reflow does not wipe out an active selection in the page currently being edited', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__fontsReadyPromise = new Promise((resolve) => { window.__resolveFontsReady = resolve; });
+    Object.defineProperty(document.fonts, 'ready', { get: () => window.__fontsReadyPromise, configurable: true });
+  });
+  await page.reload();
+  await page.waitForFunction(() => typeof state !== 'undefined' && state && typeof window.render === 'function');
+
+  await openDocumentPage(page);
+
+  // Same "page 0 has room for exactly a heading, not a heading + paragraph" setup as the
+  // duplication repro above - this is what makes the fonts-ready sweep's pullBack() actually
+  // move page 1's heading into page 0, bumping page 1's flow version.
+  const setup = await page.evaluate(() => {
+    const ed0 = document.querySelector('.documentEditor');
+    ed0.innerHTML = '<h1>Title</h1>';
+    let i = 0;
+    while (ed0.scrollHeight <= ed0.clientHeight + 2 && i < 400) {
+      const p = document.createElement('p');
+      p.textContent = `Paragraph number ${i} with enough words in it to take up a full line.`;
+      ed0.appendChild(p);
+      i++;
+    }
+    ed0.lastElementChild.remove();
+    function overflowsWithHeadingProbe() {
+      const probe = document.createElement('h2');
+      probe.textContent = 'Chapter 1 – Getting Started';
+      ed0.appendChild(probe);
+      const overflows = ed0.scrollHeight > ed0.clientHeight + 2;
+      probe.remove();
+      return overflows;
+    }
+    let guard = 0;
+    while (overflowsWithHeadingProbe() && ed0.children.length > 1 && guard++ < 50) {
+      ed0.lastElementChild.remove();
+    }
+    const headingAloneFits = !overflowsWithHeadingProbe();
+    state.pages[state.selectedPage].docHtml = ed0.innerHTML;
+    return { headingAloneFits };
+  });
+  expect(setup.headingAloneFits).toBe(true);
+
+  await page.evaluate(() => {
+    addDocumentLitePage(0);
+    const ed1 = document.querySelector('.documentEditor[data-page-index="1"]');
+    ed1.innerHTML = '<h2>Chapter 1 – Getting Started</h2><p>Pattern Pages runs directly in your web browser, so there is nothing to install.</p>';
+    state.pages[1].docHtml = ed1.innerHTML;
+  });
+  await page.waitForTimeout(300);
+
+  // Focus page 1 and select the paragraph text (not the heading that's about to be pulled away)
+  // - simulating the user mid-selection on body text while an unrelated background sync runs.
+  await page.evaluate(() => {
+    const ed1 = document.querySelector('.documentEditor[data-page-index="1"]');
+    const p = ed1.querySelector('p');
+    ed1.focus();
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
+
+  await page.evaluate(() => { window.__resolveFontsReady(); });
+  await page.waitForTimeout(500);
+
+  const after = await page.evaluate(() => {
+    const ed1 = document.querySelector('.documentEditor[data-page-index="1"]');
+    const s = window.getSelection();
+    return {
+      stillFocused: document.activeElement === ed1,
+      selectionText: s && s.rangeCount ? s.toString() : '',
+    };
+  });
+
+  expect(after.stillFocused).toBe(true);
+  expect(after.selectionText).toContain('Pattern Pages runs directly');
+});

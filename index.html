@@ -14852,8 +14852,16 @@ else install();
     // docHtml at all. Track cross-page mutations with an explicit version counter instead
     // (bumped only at the two spots below/in pullBack that write into a DIFFERENT page's
     // docHtml), so a resync only happens when this exact hazard applies.
+    // Real bug, reported the day this landed: selecting text landed one character short on the
+    // first attempt, correct on a second try. The resync above is exactly the kind of thing
+    // that would cause that if it ever fires on the editor the user is actively mid-gesture in -
+    // replacing editor.innerHTML wholesale destroys any live/in-progress selection, and a touch
+    // drag whose target node got swapped out from under it can easily land one character off
+    // when re-resolved against the fresh DOM. Never resync the editor that currently has focus;
+    // its own normal typing flow (onDocInput) keeps it correct anyway, and it'll pick up the
+    // resync next time it's touched while NOT the active one.
     const truth183=pages()[index];
-    if(truth183&&editor.dataset.flowVer183!==String(truth183.__flowVer183||0)){
+    if(truth183&&editor.dataset.flowVer183!==String(truth183.__flowVer183||0)&&document.activeElement!==editor){
       editor.innerHTML=truth183.docHtml||'<p><br></p>';
       editor.dataset.flowVer183=String(truth183.__flowVer183||0);
     }
@@ -18697,16 +18705,45 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
       range.collapse(true);
       sel.removeAllRanges();sel.addRange(range);
     }else{
-      var span=document.createElement('span');
-      span.style.setProperty(prop,value);
-      try{range.surroundContents(span)}
-      catch(e){
-        var frag=range.extractContents();
-        span.appendChild(frag);
-        range.insertNode(span);
+      // Real bug, confirmed from a saved user file: nudging the same slider (font size, letter
+      // spacing, line height) repeatedly wrapped the selection in a FRESH <span> every time
+      // instead of updating the existing one - one heading in a real document ended up 12
+      // levels deep in nested font-size spans just from a few size adjustments. Mirror
+      // applyFontFamily's fix above: if the selection is exactly the full contents of a span
+      // already wrapping it, update that span in place instead of nesting another one around it.
+      var reuseParent=range.commonAncestorContainer;
+      if(reuseParent.nodeType!==1)reuseParent=reuseParent.parentElement;
+      var reused=false;
+      if(reuseParent&&reuseParent.tagName==='SPAN'&&activeEditor.contains(reuseParent)){
+        var probe=document.createRange();
+        probe.selectNodeContents(reuseParent);
+        if(probe.compareBoundaryPoints(Range.START_TO_START,range)===0&&probe.compareBoundaryPoints(Range.END_TO_END,range)===0){
+          reuseParent.style.setProperty(prop,value);
+          reuseParent.querySelectorAll('[style]').forEach(function(el){
+            if(el.style.getPropertyValue(prop)) el.style.removeProperty(prop);
+          });
+          range.selectNodeContents(reuseParent);
+          sel.removeAllRanges();sel.addRange(range);
+          reused=true;
+        }
       }
-      range.selectNodeContents(span);
-      sel.removeAllRanges();sel.addRange(range);
+      if(!reused){
+        var span=document.createElement('span');
+        span.style.setProperty(prop,value);
+        try{range.surroundContents(span)}
+        catch(e){
+          var frag=range.extractContents();
+          span.appendChild(frag);
+          range.insertNode(span);
+        }
+        // Strip any OTHER nested element that also sets this same property so the value just
+        // applied always actually wins, rather than leaving a more-deeply-nested old value.
+        span.querySelectorAll('[style]').forEach(function(el){
+          if(el.style.getPropertyValue(prop)) el.style.removeProperty(prop);
+        });
+        range.selectNodeContents(span);
+        sel.removeAllRanges();sel.addRange(range);
+      }
     }
     savedRange=range.cloneRange();
     saveEditor(activeEditor,false);
