@@ -6094,6 +6094,7 @@ document.addEventListener('click', function(e){
       pages:st.pages||[], selectedPage:st.selectedPage||0, trays:st.trays||{pattern:[],asset:[]},
       zoom:st.zoom||1, leftHanded:!!st.leftHanded, leftCollapsed:!!st.leftCollapsed, rightCollapsed:!!st.rightCollapsed,
       customFonts:Object.assign({},window.ppCustomFonts||{}),
+      docStyles:Object.assign({},window.ppDocStyles||{}),
       listingAssistant:{
         patternName:getListingField('listingPatternName'), keywords:getListingField('listingKeywords'), etsyTags:getListingField('etsyTagsOutput'),
         longTail:getListingField('longTailKeywordsOutput'), title:getListingField('listingTitleOutput'), pinterest:getListingField('pinterestKeywordsOutput'), instagram:getListingField('instagramHashtagsOutput')
@@ -6169,6 +6170,8 @@ document.addEventListener('click', function(e){
     if(data.customFonts && typeof window.registerCustomFont==='function'){
       Object.keys(data.customFonts).forEach(name=>window.registerCustomFont(name,data.customFonts[name]));
     }
+    window.ppDocStyles=data.docStyles||{};
+    if(typeof window.ppApplyDocStylesCSS==='function') window.ppApplyDocStylesCSS();
     ['leftHanded','leftCollapsed','rightCollapsed'].forEach(k=>{ if(typeof data[k]==='boolean'){state[k]=data[k]; document.body.classList.toggle(k,data[k]);} });
     if(safe$('handModeBtn')) safe$('handModeBtn').textContent=state.leftHanded?'right-handed layout':'left-handed layout';
     const la=data.listingAssistant||{};
@@ -15076,12 +15079,125 @@ else install();
   function installPanel(){
     if(document.getElementById('ppDocumentLitePanel'))return;
     const pageList=document.getElementById('pageList');const box=pageList&&pageList.closest('.box');if(!box)return;
-    const panel=document.createElement('div');panel.id='ppDocumentLitePanel';panel.className='box documentLiteBox';panel.innerHTML=`<h2>document mode lite</h2><div class="panelBody"><p class="smallText">Write a manual or welcome PDF. Text flows onto a new A4 page automatically.</p><button class="full primary" onclick="addDocumentLitePage()">add document page</button><div class="docQuickStyles"><button onclick="ppDocStyle('h1')">heading 1</button><button onclick="ppDocStyle('h2')">heading 2</button><button onclick="ppDocStyle('p')">body</button></div><div class="grid2"><button onclick="ppDocInsertLink()">add link</button><button onclick="ppDocChooseImage()">add image</button></div><input id="ppDocImageInput" type="file" accept="image/*" onchange="ppDocInsertImage(this)"><div class="grid2"><button onclick="ppUpdateDocumentTOC()">create / update TOC</button><button onclick="ppRenameDocTOC()">rename contents title</button></div><button class="full" onclick="ppPrintDocument()">print / save PDF</button><div class="documentLiteStatus">Automatic page numbers appear at the bottom of every document page.</div></div>`;
+    const panel=document.createElement('div');panel.id='ppDocumentLitePanel';panel.className='box documentLiteBox';panel.innerHTML=`<h2>document mode lite</h2><div class="panelBody"><p class="smallText">Write a manual or welcome PDF. Text flows onto a new A4 page automatically.</p><button class="full primary" onclick="addDocumentLitePage()">add document page</button><div class="docQuickStyles"><button onclick="ppDocStyle('h1')">heading 1</button><button onclick="ppDocStyle('h2')">heading 2</button><button onclick="ppDocStyle('p')">body</button></div><p class="smallText">Format a heading or line of body text the way you want it, put your cursor in it, then tap below to use that look everywhere in the document.</p><div class="docQuickStyles"><button onclick="ppSetHeadingStyleFromSelection('h1')">set heading 1 style</button><button onclick="ppSetHeadingStyleFromSelection('h2')">set heading 2 style</button><button onclick="ppSetHeadingStyleFromSelection('p')">set body style</button></div><div class="grid2"><button onclick="ppDocInsertLink()">add link</button><button onclick="ppDocChooseImage()">add image</button></div><input id="ppDocImageInput" type="file" accept="image/*" onchange="ppDocInsertImage(this)"><div class="grid2"><button onclick="ppUpdateDocumentTOC()">create / update TOC</button><button onclick="ppRenameDocTOC()">rename contents title</button></div><button class="full" onclick="ppPrintDocument()">print / save PDF</button><div class="documentLiteStatus">Automatic page numbers appear at the bottom of every document page.</div></div>`;
     box.insertAdjacentElement('afterend',panel);
   }
   const oldRenderPages=window.renderPages;window.renderPages=function(){oldRenderPages.apply(this,arguments);decorate()};
   const oldRender=window.render;window.render=function(){const v=oldRender.apply(this,arguments);setTimeout(()=>{installPanel();decorate()},0);return v};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{installPanel();decorate()},60));else setTimeout(()=>{installPanel();decorate()},60);
+})();
+</script>
+
+
+<!-- DOCUMENT HEADING/BODY STYLES — real request: define what Heading 1, Heading 2, and body
+     text look like once and have every occurrence throughout the whole document (current and
+     future pages) use it, and stay in sync if the definition changes later - like Word/Google
+     Docs paragraph styles. Implemented as a single dynamic <style> rule scoped to
+     ".documentEditor h1/h2/p" rather than touching each heading's own HTML: the browser's own
+     CSS cascade then makes every existing and future heading follow it automatically (including
+     ones on pages not currently hot/rendered, since they'll pick up the same page-wide CSS the
+     moment they're built), and any direct per-run formatting a user already applied (a bolded
+     word, a one-off color) still correctly wins over it, same as a real Word style. -->
+<script id="pp-document-heading-styles">
+(function(){
+  'use strict';
+  if(window.__PP_DOCUMENT_HEADING_STYLES__) return;
+  window.__PP_DOCUMENT_HEADING_STYLES__=true;
+
+  window.ppDocStyles=window.ppDocStyles||{};
+
+  window.ppApplyDocStylesCSS=function(){
+    let styleEl=document.getElementById('pp-doc-custom-styles');
+    if(!styleEl){
+      styleEl=document.createElement('style');
+      styleEl.id='pp-doc-custom-styles';
+      document.head.appendChild(styleEl);
+    }
+    let css='';
+    ['h1','h2','p'].forEach(function(tag){
+      const s=window.ppDocStyles[tag]; if(!s) return;
+      // !important has to be on each individual declaration, not once at the end of the
+      // block - a single trailing "!important" only actually applies to the last property
+      // listed, silently leaving every other one as a normal-priority declaration that the
+      // editor's own base styles could still beat.
+      const decls=[];
+      if(s.fontFamily) decls.push('font-family:'+s.fontFamily+' !important');
+      if(s.fontSize) decls.push('font-size:'+s.fontSize+' !important');
+      if(s.color) decls.push('color:'+s.color+' !important');
+      if(s.fontWeight) decls.push('font-weight:'+s.fontWeight+' !important');
+      if(s.fontStyle) decls.push('font-style:'+s.fontStyle+' !important');
+      if(s.letterSpacing) decls.push('letter-spacing:'+s.letterSpacing+' !important');
+      if(s.lineHeight) decls.push('line-height:'+s.lineHeight+' !important');
+      // #pageWrap (an ID) rather than plain ".documentEditor" - a later patch's
+      // ".documentEditor.ppPersistentDoc183 h1{...!important}" rule (two classes) otherwise
+      // beats a same-!important, lower-specificity ".documentEditor h1" rule regardless of
+      // which one is inserted later. #pageWrap is the real, stable ancestor of every document
+      // editor (it's the one page-list container renderPages/decorate both append into), and
+      // an ID selector always outranks any number of classes.
+      if(decls.length) css+='#pageWrap .documentEditor '+tag+'{'+decls.join(';')+'}';
+    });
+    styleEl.textContent=css;
+  };
+
+  // The persistent-document-engine script keeps its own activeEditor/savedRange up to date on
+  // every selectionchange specifically because clicking any button outside the contenteditable
+  // (moving focus away) clears/collapses the live window.getSelection() - by the time our own
+  // button's click handler runs, the selection the user actually made is already gone unless
+  // something cached it beforehand. That tracking is private to the other script's closure (an
+  // IIFE-scoped `let`, not a global), so keep an independent copy here rather than trying to
+  // reach into it.
+  let lastDocRange=null, lastDocEditor=null;
+  document.addEventListener('selectionchange',function(){
+    const sel=window.getSelection();
+    if(!sel||!sel.rangeCount||!sel.anchorNode) return;
+    const el=sel.anchorNode.nodeType===1?sel.anchorNode:sel.anchorNode.parentElement;
+    const ed=el&&el.closest('.documentEditor');
+    if(ed){ lastDocEditor=ed; lastDocRange=sel.getRangeAt(0).cloneRange(); }
+  });
+
+  window.ppSetHeadingStyleFromSelection=function(tag){
+    tag=String(tag||'h1').toLowerCase();
+    const tagLabel=tag==='h1'?'Heading 1':tag==='h2'?'Heading 2':'Body';
+    let editor=lastDocEditor&&document.contains(lastDocEditor)?lastDocEditor:null;
+    if(!editor){
+      try{ editor=document.querySelector('.documentEditor[data-page-index="'+state.selectedPage+'"]')||document.querySelector('.documentEditor'); }catch(e){}
+    }
+    if(!editor){
+      if(typeof toast==='function') toast('Click into a document page first.');
+      return false;
+    }
+    // Refocus the editor and restore the cached range before reading the selection, the same
+    // trick restoreRange() uses - the click that got us here already moved focus (and the
+    // selection) away from the contenteditable.
+    editor.focus({preventScroll:true});
+    const sel=window.getSelection();
+    if(lastDocRange){
+      try{ sel.removeAllRanges(); sel.addRange(lastDocRange); }catch(e){}
+    }
+    if(!sel||!sel.rangeCount){
+      if(typeof toast==='function') toast('Place the cursor in a '+tagLabel+' line first.');
+      return false;
+    }
+    const node=sel.getRangeAt(0).startContainer;
+    const styledEl=node.nodeType===1?node:node.parentElement;
+    const blockEl=styledEl&&styledEl.closest(tag);
+    if(!blockEl||!editor.contains(blockEl)){
+      if(typeof toast==='function') toast('Place the cursor in a '+tagLabel+' line first.');
+      return false;
+    }
+    const cs=getComputedStyle(styledEl);
+    window.ppDocStyles[tag]={
+      fontFamily:cs.fontFamily,fontSize:cs.fontSize,color:cs.color,
+      fontWeight:cs.fontWeight,fontStyle:cs.fontStyle,
+      letterSpacing:cs.letterSpacing,lineHeight:cs.lineHeight
+    };
+    window.ppApplyDocStylesCSS();
+    if(typeof toast==='function') toast(tagLabel+' style updated throughout the document.');
+    try{ if(typeof autosaveSoon==='function') autosaveSoon(); }catch(e){}
+    return true;
+  };
+
+  window.ppApplyDocStylesCSS();
 })();
 </script>
 
@@ -16819,6 +16935,7 @@ else install();
       pages:(state.pages||[]).map(function(p){return Object.assign({},p,{layers:(p.layers||[]).map(strippedLayer)})}),
       selectedPage:state.selectedPage||0,zoom:state.zoom||1,leftHanded:!!state.leftHanded,
       customFonts:Object.assign({},window.ppCustomFonts||{}),
+      docStyles:Object.assign({},window.ppDocStyles||{}),
       note:'Pattern Pages template file. Placeholder artwork is removed, but template banners and overlays are kept.'
     };
   }
@@ -16860,6 +16977,8 @@ else install();
         if(data.customFonts && typeof window.registerCustomFont==='function'){
           Object.keys(data.customFonts).forEach(function(name){ window.registerCustomFont(name,data.customFonts[name]); });
         }
+        window.ppDocStyles=data.docStyles||{};
+        if(typeof window.ppApplyDocStylesCSS==='function') window.ppApplyDocStylesCSS();
         state.pages=data.pages.map(function(p){return Object.assign({},p,{layers:(p.layers||[]).map(function(l){l.isPlaceholder=!!(l.isPlaceholder||l.templatePlaceholder||l.patternSlot||l.templateHadArtwork);l.templatePlaceholder=l.isPlaceholder;l.placeholderName=l.placeholderName||l.name||'placeholder'; if(!l.src && (l.type==='image'||l.type==='mockup'||l.patternSlot)){l.src=null;} return l;})})});
         state.selectedPage=Math.min(Math.max(0,data.selectedPage||0),Math.max(0,state.pages.length-1));
         state.selected=null;state.selectedLayerIds=[];
@@ -17006,7 +17125,7 @@ else install();
     if(!pages.length) pages=[basePage()];
     var root=(data&&data.state)?data.state:data;
     var sel=Math.max(0,Math.min(pages.length-1,Number(root&&root.selectedPage)||0));
-    return {pages:pages,selectedPage:sel,trays:(root&&root.trays)||(data&&data.trays)||{pattern:[],asset:[]},zoom:Number((root&&root.zoom)||(data&&data.zoom)||1)||1,leftHanded:!!(root&&root.leftHanded),leftCollapsed:!!(root&&root.leftCollapsed),rightCollapsed:!!(root&&root.rightCollapsed),customFonts:(root&&root.customFonts)||(data&&data.customFonts)||{}};
+    return {pages:pages,selectedPage:sel,trays:(root&&root.trays)||(data&&data.trays)||{pattern:[],asset:[]},zoom:Number((root&&root.zoom)||(data&&data.zoom)||1)||1,leftHanded:!!(root&&root.leftHanded),leftCollapsed:!!(root&&root.leftCollapsed),rightCollapsed:!!(root&&root.rightCollapsed),customFonts:(root&&root.customFonts)||(data&&data.customFonts)||{},docStyles:(root&&root.docStyles)||(data&&data.docStyles)||{}};
   }
   function applyProject(project){
     var st=S(); if(!st) throw new Error('Pattern Pages state is not ready yet. Please wait one second and tap load again.');
@@ -17015,6 +17134,8 @@ else install();
     if(project.customFonts && typeof window.registerCustomFont==='function'){
       Object.keys(project.customFonts).forEach(function(name){ window.registerCustomFont(name,project.customFonts[name]); });
     }
+    window.ppDocStyles=project.docStyles||{};
+    if(typeof window.ppApplyDocStylesCSS==='function') window.ppApplyDocStylesCSS();
     st.leftHanded=project.leftHanded; st.leftCollapsed=project.leftCollapsed; st.rightCollapsed=project.rightCollapsed;
     document.body.classList.toggle('leftHanded',!!st.leftHanded);
     document.body.classList.toggle('leftCollapsed',!!st.leftCollapsed);

@@ -40,7 +40,7 @@ test('document editor DOM node survives selection, font, and heading changes', a
   await page.waitForTimeout(300);
   expect(await isOriginal(), 'after changing fontFamily').toBe(true);
 
-  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("heading 1")'));
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:text-is("heading 1")'));
   await page.waitForTimeout(300);
   expect(await isOriginal(), 'after clicking heading 1').toBe(true);
 });
@@ -56,7 +56,7 @@ test('heading/body toggle and font changes apply without reselecting text', asyn
   await page.waitForTimeout(300);
 
   await page.keyboard.press('Control+A');
-  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("body")'));
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:text-is("body")'));
   await page.waitForTimeout(150);
   await expect(page.locator('.documentEditor')).not.toContainText('undefined');
 
@@ -66,7 +66,7 @@ test('heading/body toggle and font changes apply without reselecting text', asyn
   expect(selectionText).toContain('Alpha Bravo Charlie Delta Echo Foxtrot Golf');
 
   // Click heading 1 WITHOUT clicking back into the editor first - the real-world flow.
-  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("heading 1")'));
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:text-is("heading 1")'));
   await page.waitForTimeout(150);
   await expect(page.locator('.documentEditor h1')).toHaveCount(1);
 
@@ -81,7 +81,7 @@ test('heading/body toggle and font changes apply without reselecting text', asyn
 
   await page.click('.documentEditor');
   await page.keyboard.press('Control+A');
-  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("heading 2")'));
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:text-is("heading 2")'));
   await page.waitForTimeout(150);
   await expect(page.locator('.documentEditor h2')).toHaveCount(1);
 
@@ -583,4 +583,114 @@ test('switching to a different page without deselecting a document image first r
   }));
   expect(layerPanel.rotateVisible).toBe(true);
   expect(layerPanel.fitCanvasVisible).toBe(true);
+});
+
+// Real request: define what Heading 1/Heading 2/body text look like once and have every
+// occurrence throughout the document use it - like a Word/Google Docs paragraph style -
+// instead of having to reformat each heading individually. Implemented as a single dynamic
+// <style> rule scoped to .documentEditor h1/h2/p (ppApplyDocStylesCSS), so it applies to every
+// heading automatically, including ones that don't exist yet.
+test('setting a heading style from one heading applies it everywhere, updates live, and does not clobber direct formatting', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.evaluate(() => {
+    document.getElementById('textStudioPanel').classList.remove('collapsed');
+    document.body.classList.remove('rightCollapsed');
+  });
+
+  // Format the existing default heading ("Title") with a distinct font and promote it to the
+  // document-wide Heading 1 style.
+  await page.click('.documentEditor h1');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Shift+End');
+  await page.selectOption('#fontFamily', 'Impact');
+  await page.waitForTimeout(200);
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("set heading 1 style")'));
+  await page.waitForTimeout(150);
+
+  // Create a brand-new heading elsewhere in the document, with no manual font formatting at all.
+  await page.click('.documentEditor p');
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Second Heading');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Shift+End');
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:text-is("heading 1")'));
+  await page.waitForTimeout(200);
+
+  let fonts = await page.evaluate(() => Array.from(document.querySelectorAll('.documentEditor h1'))
+    .map((h) => getComputedStyle(h).fontFamily));
+  expect(fonts.length).toBeGreaterThanOrEqual(2);
+  fonts.forEach((f) => expect(f).toContain('Impact'));
+
+  // Change the style again from a THIRD, freshly-created (unformatted) heading, using a
+  // different font this time.
+  await page.click('.documentEditor h1:has-text("Second Heading")');
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Third Heading');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Shift+End');
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:text-is("heading 1")'));
+  await page.waitForTimeout(200);
+  await page.click('.documentEditor h1:has-text("Third Heading")');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Shift+End');
+  await page.selectOption('#fontFamily', 'Georgia');
+  await page.waitForTimeout(200);
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("set heading 1 style")'));
+  await page.waitForTimeout(150);
+
+  const after = await page.evaluate(() => {
+    // Read the "Title" heading's inline-formatted span, not the <h1> tag itself - the tag has
+    // no text of its own (it's all inside that span), so the tag's OWN computed font-family
+    // just reflects whatever the shared style rule currently says, telling us nothing about
+    // whether the direct formatting survived.
+    const titleSpan = document.querySelector('.documentEditor h1 span');
+    const secondH1 = [...document.querySelectorAll('.documentEditor h1')].find((h) => h.textContent.includes('Second Heading'));
+    return {
+      title: getComputedStyle(titleSpan).fontFamily,
+      second: getComputedStyle(secondH1).fontFamily,
+    };
+  });
+  // The original "Title" heading has its own direct Impact formatting (a nested span) - a
+  // later style change must not clobber it.
+  expect(after.title).toContain('Impact');
+  // "Second Heading" was never directly formatted, so it tracks the live style definition and
+  // must have picked up the newer Georgia style, not stayed stuck on the older Impact one.
+  expect(after.second).toContain('Georgia');
+});
+
+test('a heading style survives a save/load round trip', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.evaluate(() => {
+    document.getElementById('textStudioPanel').classList.remove('collapsed');
+    document.body.classList.remove('rightCollapsed');
+  });
+  await page.click('.documentEditor h1');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Shift+End');
+  await page.selectOption('#fontFamily', 'Impact');
+  await page.waitForTimeout(200);
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("set heading 1 style")'));
+  await page.waitForTimeout(150);
+
+  await page.evaluate(() => window.quickSaveProject());
+  await page.waitForTimeout(300);
+
+  const wiped = await page.evaluate(() => {
+    window.ppDocStyles = {};
+    window.ppApplyDocStylesCSS();
+    return document.getElementById('pp-doc-custom-styles').textContent;
+  });
+  expect(wiped).toBe('');
+
+  await page.evaluate(() => window.quickLoadProject());
+  await page.waitForTimeout(300);
+
+  const restored = await page.evaluate(() => ({
+    docStyles: window.ppDocStyles,
+    css: document.getElementById('pp-doc-custom-styles').textContent,
+  }));
+  expect(restored.docStyles.h1 && restored.docStyles.h1.fontFamily).toContain('Impact');
+  expect(restored.css).toContain('Impact');
 });
