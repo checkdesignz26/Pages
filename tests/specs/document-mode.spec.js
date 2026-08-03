@@ -879,3 +879,62 @@ test('a page that overflows only after fonts finish loading still gets its overf
 
   expect(await page.evaluate(() => state.pages.length)).toBeGreaterThan(countBefore);
 });
+
+// Real report, confirmed from a screen recording: editing text made the caret/page jump around
+// erratically, with the on-screen keyboard repeatedly dismissing and reappearing. Root cause:
+// moveOverflow() always followed the caret onto the newly-created page whenever ANY trailing
+// content overflowed, even when the edit that triggered it happened somewhere else entirely in
+// the page (e.g. fixing a word near the top while a paragraph near the bottom happened to be
+// sitting right at the page boundary) - yanking focus away mid-edit to a page the user was
+// never actually looking at.
+test('editing text in the middle of a page does not steal the caret away to a new page when unrelated trailing content overflows', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.click('.documentEditor');
+  await page.keyboard.press('Control+A');
+
+  // Build up content paragraph by paragraph until it's right at the overflow boundary (one more
+  // paragraph would push over), without ever crossing it yet.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.innerHTML = '<h1>Title</h1>';
+    let i = 0;
+    while (ed.scrollHeight <= ed.clientHeight + 2 && i < 200) {
+      const p = document.createElement('p');
+      p.textContent = `Paragraph number ${i} with enough words in it to take up a full line of the page.`;
+      ed.appendChild(p);
+      i++;
+    }
+    // Back off by one paragraph so we're just under the boundary, not already over it.
+    ed.lastElementChild.remove();
+    state.pages[state.selectedPage].docHtml = ed.innerHTML;
+  });
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => state.pages.length)).toBe(1);
+
+  // Place the caret in the FIRST paragraph (nowhere near the bottom of the page) and type there -
+  // this alone pushes the trailing content just over the boundary.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    const firstP = ed.querySelector('p');
+    ed.focus();
+    const r = document.createRange();
+    r.selectNodeContents(firstP);
+    r.collapse(true);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
+  await page.keyboard.type('EDITED-HERE ');
+
+  await page.waitForFunction(() => state.pages.length > 1, null, { timeout: 5000 });
+  await page.waitForTimeout(200);
+
+  const after = await page.evaluate(() => ({
+    focusedPageIndex: document.activeElement.classList.contains('documentEditor') ? +document.activeElement.dataset.pageIndex : null,
+    firstParagraphText: document.querySelector('.documentEditor[data-page-index="0"] p').textContent,
+  }));
+  // Focus must stay on the page being edited (page 0), not jump to the new page 1 that
+  // received the unrelated overflowed content.
+  expect(after.focusedPageIndex).toBe(0);
+  expect(after.firstParagraphText).toContain('EDITED-HERE');
+});

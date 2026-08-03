@@ -14779,6 +14779,55 @@ else install();
     clone.textContent=overflow;
     return clone.outerHTML;
   }
+  // The core renderPages() (called by the shared render()) unconditionally wipes and rebuilds
+  // #pageWrap's entire innerHTML on every call - decorate()'s "already matches" check avoids
+  // rebuilding a page's HTML *content* when nothing changed, but it still always creates a
+  // fresh DOM node either way, never reusing the one that was actually focused. So any render()
+  // triggered while typing (e.g. an unrelated overflow correction elsewhere in the document)
+  // silently drops focus to <body>, dismissing the on-screen keyboard, even when nothing about
+  // the page being edited actually needed to change. These two helpers save "which child of
+  // the editor, and how many characters into it" the caret was at, then restore an equivalent
+  // position in the freshly-rebuilt editor for that same page afterward.
+  function caretCharOffsetInNode(node,container,offset){
+    const range=document.createRange();
+    range.selectNodeContents(node);
+    try{ range.setEnd(container,offset); }catch(e){ return 0; }
+    return range.toString().length;
+  }
+  function setCaretAtCharOffset(node,charOffset){
+    const walker=document.createTreeWalker(node,NodeFilter.SHOW_TEXT,null);
+    let remaining=charOffset,textNode=null;
+    while(walker.nextNode()){
+      const len=walker.currentNode.textContent.length;
+      if(remaining<=len){ textNode=walker.currentNode; break; }
+      remaining-=len;
+    }
+    const range=document.createRange();
+    if(textNode){ range.setStart(textNode,Math.min(remaining,textNode.textContent.length)); }
+    else{ range.selectNodeContents(node); range.collapse(false); return range; }
+    range.collapse(true);
+    return range;
+  }
+  function captureCaretForRestore(editor){
+    const sel=window.getSelection();
+    if(!sel||!sel.rangeCount)return null;
+    const r=sel.getRangeAt(0);
+    let child=r.startContainer;
+    while(child&&child.parentElement!==editor)child=child.parentElement;
+    if(!child)return null;
+    return {childIndex:Array.prototype.indexOf.call(editor.children,child),charOffset:caretCharOffsetInNode(child,r.startContainer,r.startOffset)};
+  }
+  function restoreCaretAfterRender(pageIndex,info){
+    if(!info)return;
+    const ed=document.querySelector(`.documentEditor[data-page-index="${pageIndex}"]`);
+    const child=ed&&ed.children[info.childIndex];
+    if(!child)return;
+    try{
+      const range=setCaretAtCharOffset(child,info.charOffset);
+      ed.focus({preventScroll:true});
+      const s=window.getSelection();s.removeAllRanges();s.addRange(range);
+    }catch(e){}
+  }
   function moveOverflow(index,editor){
     // A page inserted/removed elsewhere (e.g. the TOC going in at index 0) shifts every
     // later page's array index, but a moveOverflow already scheduled via setTimeout before
@@ -14788,6 +14837,16 @@ else install();
     // has since been detached from the DOM (replaced by a fresh one) avoids that.
     if(!editor||!document.body.contains(editor))return false;
     const paper=editor.closest('.documentPaper');
+    // Real bug: editing was jumping the caret/page around erratically. This used to always
+    // follow the caret onto the new page whenever ANY content overflowed, even while editing
+    // something in the middle of the page completely unrelated to the trailing content that
+    // overflowed - e.g. fixing a typo in paragraph 2 while paragraph 9 happened to be sitting
+    // right at the page boundary would yank the cursor away to a different page mid-edit,
+    // dismissing and re-showing the on-screen keyboard in the process. Only follow if the
+    // caret was actually inside the content that's about to be moved out.
+    const selBefore=window.getSelection();
+    const caretNode=selBefore&&selBefore.rangeCount?selBefore.getRangeAt(0).startContainer:null;
+    let caretWasInMovedContent=false;
     let guard=0,moved=[];
     while(editor.scrollHeight>editor.clientHeight+2&&editor.lastElementChild&&guard++<100){
       if(editor.children.length===1){
@@ -14795,14 +14854,21 @@ else install();
         if(splitHtml){moved.unshift(splitHtml);continue}
         break;
       }
-      const n=editor.lastElementChild;moved.unshift(n.outerHTML);n.remove();
+      const n=editor.lastElementChild;
+      if(caretNode&&n.contains(caretNode))caretWasInMovedContent=true;
+      moved.unshift(n.outerHTML);n.remove();
     }
     paper.classList.toggle('hasOverflow',editor.scrollHeight>editor.clientHeight+2);
     pages()[index].docHtml=editor.innerHTML;
     if(moved.length){
       const ni=nextDocIndex(index,true),np=pages()[ni];ensureDocProps(np);
       np.docHtml=moved.join('')+(np.docHtml||'');
-      setTimeout(()=>{render();setTimeout(()=>{const ne=document.querySelector(`.documentEditor[data-page-index="${ni}"]`);if(ne){ne.focus();const r=document.createRange(),s=getSelection();r.selectNodeContents(ne);r.collapse(true);s.removeAllRanges();s.addRange(r)}},40)},0);
+      if(caretWasInMovedContent){
+        setTimeout(()=>{render();setTimeout(()=>{const ne=document.querySelector(`.documentEditor[data-page-index="${ni}"]`);if(ne){ne.focus();const r=document.createRange(),s=getSelection();r.selectNodeContents(ne);r.collapse(true);s.removeAllRanges();s.addRange(r)}},40)},0);
+      }else{
+        const restoreInfo=captureCaretForRestore(editor);
+        setTimeout(()=>{render();restoreCaretAfterRender(index,restoreInfo);},0);
+      }
       return true;
     }
     return false;
