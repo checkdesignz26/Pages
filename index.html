@@ -18689,6 +18689,42 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
       document.execCommand('formatBlock',false,'p');
       saveEditor(editor,false);
     },true);
+    editor.addEventListener('keydown',function(e){
+      // Word/Docs-style "backspacing an empty page merges it away": each document page is its
+      // own separate contentEditable, so plain Backspace can never naturally reach across into
+      // a different page/DOM node the way it would within one continuous document - without
+      // this, a genuinely empty page had no keyboard way to get rid of it at all (the page-list
+      // "x" button was the only route, and easy to miss/forget). Pressing Backspace at the very
+      // start of an empty page instead deletes that page and moves the caret to the end of the
+      // previous one.
+      if(e.key!=='Backspace') return;
+      var sel=window.getSelection();
+      if(!sel||!sel.rangeCount||!sel.getRangeAt(0).collapsed) return;
+      var range=sel.getRangeAt(0);
+      var pre=document.createRange();
+      pre.selectNodeContents(editor);
+      try{ pre.setEnd(range.startContainer,range.startOffset); }catch(err){ return; }
+      if(pre.toString().length>0) return; // caret isn't at the very start of the page
+      var isEmpty=(editor.textContent||'').replace(/[\u200b]/g,'').trim()==='';
+      if(!isEmpty) return;
+      var p=pageForEditor(editor);
+      if(!p||p.docTOC) return;
+      var index=state.pages.indexOf(p);
+      if(index<=0) return; // first page, or not found - nothing to merge back into
+      e.preventDefault();
+      if(typeof save==='function') save();
+      state.pages.splice(index,1);
+      state.selectedPage=index-1;
+      state.selected=null;
+      if(typeof render==='function') render();
+      setTimeout(function(){
+        var prev=document.querySelector('.documentEditor[data-page-index="'+(index-1)+'"]');
+        if(!prev) return;
+        prev.focus();
+        var r=document.createRange(); r.selectNodeContents(prev); r.collapse(false);
+        var s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      },40);
+    },true);
     ['keyup','mouseup','touchend','pointerup'].forEach(function(type){
       editor.addEventListener(type,function(){activate(editor);setTimeout(rememberRange,0)},true);
     });

@@ -694,3 +694,66 @@ test('a heading style survives a save/load round trip', async ({ page }) => {
   expect(restored.docStyles.h1 && restored.docStyles.h1.fontFamily).toContain('Impact');
   expect(restored.css).toContain('Impact');
 });
+
+// Real report: "it doesn't want to delete empty pages" - turned out the user was trying to
+// delete them with the keyboard (Backspace), not the page-list "x" button. Each document page
+// is its own separate contentEditable, so Backspace has no natural way to reach across into a
+// different page/DOM node the way it would within one continuous document - pressing it at the
+// start of an empty page just did nothing. Fixed by detecting that exact case (caret at the very
+// start of a genuinely empty page) and merging the page away, moving the caret to the end of
+// the previous one - matching Word/Docs behavior for an empty paragraph/page.
+test('pressing Backspace at the start of an empty document page deletes it and moves the caret to the previous page', async ({ page }) => {
+  await openDocumentPage(page);
+  // Add a second page and empty it out completely, to reproduce a genuinely blank page (the
+  // default "add document page" content is never actually empty - it starts with "Title" and
+  // placeholder body text).
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("add document page")'));
+  await page.waitForTimeout(300);
+  const countBefore = await page.evaluate(() => state.pages.length);
+
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor[data-page-index="1"]');
+    ed.innerHTML = '<p><br></p>';
+    state.pages[1].docHtml = ed.innerHTML;
+  });
+
+  await page.click('.documentEditor[data-page-index="1"]');
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor[data-page-index="1"]');
+    ed.focus();
+    const r = document.createRange();
+    r.selectNodeContents(ed);
+    r.collapse(true);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
+  await page.keyboard.press('Backspace');
+  await page.waitForTimeout(300);
+
+  const countAfter = await page.evaluate(() => state.pages.length);
+  expect(countAfter).toBe(countBefore - 1);
+
+  const focusedOnPrevious = await page.evaluate(() => {
+    const prev = document.querySelector('.documentEditor[data-page-index="0"]');
+    return document.activeElement === prev;
+  });
+  expect(focusedOnPrevious).toBe(true);
+});
+
+test('Backspace at the start of a non-empty document page does nothing special (no accidental page deletion)', async ({ page }) => {
+  await openDocumentPage(page);
+  await clickResilient(page, page.locator('#ppDocumentLitePanel button:has-text("add document page")'));
+  await page.waitForTimeout(300);
+  const countBefore = await page.evaluate(() => state.pages.length);
+
+  // The default new-page content ("Title" / placeholder body text) is not empty - Backspace at
+  // its very start must not delete the page out from under real content.
+  await page.click('.documentEditor[data-page-index="1"] h1');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Backspace');
+  await page.waitForTimeout(300);
+
+  const countAfter = await page.evaluate(() => state.pages.length);
+  expect(countAfter).toBe(countBefore);
+});
