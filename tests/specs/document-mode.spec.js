@@ -757,3 +757,28 @@ test('Backspace at the start of a non-empty document page does nothing special (
   const countAfter = await page.evaluate(() => state.pages.length);
   expect(countAfter).toBe(countBefore);
 });
+
+// Real request: "Start writing here…" was literal text baked into every new document page's
+// HTML, so the user had to manually select and delete it before typing their own content. It's
+// now a genuine CSS placeholder (like a native <input placeholder>) on the actual empty body
+// paragraph, so it should disappear on its own the moment they start typing - never require a
+// manual delete, and never survive into the saved docHtml as real text.
+test('"Start writing here…" is a real placeholder that disappears the moment you type, not literal text to delete', async ({ page }) => {
+  await openDocumentPage(page);
+
+  const initial = await page.evaluate(() => {
+    const p = document.querySelector('.documentEditor p');
+    return { docHtml: state.pages[state.selectedPage].docHtml, placeholderContent: getComputedStyle(p, '::before').content };
+  });
+  // The placeholder text must not be real, literal content in the saved HTML...
+  expect(initial.docHtml).not.toContain('Start writing here');
+  // ...but it must still be visibly showing via CSS on the empty paragraph.
+  expect(initial.placeholderContent).toContain('Start writing here');
+
+  await page.click('.documentEditor p');
+  await page.keyboard.type('H');
+
+  await expect
+    .poll(() => page.evaluate(() => getComputedStyle(document.querySelector('.documentEditor p'), '::before').content))
+    .not.toContain('Start writing here');
+});

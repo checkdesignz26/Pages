@@ -14734,10 +14734,10 @@ else install();
   function pages(){try{return (typeof state!=='undefined'&&Array.isArray(state.pages))?state.pages:[]}catch(e){return []}}
   function isDoc(p){return !!(p&&(p.documentLite||p.type==='Document'||p.type==='Document TOC'))}
   function docPageNumber(index){return pages().slice(0,index+1).filter(isDoc).length}
-  function ensureDocProps(p){if(!p)return;p.documentLite=true;p.w=DOC_W;p.h=DOC_H;if(typeof p.docHtml!=='string')p.docHtml='<h1>Title</h1><p>Start writing here…</p>';}
+  function ensureDocProps(p){if(!p)return;p.documentLite=true;p.w=DOC_W;p.h=DOC_H;if(typeof p.docHtml!=='string')p.docHtml='<h1>Title</h1><p><br></p>';}
   window.addDocumentLitePage=function(afterIndex){
     if(typeof save==='function')save();
-    const p={type:'Document',w:DOC_W,h:DOC_H,layers:[],documentLite:true,docHtml:'<h1>Title</h1><p>Start writing here…</p>'};
+    const p={type:'Document',w:DOC_W,h:DOC_H,layers:[],documentLite:true,docHtml:'<h1>Title</h1><p><br></p>'};
     const at=Number.isInteger(afterIndex)?afterIndex+1:pages().length;
     pages().splice(at,0,p);state.selectedPage=at;state.selected=null;render();if(typeof scrollSel==='function')scrollSel();
   };
@@ -15556,7 +15556,7 @@ else install();
     p.docTOC=false;
     p.w=DOC_W;
     p.h=DOC_H;
-    p.docHtml=html||'<h1>Title</h1><p>Start writing here…</p>';
+    p.docHtml=html||'<h1>Title</h1><p><br></p>';
     p.layers=[];
     try{state.selected=null}catch(e){}
     try{render()}catch(e){}
@@ -18302,7 +18302,14 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   font:400 14px/1.55 Georgia,serif;
   text-align:left;
 }
-.documentEditor.ppPersistentDoc183:empty::before{
+/* Real request: "Start writing here…" used to be literal text the user had to select and
+   delete manually before typing their own content. This rule used to require the WHOLE editor
+   to be :empty, which it never actually was (the default docHtml always had a real "Title"
+   heading in it) - so it never fired in practice. It's a genuine CSS placeholder now, toggled
+   by a JS class (ppDocEmptyPlaceholder, set in the persistent-document-engine's input handler)
+   rather than a live :has() selector - :has() has to re-match on every keystroke, and doing
+   that continuously while typing a long document measurably slowed pagination down. */
+.documentEditor.ppPersistentDoc183 p.ppDocEmptyPlaceholder::before{
   content:"Start writing here…";
   color:#9a8f9e;
   pointer-events:none;
@@ -18352,7 +18359,21 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     var page=pageForEditor(editor);
     if(!page) return;
     page.documentLite=true;
-    page.docHtml=editor.innerHTML;
+    // ppDocEmptyPlaceholder is a transient UI marker (drives the "Start writing here…" CSS
+    // placeholder) - strip it before persisting so it doesn't bloat every save with
+    // implementation detail, and so a stale copy can never linger in saved data.
+    var placeholderEl=editor.querySelector('.ppDocEmptyPlaceholder');
+    if(placeholderEl){
+      var clone=editor.cloneNode(true);
+      var markedClone=clone.querySelector('.ppDocEmptyPlaceholder');
+      if(markedClone){
+        markedClone.classList.remove('ppDocEmptyPlaceholder');
+        if(!markedClone.classList.length) markedClone.removeAttribute('class');
+      }
+      page.docHtml=clone.innerHTML;
+    }else{
+      page.docHtml=editor.innerHTML;
+    }
     clearTimeout(saveTimer);
     saveTimer=setTimeout(function(){
       try{if(typeof scheduleAutosave==='function')scheduleAutosave()}catch(e){}
@@ -18637,6 +18658,21 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     if(typeof layerToggleItalic==='function')layerToggleItalic();
   };
 
+  // Marks the empty body paragraph of a freshly created page (an <h1> followed by nothing but
+  // one empty <p>) so the "Start writing here…" CSS placeholder shows on it - see
+  // pp-document-heading-styles' sibling rule below. A plain class toggled on specific events is
+  // far cheaper than a live :has() selector, which has to re-match on every single keystroke.
+  function updateDocPlaceholder(editor){
+    var existing=editor.querySelector('p.ppDocEmptyPlaceholder');
+    if(existing) existing.classList.remove('ppDocEmptyPlaceholder');
+    if(editor.children.length===2 && editor.firstElementChild && editor.firstElementChild.tagName==='H1'){
+      var p=editor.lastElementChild;
+      if(p && p.tagName==='P' && p.childNodes.length===1 && p.firstChild && p.firstChild.nodeName==='BR'){
+        p.classList.add('ppDocEmptyPlaceholder');
+      }
+    }
+  }
+
   function upgrade(editor){
     if(!editor||editor.dataset.ppPersistent183==='yes')return;
     var page=pageForEditor(editor);
@@ -18648,12 +18684,14 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     editor.setAttribute('contenteditable','true');
     editor.setAttribute('spellcheck','true');
     editor.setAttribute('autocapitalize','sentences');
-    editor.innerHTML=page.docHtml||'<h1>Title</h1><p>Start writing here…</p>';
+    editor.innerHTML=page.docHtml||'<h1>Title</h1><p><br></p>';
+    updateDocPlaceholder(editor);
 
     editor.addEventListener('focus',function(){activate(editor)},true);
     editor.addEventListener('input',function(e){
       saveEditor(editor,false);
       rememberRange();
+      updateDocPlaceholder(editor);
     },true);
     editor.addEventListener('blur',function(){
       saveEditor(editor,true);

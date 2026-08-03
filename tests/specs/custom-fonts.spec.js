@@ -305,8 +305,15 @@ test('the font dropdown refreshes to match each new document selection (not stuc
   const fontName = await page.evaluate(() => Object.keys(window.ppCustomFonts)[0]);
   expect(await page.evaluate(() => document.getElementById('fontFamily').value)).toBe(fontName);
 
-  // Move the selection to the paragraph (still on the default font) via a real interaction, the
-  // same way a tap/click does in the real app.
+  // The body paragraph starts genuinely empty now (just a CSS placeholder, not real text) -
+  // give it some real text directly (this test isn't about typing, just about having some
+  // differently-styled real text available to select), then move the selection there via a
+  // real interaction, the same way a tap/click does in the real app.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    const p = ed.querySelector('p');
+    p.textContent = 'Body text';
+  });
   await page.evaluate(() => {
     const ed = document.querySelector('.documentEditor');
     const p = ed.querySelector('p');
@@ -331,7 +338,7 @@ test('the font dropdown refreshes to match each new document selection (not stuc
   }, fontName);
 
   const docHtml = await page.evaluate(() => state.pages[state.selectedPage].docHtml);
-  const paragraphHtml = docHtml.match(/<p>[\s\S]*?<\/p>/)[0];
+  const paragraphHtml = docHtml.match(/<p[^>]*>[\s\S]*?<\/p>/)[0];
   expect(paragraphHtml).toContain(fontName);
 });
 
