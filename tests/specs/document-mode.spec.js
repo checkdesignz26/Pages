@@ -990,11 +990,11 @@ test('the keyboard-open scroll correction brings the caret into view without ove
     s.addRange(r);
   });
 
-  const before = await page.evaluate(() => ({
-    scrollTop: document.getElementById('workspace').scrollTop,
-    caretY: window.getSelection().getRangeAt(0).getBoundingClientRect().top,
-  }));
-  expect(before.caretY).toBeGreaterThan(0);
+  const before = await page.evaluate(() => {
+    const r = window.getSelection().getRangeAt(0).getBoundingClientRect();
+    return { caretTop: r.top, caretBottom: r.bottom };
+  });
+  expect(before.caretTop).toBeGreaterThan(0);
 
   // Simulate the on-screen keyboard opening: visualViewport shrinks and fires 'resize'.
   const realHeight = await page.evaluate(() => window.visualViewport.height);
@@ -1003,29 +1003,125 @@ test('the keyboard-open scroll correction brings the caret into view without ove
   // making this discriminate reliably between "bring the caret to the edge" and "re-center
   // the whole element regardless of where the constrained area actually ends".
   const shrunkHeight = Math.round(realHeight * 0.3);
-  await page.evaluate((h) => {
+  // Check the #workspace.scrollBy() call itself rather than the resulting scrollTop/caret
+  // position: in a headless run the whole (short) test document can already fit within the
+  // real, unshrunk viewport with nothing left to actually scroll, at whatever zoom level the
+  // app happens to pick - making a post-hoc "did the caret end up on-screen" check dependent on
+  // incidental layout rather than the fix itself. The old buggy code called
+  // editor.scrollIntoView(...) directly and never touched #workspace.scrollBy at all, so this
+  // still discriminates cleanly: no call (or an unbounded one) means the bug is back.
+  const scrollByCall = await page.evaluate((h) => new Promise((resolve) => {
+    const scroller = document.getElementById('workspace');
+    const orig = scroller.scrollBy;
+    let called = null;
+    scroller.scrollBy = function (opts) { called = opts; return orig.apply(this, arguments); };
     Object.defineProperty(window.visualViewport, 'height', { get: () => h, configurable: true });
     window.visualViewport.dispatchEvent(new Event('resize'));
-  }, shrunkHeight);
+    setTimeout(() => resolve(called), 400);
+  }), shrunkHeight);
+
+  expect(scrollByCall).not.toBeNull();
+  expect(scrollByCall.behavior).toBe('smooth');
+
+  // A correct "nearest edge" scroll moves the caret to just above the new keyboard-constrained
+  // bottom edge (a 24px margin) - a small, bounded, and exactly-predictable distance - not an
+  // arbitrary whole-page-height jump from trying to center the entire (much taller) element.
+  const expectedDelta = before.caretBottom - (shrunkHeight - 24);
+  expect(scrollByCall.top).toBeGreaterThan(0);
+  expect(Math.abs(scrollByCall.top - expectedDelta)).toBeLessThan(5);
+});
+
+// Real report, with a screenshot: a heading the user had written once showed up twice in a row
+// on the same page after re-opening a saved .ppages file, and got worse (three copies) the more
+// times the file had been saved/reopened. Root cause: the fonts-ready recheck (added to fix the
+// "last line half clipped" bug) sweeps every .documentEditor node in one pass, low index to high.
+// pullBack() on an earlier page can pull the FIRST element off a later page straight out of that
+// later page's `docHtml` in the pages() array - without ever touching that later page's own,
+// still-live DOM node. When the sweep then reaches that later page's own (now-stale) DOM node,
+// moveOverflow() unconditionally writes `editor.innerHTML` back over `pages()[index].docHtml` -
+// resurrecting the exact content pullBack just removed, so it ends up living on both pages.
+test('a heading pulled back into a shorter page does not also survive on the page it was pulled from', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__fontsReadyPromise = new Promise((resolve) => { window.__resolveFontsReady = resolve; });
+    Object.defineProperty(document.fonts, 'ready', { get: () => window.__fontsReadyPromise, configurable: true });
+  });
+  await page.reload();
+  await page.waitForFunction(() => typeof state !== 'undefined' && state && typeof window.render === 'function');
+
+  await openDocumentPage(page);
+
+  // Fill page 0 with paragraphs until it's one paragraph away from overflowing, then confirm
+  // (via a throwaway probe element) exactly how many trailing paragraphs need to come back off
+  // to leave a gap that fits a heading alone, but not a heading plus another paragraph - the
+  // exact shape of the real bug (the heading moves, the paragraph after it does not).
+  const setup = await page.evaluate(() => {
+    const ed0 = document.querySelector('.documentEditor');
+    ed0.innerHTML = '<h1>Title</h1>';
+    let i = 0;
+    while (ed0.scrollHeight <= ed0.clientHeight + 2 && i < 400) {
+      const p = document.createElement('p');
+      p.textContent = `Paragraph number ${i} with enough words in it to take up a full line.`;
+      ed0.appendChild(p);
+      i++;
+    }
+    ed0.lastElementChild.remove(); // back under the boundary
+
+    function overflowsWithHeadingProbe() {
+      const probe = document.createElement('h2');
+      probe.textContent = 'Chapter 1 – Getting Started';
+      ed0.appendChild(probe);
+      const overflows = ed0.scrollHeight > ed0.clientHeight + 2;
+      probe.remove();
+      return overflows;
+    }
+    // Keep backing off one paragraph at a time until the heading alone would fit.
+    let guard = 0;
+    while (overflowsWithHeadingProbe() && ed0.children.length > 1 && guard++ < 50) {
+      ed0.lastElementChild.remove();
+    }
+    const headingAloneFits = !overflowsWithHeadingProbe();
+
+    function overflowsWithHeadingAndParagraphProbe() {
+      const probeH = document.createElement('h2');
+      probeH.textContent = 'Chapter 1 – Getting Started';
+      const probeP = document.createElement('p');
+      probeP.textContent = 'Pattern Pages runs directly in your web browser, so there is nothing to install.';
+      ed0.appendChild(probeH);
+      ed0.appendChild(probeP);
+      const overflows = ed0.scrollHeight > ed0.clientHeight + 2;
+      probeH.remove();
+      probeP.remove();
+      return overflows;
+    }
+    const headingAndParagraphOverflow = overflowsWithHeadingAndParagraphProbe();
+
+    state.pages[state.selectedPage].docHtml = ed0.innerHTML;
+    return { headingAloneFits, headingAndParagraphOverflow };
+  });
+  expect(setup.headingAloneFits).toBe(true);
+  expect(setup.headingAndParagraphOverflow).toBe(true);
+
+  await page.evaluate(() => {
+    addDocumentLitePage(0);
+    const ed1 = document.querySelector('.documentEditor[data-page-index="1"]');
+    ed1.innerHTML = '<h2>Chapter 1 – Getting Started</h2><p>Pattern Pages runs directly in your web browser, so there is nothing to install.</p>';
+    state.pages[1].docHtml = ed1.innerHTML;
+  });
+  await page.waitForTimeout(300); // let the normal fixed-delay pagination settle first
+
+  await page.evaluate(() => { window.__resolveFontsReady(); });
   await page.waitForTimeout(500);
 
-  const after = await page.evaluate(() => ({
-    scrollTop: document.getElementById('workspace').scrollTop,
-    caretRect: (() => {
-      const r = window.getSelection().getRangeAt(0).getBoundingClientRect();
-      return { top: r.top, bottom: r.bottom };
-    })(),
+  const result = await page.evaluate(() => ({
+    page0: state.pages[0].docHtml,
+    page1: state.pages[1].docHtml,
   }));
 
-  // The caret must end up visible within the shrunken (keyboard-constrained) viewport...
-  expect(after.caretRect.bottom).toBeLessThanOrEqual(shrunkHeight);
-  expect(after.caretRect.top).toBeGreaterThanOrEqual(0);
+  const headingCount = (html) => (html.match(/Chapter 1/g) || []).length;
+  const totalHeadingCopies = headingCount(result.page0) + headingCount(result.page1);
 
-  // ...via a minimal, targeted scroll - not one that blew straight past the caret to re-center
-  // the whole (much taller) page element instead. The caret started at `before.caretY` from the
-  // top of the (still full-height) viewport; a correct "nearest edge" scroll only needs to move
-  // it back to just above the new keyboard-constrained bottom edge, a bounded, modest distance -
-  // not an arbitrary whole-page-height jump.
-  const scrollDelta = Math.abs(after.scrollTop - before.scrollTop);
-  expect(scrollDelta).toBeLessThan(before.caretY + 200);
+  expect(totalHeadingCopies).toBe(1);
+  expect(result.page0).toContain('Chapter 1');
+  expect(result.page1).not.toContain('Chapter 1');
+  expect(result.page1).toContain('Pattern Pages runs directly');
 });

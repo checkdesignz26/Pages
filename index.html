@@ -14836,6 +14836,27 @@ else install();
     // stale index instead of the page it actually belongs to - bailing out here if the editor
     // has since been detached from the DOM (replaced by a fresh one) avoids that.
     if(!editor||!document.body.contains(editor))return false;
+    // Real bug, confirmed by a screenshot: a heading showed up twice on the same page after
+    // reopening a saved file, worse (three copies) the more times the file had been reopened.
+    // scheduleFontsReadyRecheck() below sweeps every .documentEditor low-index to high in one
+    // pass - pullBack() on an earlier page can pull this page's first element straight out of
+    // `pages()[index].docHtml` in the array without ever touching THIS editor's still-live DOM
+    // node. If nothing resyncs first, the unconditional `pages()[index].docHtml=editor.innerHTML`
+    // a few lines down would write this now-stale DOM straight back over the array, resurrecting
+    // the exact content pullBack just removed - duplicating it across both pages.
+    //
+    // Comparing editor.innerHTML to the array directly (an earlier version of this fix did that)
+    // is too broad a net, though: it also fires - and forcibly rebuilds the editor, destroying
+    // whatever's live in the DOM - whenever the two differ for any OTHER reason, such as a
+    // selected-image overlay adding a transient class that was never meant to round-trip through
+    // docHtml at all. Track cross-page mutations with an explicit version counter instead
+    // (bumped only at the two spots below/in pullBack that write into a DIFFERENT page's
+    // docHtml), so a resync only happens when this exact hazard applies.
+    const truth183=pages()[index];
+    if(truth183&&editor.dataset.flowVer183!==String(truth183.__flowVer183||0)){
+      editor.innerHTML=truth183.docHtml||'<p><br></p>';
+      editor.dataset.flowVer183=String(truth183.__flowVer183||0);
+    }
     const paper=editor.closest('.documentPaper');
     // Real bug: editing was jumping the caret/page around erratically. This used to always
     // follow the caret onto the new page whenever ANY content overflowed, even while editing
@@ -14863,6 +14884,7 @@ else install();
     if(moved.length){
       const ni=nextDocIndex(index,true),np=pages()[ni];ensureDocProps(np);
       np.docHtml=moved.join('')+(np.docHtml||'');
+      np.__flowVer183=(np.__flowVer183||0)+1;
       if(caretWasInMovedContent){
         setTimeout(()=>{render();setTimeout(()=>{const ne=document.querySelector(`.documentEditor[data-page-index="${ni}"]`);if(ne){ne.focus();const r=document.createRange(),s=getSelection();r.selectNodeContents(ne);r.collapse(true);s.removeAllRanges();s.addRange(r)}},40)},0);
       }else{
@@ -14885,7 +14907,7 @@ else install();
       if(editor.scrollHeight>editor.clientHeight+2){node.remove();break}
       temp.firstElementChild.remove();moved=true;
     }
-    if(moved){pages()[index].docHtml=editor.innerHTML;np.docHtml=temp.innerHTML||'<p><br></p>';if(cleanEmpty(temp)&&pages().length>1)pages().splice(ni,1);}
+    if(moved){pages()[index].docHtml=editor.innerHTML;np.docHtml=temp.innerHTML||'<p><br></p>';np.__flowVer183=(np.__flowVer183||0)+1;if(cleanEmpty(temp)&&pages().length>1)pages().splice(ni,1);}
   }
   function onDocInput(e){
     const editor=e.currentTarget,index=+editor.dataset.pageIndex,p=pages()[index];if(!p)return;
@@ -14937,7 +14959,7 @@ else install();
       if(p.docTOC){
         const toc=document.createElement('div');toc.className='documentTOC';toc.innerHTML=p.docHtml||'<h1>Contents</h1>';paper.appendChild(toc);
       }else{
-        const ed=document.createElement('div');ed.className='documentEditor';ed.contentEditable='true';ed.dataset.pageIndex=i;ed.innerHTML=p.docHtml||'<p><br></p>';ed.addEventListener('input',onDocInput);ed.addEventListener('focus',()=>{state.selectedPage=i;state.selected=null;if(typeof renderPageList==='function')renderPageList()});paper.appendChild(ed);
+        const ed=document.createElement('div');ed.className='documentEditor';ed.contentEditable='true';ed.dataset.pageIndex=i;ed.innerHTML=p.docHtml||'<p><br></p>';ed.dataset.flowVer183=String(p.__flowVer183||0);ed.addEventListener('input',onDocInput);ed.addEventListener('focus',()=>{state.selectedPage=i;state.selected=null;if(typeof renderPageList==='function')renderPageList()});paper.appendChild(ed);
         const warn=document.createElement('div');warn.className='documentOverflowWarning';warn.textContent='flowing to next page';paper.appendChild(warn);
         setTimeout(()=>moveOverflow(i,ed),20);
         scheduleFontsReadyRecheck();
