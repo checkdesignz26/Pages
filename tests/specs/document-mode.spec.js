@@ -361,6 +361,13 @@ test('the on-screen keyboard opening scrolls the focused document page back into
   // manually to see it. 'focus' fires before the keyboard's open animation finishes, so it
   // can't be used to compute where to scroll to - visualViewport's own height only shrinks
   // once that animation actually completes, giving an accurate signal to act on instead.
+  //
+  // This used to assert the correction called scrollIntoView({block:'center'}) on the whole
+  // editor element - that was the bug reported as "it jumps when I place the cursor" (centering
+  // a full page, not the caret, inside a viewport shrunk by the keyboard). The fix (see the more
+  // detailed 'keyboard-open scroll correction' test below) scrolls the nearest scroll container
+  // by the minimal amount needed to bring the caret into view instead. This test just confirms
+  // the shrink-resize signal still triggers *some* scroll correction on the workspace scroller.
   await openDocumentPage(page);
   // Let this app's known startup-settling renders (several independent setTimeout(...) calls
   // scattered up to ~1.6s after load, per fixtures.js) finish first - otherwise one of them can
@@ -370,19 +377,22 @@ test('the on-screen keyboard opening scrolls the focused document page back into
   await page.click('.documentEditor');
   await page.waitForTimeout(200);
 
-  const scrolledInto = await page.evaluate(() => new Promise((resolve) => {
-    const ed = document.querySelector('.documentEditor');
-    const orig = ed.scrollIntoView;
-    ed.scrollIntoView = function (opts) {
-      ed.scrollIntoView = orig;
+  const scrolledBy = await page.evaluate(() => new Promise((resolve) => {
+    const scroller = document.getElementById('workspace');
+    const orig = scroller.scrollBy;
+    scroller.scrollBy = function (opts) {
+      scroller.scrollBy = orig;
       resolve(opts);
     };
-    window.visualViewport.dispatchEvent(new Event('resize'));
+    const vv = window.visualViewport;
+    const realHeight = vv.height;
+    Object.defineProperty(vv, 'height', { get: () => Math.round(realHeight * 0.3), configurable: true });
+    vv.dispatchEvent(new Event('resize'));
     setTimeout(() => resolve(null), 500);
   }));
 
-  expect(scrolledInto).not.toBeNull();
-  expect(scrolledInto.block).toBe('center');
+  expect(scrolledBy).not.toBeNull();
+  expect(scrolledBy.behavior).toBe('smooth');
 });
 
 test('PDF export renders the actual font applied to each run, not always Georgia', async ({ page }) => {
@@ -937,4 +947,85 @@ test('editing text in the middle of a page does not steal the caret away to a ne
   // received the unrelated overflowed content.
   expect(after.focusedPageIndex).toBe(0);
   expect(after.firstParagraphText).toContain('EDITED-HERE');
+});
+
+// Real report: placing the cursor felt like it "jumped". Root cause: the on-screen-keyboard
+// scroll correction used scrollIntoView({block:'center'}) on the whole editor ELEMENT (a full
+// page, usually taller than the visible area once the keyboard is up) instead of the caret's
+// own position - tapping anywhere on a tall page would re-center the whole page around its
+// middle, landing far from where the caret (and the user's finger) actually was.
+test('the keyboard-open scroll correction brings the caret into view without overshooting to re-center the whole page', async ({ page }) => {
+  await openDocumentPage(page);
+
+  // Build a page taller than any reasonable viewport, and place the caret near its bottom -
+  // this is exactly the case where "center the whole element" and "bring the caret into view"
+  // produce very different amounts of scrolling.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.innerHTML = '<h1>Title</h1>';
+    for (let i = 0; i < 60; i++) {
+      const p = document.createElement('p');
+      p.textContent = `Line ${i} of a long page.`;
+      ed.appendChild(p);
+    }
+    state.pages[state.selectedPage].docHtml = ed.innerHTML;
+  });
+  await page.waitForTimeout(300);
+
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    const lastP = ed.querySelector('p:last-of-type');
+    lastP.scrollIntoView({ block: 'center' });
+    ed.focus();
+    const r = document.createRange();
+    // A range collapsed via an ELEMENT container + child-index boundary (e.g.
+    // selectNodeContents(lastP) + collapse()) gives an all-zero getBoundingClientRect() in
+    // Chromium - there's no adjacent glyph for the browser to anchor a rect to at that
+    // representation. Setting the boundary directly on the actual text node + character offset
+    // resolves to a real, non-zero caret position instead.
+    r.setStart(lastP.firstChild, lastP.firstChild.length);
+    r.collapse(true);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
+
+  const before = await page.evaluate(() => ({
+    scrollTop: document.getElementById('workspace').scrollTop,
+    caretY: window.getSelection().getRangeAt(0).getBoundingClientRect().top,
+  }));
+  expect(before.caretY).toBeGreaterThan(0);
+
+  // Simulate the on-screen keyboard opening: visualViewport shrinks and fires 'resize'.
+  const realHeight = await page.evaluate(() => window.visualViewport.height);
+  // Deliberately much smaller than a real keyboard would take - centering the caret's Y
+  // position in the full-height viewport (~50%) would clearly land outside a 30% cutoff,
+  // making this discriminate reliably between "bring the caret to the edge" and "re-center
+  // the whole element regardless of where the constrained area actually ends".
+  const shrunkHeight = Math.round(realHeight * 0.3);
+  await page.evaluate((h) => {
+    Object.defineProperty(window.visualViewport, 'height', { get: () => h, configurable: true });
+    window.visualViewport.dispatchEvent(new Event('resize'));
+  }, shrunkHeight);
+  await page.waitForTimeout(500);
+
+  const after = await page.evaluate(() => ({
+    scrollTop: document.getElementById('workspace').scrollTop,
+    caretRect: (() => {
+      const r = window.getSelection().getRangeAt(0).getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom };
+    })(),
+  }));
+
+  // The caret must end up visible within the shrunken (keyboard-constrained) viewport...
+  expect(after.caretRect.bottom).toBeLessThanOrEqual(shrunkHeight);
+  expect(after.caretRect.top).toBeGreaterThanOrEqual(0);
+
+  // ...via a minimal, targeted scroll - not one that blew straight past the caret to re-center
+  // the whole (much taller) page element instead. The caret started at `before.caretY` from the
+  // top of the (still full-height) viewport; a correct "nearest edge" scroll only needs to move
+  // it back to just above the new keyboard-constrained bottom edge, a bounded, modest distance -
+  // not an arbitrary whole-page-height jump.
+  const scrollDelta = Math.abs(after.scrollTop - before.scrollTop);
+  expect(scrollDelta).toBeLessThan(before.caretY + 200);
 });

@@ -18888,11 +18888,40 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     // scroll up manually to see it. visualViewport's own height shrinks once the keyboard
     // animation finishes (unlike 'focus', which fires before that), so waiting for its resize
     // event gives an accurate moment to nudge the focused page back into view above it.
+    //
+    // Real bug: placing the cursor felt like it "jumped" - scrollIntoView({block:'center'})
+    // centers the whole editor ELEMENT (a full page, usually taller than the visible area once
+    // the keyboard is up), not the caret itself. Tapping near the bottom of a tall page could
+    // scroll the view sharply upward to center the page as a whole, landing nowhere near where
+    // the caret (and the user's finger) actually was. Scroll by the minimal amount needed to
+    // bring the caret's own position into view instead - nothing moves at all if it's already
+    // visible - and only do this when the viewport actually shrank (the keyboard opening), not
+    // on every resize (it also fires when the keyboard closes, where no correction is wanted).
+    var lastViewportHeight183=window.visualViewport?window.visualViewport.height:null;
     if(window.visualViewport){
       window.visualViewport.addEventListener('resize',function(){
+        var vv=window.visualViewport;
+        var prevHeight=lastViewportHeight183;
+        lastViewportHeight183=vv.height;
+        if(prevHeight!=null&&vv.height>=prevHeight-40)return;
         if(!activeEditor||!document.contains(activeEditor))return;
         setTimeout(function(){
-          try{activeEditor.scrollIntoView({block:'center',behavior:'smooth'})}catch(e){}
+          try{
+            var sel=window.getSelection();
+            var scroller=document.getElementById('workspace');
+            if(!scroller)return;
+            var rect=null;
+            if(sel&&sel.rangeCount&&activeEditor.contains(sel.anchorNode)){
+              rect=sel.getRangeAt(0).getBoundingClientRect();
+              if(!rect.width&&!rect.height&&!rect.top&&!rect.left)rect=null;
+            }
+            if(!rect)rect=activeEditor.getBoundingClientRect();
+            var margin=24;
+            var delta=0;
+            if(rect.bottom>vv.height-margin)delta=rect.bottom-(vv.height-margin);
+            else if(rect.top<margin)delta=rect.top-margin;
+            if(delta)scroller.scrollBy({top:delta,behavior:'smooth'});
+          }catch(e){}
         },60);
       });
     }
