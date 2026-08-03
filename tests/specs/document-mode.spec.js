@@ -782,3 +782,41 @@ test('"Start writing here…" is a real placeholder that disappears the moment y
     .poll(() => page.evaluate(() => getComputedStyle(document.querySelector('.documentEditor p'), '::before').content))
     .not.toContain('Start writing here');
 });
+
+// Real request: collapsing the right panel for a wider canvas got silently undone every time a
+// document editor regained focus - which routinely happens just from scrolling/tapping between
+// pages while writing, not just from deliberately opening the panel. Fixed by never forcing
+// body.rightCollapsed off from either the editor-focus path (activate()) or the document-image
+// selection path (selectImage()) - only their own already-visible accordion section still
+// auto-expands.
+test('collapsing the right panel in document mode stays collapsed when scrolling/re-focusing a page', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.evaluate(() => { toggleSidePanel('right'); });
+  expect(await page.evaluate(() => document.body.classList.contains('rightCollapsed'))).toBe(true);
+
+  // Simulate what happens while scrolling/tapping between pages: the document editor regains
+  // focus (real click, not a synthetic focus() call, matching what a tap actually does).
+  await page.click('.documentEditor h1');
+  await page.waitForTimeout(150);
+
+  expect(await page.evaluate(() => document.body.classList.contains('rightCollapsed'))).toBe(true);
+});
+
+test('collapsing the right panel stays collapsed when selecting an image inside a document page', async ({ page }) => {
+  const png1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  await openDocumentPage(page);
+  await page.evaluate((src) => {
+    const ed = document.querySelector('.documentEditor');
+    const img = document.createElement('img');
+    img.src = src;
+    ed.appendChild(img);
+  }, png1x1);
+
+  await page.evaluate(() => { toggleSidePanel('right'); });
+  expect(await page.evaluate(() => document.body.classList.contains('rightCollapsed'))).toBe(true);
+
+  await page.click('.documentEditor img');
+  await page.waitForTimeout(150);
+
+  expect(await page.evaluate(() => document.body.classList.contains('rightCollapsed'))).toBe(true);
+});

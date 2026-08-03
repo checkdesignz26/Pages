@@ -18424,9 +18424,13 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     var panel=byId('textStudioPanel') || (byId('fontFamily')&&byId('fontFamily').closest('.box'));
     if(panel){
       panel.classList.add('ppDocActive183');
-      panel.classList.remove('collapsed');
+      // Real request: collapsing the right panel for a wider canvas got silently undone every
+      // time a document editor regained focus (which routinely happens while scrolling/tapping
+      // between pages while writing) - only expand its own accordion section, and only if the
+      // whole panel is actually visible; never force the panel itself back open behind the
+      // user's back.
+      if(!document.body.classList.contains('rightCollapsed')) panel.classList.remove('collapsed');
     }
-    document.body.classList.remove('rightCollapsed');
     rememberRange();
     syncPanel();
   }
@@ -18992,9 +18996,11 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     }
     selectedImg=img;
     img.classList.add('ppDocImgSelected');
-    document.body.classList.remove('rightCollapsed');
+    // Same rule as activate() above: never force the collapsed right panel back open just
+    // because something got selected - only expand its own accordion section if the panel is
+    // already visible.
     var box=editAdjustBox();
-    if(box)box.classList.remove('collapsed');
+    if(box && !document.body.classList.contains('rightCollapsed')) box.classList.remove('collapsed');
     ensureImagePanel();
     if($('opacity')){
       var op=img.style.opacity!==''?Math.round(parseFloat(img.style.opacity)*100):100;
