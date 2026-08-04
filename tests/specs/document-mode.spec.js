@@ -374,7 +374,26 @@ test('the on-screen keyboard opening scrolls the focused document page back into
   // replace the .documentEditor DOM node after this test has already grabbed and monkey-patched
   // it, out from under the still-running test.
   await page.waitForTimeout(1800);
-  await page.click('.documentEditor');
+  // Add a real paragraph of text and place the caret in it via the Range API, rather than a
+  // plain .click(). Chromium's click-to-caret placement is unreliable for this purpose - even
+  // clicking directly on a text-bearing element can resolve the caret to an element-container
+  // boundary rather than a text-node one, which gives an all-zero getBoundingClientRect() (not a
+  // real-world caret position, and, correctly, no longer enough on its own to trigger the scroll
+  // correction below). Setting the boundary directly on the text node sidesteps that.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    const p = document.createElement('p');
+    p.textContent = 'Some real body text to click on.';
+    ed.appendChild(p);
+    state.pages[state.selectedPage].docHtml = ed.innerHTML;
+    ed.focus();
+    const r = document.createRange();
+    r.setStart(p.firstChild, 4);
+    r.collapse(true);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
   await page.waitForTimeout(200);
 
   const scrolledBy = await page.evaluate(() => new Promise((resolve) => {
@@ -1029,6 +1048,59 @@ test('the keyboard-open scroll correction brings the caret into view without ove
   const expectedDelta = before.caretBottom - (shrunkHeight - 24);
   expect(scrollByCall.top).toBeGreaterThan(0);
   expect(Math.abs(scrollByCall.top - expectedDelta)).toBeLessThan(5);
+});
+
+// Real report, confirmed from a screen recording: tapping into a page to start editing it
+// scrolled the view a full page further, landing on the NEXT page entirely - only on the first
+// tap, never on a second one right after. Root cause: the keyboard-open correction above used to
+// fall back to activeEditor.getBoundingClientRect() (the WHOLE page, top to bottom) whenever a
+// precise caret rect wasn't available at the moment it ran - a real gap, since caret placement
+// after a tap happens in its own async step (see pp-single-tap-keyboard-186-js) that can still be
+// in flight when the keyboard's resize event fires. A tall page's bottom edge sits far below the
+// keyboard-constrained viewport, so that fallback could compute a scroll delta large enough to
+// land on the following page. A second tap has no such gap (the editor's already focused, the
+// caret's already there), which is exactly why it never repeated.
+test('the keyboard-open scroll correction does nothing if the caret is not yet available, instead of guessing with the whole page', async ({ page }) => {
+  await openDocumentPage(page);
+
+  // A page tall enough that its own bottom edge sits well below a keyboard-shrunk viewport -
+  // exactly the shape that made the old whole-editor fallback overshoot by roughly a page.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.innerHTML = '<h1>Title</h1>';
+    for (let i = 0; i < 60; i++) {
+      const p = document.createElement('p');
+      p.textContent = `Line ${i} of a long page.`;
+      ed.appendChild(p);
+    }
+    state.pages[state.selectedPage].docHtml = ed.innerHTML;
+  });
+  await page.waitForTimeout(300);
+
+  // Focus the editor (as a real tap would, synchronously setting activeEditor) but deliberately
+  // leave the selection collapsed OUTSIDE it - simulating the real gap where the async caret
+  // placement after a tap hasn't landed yet by the time the keyboard's resize event fires.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.focus();
+    const s = window.getSelection();
+    s.removeAllRanges();
+  });
+
+  const realHeight = await page.evaluate(() => window.visualViewport.height);
+  const shrunkHeight = Math.round(realHeight * 0.3);
+  const scrollByCall = await page.evaluate((h) => new Promise((resolve) => {
+    const scroller = document.getElementById('workspace');
+    const orig = scroller.scrollBy;
+    let called = null;
+    scroller.scrollBy = function (opts) { called = opts; return orig.apply(this, arguments); };
+    Object.defineProperty(window.visualViewport, 'height', { get: () => h, configurable: true });
+    window.visualViewport.dispatchEvent(new Event('resize'));
+    setTimeout(() => resolve(called), 400);
+  }), shrunkHeight);
+
+  // No caret to go on - the correct move is to do nothing, not scroll based on the whole page.
+  expect(scrollByCall).toBeNull();
 });
 
 // Real report, with a screenshot: a heading the user had written once showed up twice in a row

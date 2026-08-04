@@ -18975,7 +18975,19 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
               rect=sel.getRangeAt(0).getBoundingClientRect();
               if(!rect.width&&!rect.height&&!rect.top&&!rect.left)rect=null;
             }
-            if(!rect)rect=activeEditor.getBoundingClientRect();
+            // Real bug, confirmed from a screen recording: tapping a page to start editing it
+            // scrolled the view a full page further, landing on the NEXT page entirely - only on
+            // the first tap, never on a second one right after. This used to fall back to
+            // activeEditor.getBoundingClientRect() (the WHOLE page, top to bottom) whenever a
+            // precise caret rect wasn't available yet. A tall page's bottom edge sits far below
+            // the keyboard-constrained viewport, so that fallback could compute a huge scroll
+            // delta - easily enough to overshoot an entire page - rather than the small nudge a
+            // real caret position would need. A second tap has no such gap (the editor's already
+            // focused, the caret's already there), which is exactly why it never repeated. Since
+            // this correction only exists to keep the CARET visible, guessing with the whole
+            // page's bounds when the caret isn't ready yet is worse than doing nothing - skip the
+            // correction instead of risking a wrong, oversized scroll.
+            if(!rect)return;
             var margin=24;
             var delta=0;
             if(rect.bottom>vv.height-margin)delta=rect.bottom-(vv.height-margin);
