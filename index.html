@@ -14719,13 +14719,13 @@ else install();
 <!-- DOCUMENT MODE LITE v155 -->
 <style id="pp-document-lite-v155">
 .stage.documentStage{width:min(100%,620px)!important;aspect-ratio:210/297!important;background:#fff!important;overflow:hidden!important;touch-action:pan-y!important;color:#26212b!important}
-.documentPaper{position:absolute;inset:0;background:#fff;color:#26212b;padding:8.7% 8.3% 8.5%;text-align:left;font-family:Georgia,serif;overflow:hidden}
-.documentEditor{height:100%;min-height:0;outline:none;overflow:hidden;white-space:normal;word-break:break-word;font-size:14px;line-height:1.55;-webkit-user-select:text;user-select:text;touch-action:pan-y;caret-color:#7a43cf}
+.documentPaper{position:absolute;inset:0;background:#fff;color:#26212b;text-align:left;font-family:Georgia,serif;overflow:hidden}
+.documentEditor{height:100%;min-height:0;box-sizing:border-box;padding:8.7% 8.3% 8.5%;outline:none;overflow:hidden;white-space:normal;word-break:break-word;font-size:14px;line-height:1.55;-webkit-user-select:text;user-select:text;touch-action:pan-y;caret-color:#7a43cf}
 .documentEditor p{margin:0 0 .8em}.documentEditor h1{font-size:2em;line-height:1.12;margin:.15em 0 .55em}.documentEditor h2{font-size:1.45em;line-height:1.2;margin:1em 0 .45em}.documentEditor img{display:block;max-width:100%;max-height:42%;object-fit:contain;margin:1em auto;border-radius:4px}
 .documentEditor a{color:#6b42bb;text-decoration:underline}.documentEditor:empty:before{content:'Start writing your manual…';color:#a397a8}
 .documentPageNumber{position:absolute;bottom:3.2%;left:0;right:0;text-align:center;font:700 12px/1 system-ui,sans-serif;color:#756b78;pointer-events:none}
 .documentOverflowWarning{position:absolute;right:12px;bottom:11px;background:#7b3f91;color:white;border-radius:999px;padding:5px 9px;font:800 10px system-ui;display:none}.documentPaper.hasOverflow .documentOverflowWarning{display:block}
-.documentTOC{height:100%;overflow:hidden}.documentTOC h1{font-size:2em;margin:0 0 .8em}.documentTOCRow{display:grid;grid-template-columns:1fr auto;gap:12px;border-bottom:1px dotted #b6aaba;padding:7px 0;font-size:16px}.documentTOCRow.level2{padding-left:22px;font-size:14px}
+.documentTOC{height:100%;box-sizing:border-box;padding:8.7% 8.3% 8.5%;overflow:hidden}.documentTOC h1{font-size:2em;margin:0 0 .8em}.documentTOCRow{display:grid;grid-template-columns:1fr auto;gap:12px;border-bottom:1px dotted #b6aaba;padding:7px 0;font-size:16px}.documentTOCRow.level2{padding-left:22px;font-size:14px}
 .documentLiteBox{border-color:rgba(255,142,214,.25)!important;background:linear-gradient(180deg,rgba(255,142,214,.055),rgba(255,255,255,.03))!important}.documentLiteBox .docQuickStyles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}.documentLiteBox .docQuickStyles button{font-size:11px!important;padding:7px 4px!important}.documentLiteBox input[type=file]{display:none}.documentLiteStatus{font-size:11px;line-height:1.3;color:#d8cede;margin-top:7px}
 </style>
 <script id="pp-document-lite-script-v155">
@@ -18396,7 +18396,8 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   height:100%!important;
   min-height:0!important;
   overflow:hidden!important;
-  padding:0!important;
+  box-sizing:border-box!important;
+  padding:8.7% 8.3% 8.5%!important;
   color:#26212b!important;
   background:transparent!important;
   outline:none!important;

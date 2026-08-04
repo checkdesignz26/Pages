@@ -1049,6 +1049,10 @@ test('a heading pulled back into a shorter page does not also survive on the pag
   await page.waitForFunction(() => typeof state !== 'undefined' && state && typeof window.render === 'function');
 
   await openDocumentPage(page);
+  // Let layout settle before taking pixel-precise measurements - other tests in this file that
+  // measure geometry right after load hit occasional jitter without this (matches the pattern
+  // used elsewhere, e.g. the keyboard-scroll test above).
+  await page.waitForTimeout(300);
 
   // Fill page 0 with paragraphs until it's one paragraph away from overflowing, then confirm
   // (via a throwaway probe element) exactly how many trailing paragraphs need to come back off
@@ -1253,4 +1257,38 @@ test('a background cross-page reflow does not wipe out an active selection in th
 
   expect(after.stillFocused).toBe(true);
   expect(after.selectionText).toContain('Pattern Pages runs directly');
+});
+
+// Real report: dragging a text selection backward (right-to-left, extending the selection's
+// START handle past the first character) dropped that character on the first attempt, correct
+// on a retry. .documentPaper used to carry the page's visual inset as its own padding, with
+// .documentEditor sized to only paper's already-padded content box - so a backward drag that
+// overshot past the first character's edge left the editable element's DOM bounding box
+// entirely, landing in paper's padding where there's no editable content to hit-test against.
+// The fix moves that same visual inset onto the editor itself (as its own padding, kept visually
+// identical via box-sizing:border-box) so the editor's hit-testable bounds now cover the whole
+// page - this can't simulate an actual iOS drag gesture, but it can verify the underlying
+// geometry the bug depended on no longer exists. (An earlier version of this fix also switched
+// the editor to position:absolute, which turned out to make an unrelated pagination test
+// noticeably flakier under repeated runs - dropped in favor of this narrower change, which only
+// moves the padding and keeps the editor's existing position/sizing model otherwise untouched.)
+test('the document editor\'s hit-testable bounds cover the whole page, not just its padded text area', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.waitForTimeout(300);
+
+  const rects = await page.evaluate(() => {
+    const paper = document.querySelector('.documentPaper');
+    const editor = document.querySelector('.documentEditor');
+    const pr = paper.getBoundingClientRect();
+    const er = editor.getBoundingClientRect();
+    return {
+      paper: { top: pr.top, left: pr.left, width: pr.width, height: pr.height },
+      editor: { top: er.top, left: er.left, width: er.width, height: er.height },
+    };
+  });
+
+  expect(Math.abs(rects.editor.left - rects.paper.left)).toBeLessThan(1);
+  expect(Math.abs(rects.editor.top - rects.paper.top)).toBeLessThan(1);
+  expect(Math.abs(rects.editor.width - rects.paper.width)).toBeLessThan(1);
+  expect(Math.abs(rects.editor.height - rects.paper.height)).toBeLessThan(1);
 });
