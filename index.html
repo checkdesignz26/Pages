@@ -18883,6 +18883,20 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
       var block=(node&&node.nodeType===1?node:(node&&node.parentElement));
       block=block&&block.closest&&block.closest('h1,h2');
       if(!block||!editor.contains(block)) return;
+      // Real bug, confirmed from a screen recording: pressing Enter at the START of an EXISTING
+      // heading (not after typing a new one) destroyed that heading - the code below always
+      // force-converts whatever block the caret lands in after the split to a plain paragraph,
+      // assuming Enter was pressed at the END of a just-typed heading to start a body-text line
+      // after it. At the start of "Chapter 4 - Creating Templates", the split instead put the
+      // heading's own text in the block the caret landed in, so THAT got stripped down to a
+      // paragraph, losing its formatting - and the caret was left in a new, empty heading now
+      // sitting above the visible content, looking like it had vanished. Only apply this when the
+      // caret has nothing after it in the heading (a real "end of heading" position) - anywhere
+      // else, let Enter split the heading normally instead, the way any other editor would.
+      var postRange=document.createRange();
+      postRange.selectNodeContents(block);
+      postRange.setStart(sel.getRangeAt(0).endContainer,sel.getRangeAt(0).endOffset);
+      if(postRange.toString().length>0) return;
       e.preventDefault();
       document.execCommand('insertParagraph');
       document.execCommand('formatBlock',false,'p');

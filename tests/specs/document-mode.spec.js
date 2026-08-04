@@ -318,6 +318,49 @@ test('pressing Enter after a heading drops back to body text instead of leaving 
   await expect(page.locator('.documentTOCRow')).toHaveCount(1);
 });
 
+// Real report, confirmed from a screen recording: pressing Enter at the START of an EXISTING
+// heading (not after typing a new one, e.g. placing the cursor before "Chapter 4" and hitting
+// Enter to add a line above it) destroyed that heading instead of just adding a line. The fix
+// above only drops to body text when Enter is pressed at the END of a heading (nothing after the
+// caret) - anywhere else in the heading, it should split like any other editor: two headings,
+// original text and formatting intact.
+test('pressing Enter at the start of an existing heading splits it into two headings instead of destroying the original text', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.innerHTML = '<p>Some intro text.</p><h1>Chapter 4 – Creating Templates</h1><p>Body text after the heading.</p>';
+    state.pages[state.selectedPage].docHtml = ed.innerHTML;
+  });
+  await page.waitForTimeout(300);
+
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    const h1 = ed.querySelector('h1');
+    ed.focus();
+    const r = document.createRange();
+    r.setStart(h1.firstChild, 0);
+    r.collapse(true);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(100);
+
+  const result = await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    return {
+      html: ed.innerHTML,
+      headingTexts: [...ed.querySelectorAll('h1')].map((h) => h.textContent),
+    };
+  });
+
+  // The original heading text must survive, still tagged as a real heading - not silently
+  // downgraded to a plain paragraph.
+  expect(result.headingTexts).toContain('Chapter 4 – Creating Templates');
+  expect(result.html).toContain('<h1>Chapter 4 – Creating Templates</h1>');
+});
+
 test('creating the TOC for the first time does not clobber it with the page content that was focused', async ({ page }) => {
   // Real request: bolding a line of body text on a document page, then generating the TOC,
   // left that same body text sitting on the "Contents" page instead of the generated listing.
