@@ -20,11 +20,30 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:system-ui,-apple-syst
 button,input,select{font:inherit}
 button,select,input[type=number],input[type=text],input[type=color]{border:1px solid var(--line);background:linear-gradient(180deg,#303851,#20263d);color:var(--text);border-radius:15px;padding:10px 13px;font-weight:850;box-shadow:0 5px 14px rgba(0,0,0,.18)}
 button{cursor:pointer;touch-action:manipulation} button:disabled{opacity:.45;cursor:not-allowed} button.primary{border:0;background:linear-gradient(90deg,var(--purple),var(--pink))} button.small{padding:7px 10px;border-radius:12px;font-size:13px} button.active{outline:3px solid rgba(255,142,214,.75)}
-.app{height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr)}
-header{background:rgba(8,12,25,.92);border-bottom:1px solid var(--line);padding:14px 18px 12px;display:grid;grid-template-columns:280px 1fr;gap:12px;align-items:center}
+/* Real bug: on a narrower iPad, the whole layout ran off the edge of the screen with no way to
+   scroll back and see the rest - confirmed from a screenshot, reproduced at that iPad's actual
+   logical viewport (1080x810 landscape). .app had no explicit grid-template-columns, so its
+   single implicit column - and everything grid-sized off it (header, main) - grew to fit its
+   CONTENT's preferred width instead of being constrained by the viewport: a plain "1fr" track,
+   without an explicit 0 minimum, falls back to the max-content size of what's inside it once
+   there's nothing forcing the container itself to a definite size. Same root cause hit header's
+   own two-column layout further down (280px + a bare "1fr" for the toolbar) - fixed at each spot
+   by giving the flexible track an explicit minmax(0,1fr) instead of a bare 1fr. */
+.app{height:100dvh;width:100%;display:grid;grid-template-rows:auto minmax(0,1fr);grid-template-columns:minmax(0,1fr)}
+header{background:rgba(8,12,25,.92);border-bottom:1px solid var(--line);padding:14px 18px 12px;display:grid;grid-template-columns:280px minmax(0,1fr);gap:12px;align-items:center}
 .brand{display:flex;align-items:center;gap:12px}.flower{width:42px;height:42px;border-radius:50%;background:conic-gradient(from 20deg,#ffe9fb,#ff8ed6,#9b6bff,#ffe58a,#ffe9fb);box-shadow:0 0 0 4px rgba(255,255,255,.1)}.brand h1{font-size:20px;line-height:1.12;margin:0}
 .toolbar{display:flex;flex-direction:column;gap:9px;align-items:center}.toolbarRow{display:flex;flex-wrap:wrap;gap:9px;justify-content:center}
-main{display:grid;grid-template-columns:300px minmax(0,1fr) 340px;min-height:0;height:100%;overflow:hidden;transition:grid-template-columns .22s ease}.side{background:rgba(19,25,44,.86);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;padding:14px;border-right:1px solid var(--line);position:relative;min-height:0;height:100%}.side.right{border-right:0;border-left:1px solid var(--line)}
+/* Real bug: on a narrower iPad, the right panel (and canvas) ran off the edge of the screen -
+   confirmed from a screenshot, reproduced at that iPad's actual logical viewport (1080x810).
+   main's two fixed-width side columns plus its minmax(0,1fr) centre column should shrink the
+   centre column to fit whatever space is left, but main itself had no explicit width - for an
+   auto-sized grid container, an fr track without a definite container width falls back to the
+   PREFERRED (max-content) size of what's inside it rather than actually being constrained by the
+   viewport, so main grew to fit the canvas's natural content width instead of the other way
+   around, pushing the whole layout past 1080px wide with no way to scroll back to see the rest.
+   An explicit width makes main a definite-size container, so minmax(0,1fr) can do its actual job:
+   shrink the centre column to whatever's left after both fixed side columns. */
+main{width:100%;display:grid;grid-template-columns:300px minmax(0,1fr) 340px;min-height:0;height:100%;overflow:hidden;transition:grid-template-columns .22s ease}.side{background:rgba(19,25,44,.86);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;padding:14px;border-right:1px solid var(--line);position:relative;min-height:0;height:100%}.side.right{border-right:0;border-left:1px solid var(--line)}
 .box{background:rgba(255,255,255,.045);border:1px solid var(--line);border-radius:22px;padding:14px;margin-bottom:14px}.trayTop{border-color:rgba(255,142,214,.28);background:rgba(255,255,255,.06)}.box h2{font-size:18px;margin:0 0 10px}.smallText{font-size:13px;color:var(--muted);line-height:1.3}.full{width:100%;margin:5px 0}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .workspace{position:relative;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:38px 26px 110px;touch-action:pan-y;background:linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px);background-size:36px 36px}.pageWrap{display:flex;flex-direction:column;align-items:center;gap:70px;min-width:0}.pageBlock{position:relative;text-align:center;width:100%;display:flex;flex-direction:column;align-items:center}.pageTitle{display:inline-block;margin-bottom:12px;background:#0d1326;border-radius:18px;padding:8px 15px;font-weight:950;box-shadow:0 8px 18px rgba(0,0,0,.25)}
 .stage{position:relative;background:#fff;overflow:hidden;box-shadow:0 24px 65px rgba(0,0,0,.45);border:0;width:min(100%,620px);aspect-ratio:3000/2250;touch-action:none}.stage.listing{width:min(100%,620px);aspect-ratio:3000/2250}.stage.pattern{width:min(100%,560px);aspect-ratio:1/1}.stage.social{width:min(100%,520px);aspect-ratio:1/1}.stage.mockup{width:min(100%,680px)}.blankHint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#8e829d;font-weight:950;font-size:clamp(36px,6vw,78px);pointer-events:none}
@@ -108,7 +127,7 @@ body.leftHanded.rightCollapsed #toggleRightPanel::after{content:'›'}
 
 /* Pattern Pages styling pass: Affinity-style panels + simple Seamless Studio flower mark */
 :root{--studio-deep:#070b17;--studio-line-soft:rgba(255,255,255,.08)}
-header{grid-template-columns:270px 1fr;background:linear-gradient(180deg,rgba(13,18,34,.98),rgba(7,10,20,.96));border-bottom:1px solid rgba(255,255,255,.16);box-shadow:0 10px 34px rgba(0,0,0,.34);padding:12px 16px 10px}
+header{grid-template-columns:270px minmax(0,1fr);background:linear-gradient(180deg,rgba(13,18,34,.98),rgba(7,10,20,.96));border-bottom:1px solid rgba(255,255,255,.16);box-shadow:0 10px 34px rgba(0,0,0,.34);padding:12px 16px 10px}
 .brand{gap:10px;align-items:center}.brandFlower{width:36px;height:36px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.18);border-radius:12px;background:rgba(255,255,255,.055);color:#ffe9fb;font-size:25px;line-height:1;text-shadow:0 0 14px rgba(255,142,214,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 22px rgba(0,0,0,.28)}.flower{display:none!important}.brand h1{font-size:20px;letter-spacing:.01em}.brand h1 span{font-size:11px;color:#cfc7dd;letter-spacing:.12em}
 .toolbarRow{justify-content:flex-end;gap:7px}.toolbarRow button{padding:8px 10px;border-radius:10px;font-size:12px;text-transform:none;box-shadow:none;background:rgba(255,255,255,.055)}.toolbarRow button.primary{background:linear-gradient(90deg,#8e69ff,#ff8ed6);box-shadow:0 8px 18px rgba(155,107,255,.2)}
 .side{background:linear-gradient(180deg,rgba(18,24,42,.94),rgba(10,14,27,.96));padding:10px}.side.left{border-right:1px solid rgba(255,255,255,.13)}.side.right{border-left:1px solid rgba(255,255,255,.13)}
@@ -3630,7 +3649,7 @@ html,body{
     linear-gradient(135deg,#17101f 0%,#100d1b 45%,#0f1221 100%);
 }
 header{
-  grid-template-columns:360px 1fr;
+  grid-template-columns:360px minmax(0,1fr);
   background:linear-gradient(180deg,rgba(27,21,38,.98),rgba(17,14,27,.96));
   border-bottom:1px solid rgba(255,226,248,.16);
 }
@@ -3859,7 +3878,7 @@ button,select,input[type=number],input[type=text],input[type=color]{
 .panelToggle{width:25px!important;height:58px!important;background:rgba(31,38,63,.96)!important;}
 @media(max-width:1180px){
   main{--leftW:238px!important;--rightW:258px!important;}
-  .studioHeader,header{grid-template-columns:minmax(280px,320px) 1fr!important;padding:14px 16px!important;gap:14px!important;min-height:82px!important;}
+  .studioHeader,header{grid-template-columns:minmax(280px,320px) minmax(0,1fr)!important;padding:14px 16px!important;gap:14px!important;min-height:82px!important;}
   .brandTitle,.brand h1{font-size:29px!important;}
   .brandFlower{font-size:30px!important;}
   .tagline{font-size:11.5px!important;max-width:280px!important;}
