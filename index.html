@@ -1479,11 +1479,6 @@ body.autoGroupEditing .layer.collectionGrouped{
   <div class="rangeRow"><label>glow</label><input id="textGlow" type="range" min="0" max="24" value="0"></div>
   <div class="rangeRow"><label>outline</label><input id="textStroke" type="range" min="0" max="8" value="0"></div>
   <div class="colorRow"><label class="smallText">effect colour</label><input id="effectColor" type="color" value="#ffffff"></div>
-  <div class="textSectionTitle">links & pdf</div>
-  <input id="linkUrlInput" class="linkInput" type="text" placeholder="https://your-download-link.com" oninput="applySelectedLinkFromInput()">
-  <button class="full" onclick="makeLinkButton()">make selected text a link button</button>
-  <div id="selectedLinkHint" class="linkMini" style="display:none"></div>
-  <div class="grid2"><button onclick="downloadCurrentPagePDF()">current PDF</button><button onclick="downloadAllPagesPDF()">multi-page PDF</button></div>
 </div>
 
   <div class="box recolorPngBox" id="recolorPngPanel"><h2>recolor png</h2><div class="panelBody">
@@ -4735,8 +4730,6 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
   border-radius:12px;background:rgba(255,255,255,.055);color:#fff8fb;padding:10px;
   font:inherit;font-size:12px;line-height:1.35;outline:none;box-shadow:none;
 }
-.linkInput{width:100%;margin:5px 0;font-size:12px!important;text-transform:none!important}
-.linkMini{display:inline-flex;gap:6px;align-items:center;font-size:11px;color:#ffe9fb;background:rgba(155,107,255,.14);border:1px solid rgba(155,107,255,.25);border-radius:999px;padding:5px 8px;margin-top:6px;font-weight:850;text-transform:none}
 .stage a{color:inherit;text-decoration:none}
 .pdfTip{font-size:11.5px;line-height:1.35;color:rgba(216,206,222,.88);margin-top:7px}
 
@@ -5626,12 +5619,6 @@ aside:last-of-type .shadowSliderBox{
     }
   }
 
-  function insertPdfTools(){
-    // UX cleanup: PDF, links and pasted text now live inside the single Text panel.
-    const panel=document.getElementById('textStudioPanel');
-    if(panel && typeof setupCollapsiblePanels==='function') setupCollapsiblePanels();
-  }
-
   function ensureTextBoxDefaults(l){
     if(!l)return;
     if(l.disclosureBadge){l.text='AI Generated';l.font='system-ui';l.fontSize=12;l.bold=false;l.italic=false;l.color='#555555';l.fill='rgba(255,255,255,.92)';l.border='#ffffff';l.borderW=0;l.scale=1;l.lineHeight=1;l.letterSpacing=0;l.textShadow=0;l.textGlow=0;l.textStroke=0;l.effectColor='#ffffff';l.textPadding=10;return;}
@@ -5639,38 +5626,6 @@ aside:last-of-type .shadowSliderBox{
     if(l.letterSpacing==null)l.letterSpacing=0;
     if(l.textPadding==null)l.textPadding=8;
   }
-
-  window.applySelectedLinkFromInput=function(){
-    const l=typeof getLayer==='function'?getLayer():null;
-    const input=safe$('linkUrlInput');
-    if(!l || !input)return;
-    l.href=(input.value||'').trim();
-    updateLinkHint();
-  };
-
-  window.updateLinkHint=function(){
-    const hint=safe$('selectedLinkHint');
-    if(!hint)return;
-    const l=typeof getLayer==='function'?getLayer():null;
-    const input=safe$('linkUrlInput');
-    if(input && l) input.value=l.href||'';
-    if(l && l.href){hint.style.display='inline-flex';hint.textContent='linked: '+l.href.replace(/^https?:\/\//,'').slice(0,42);}else{hint.style.display='none';hint.textContent='';}
-  };
-
-  window.makeLinkButton=function(){
-    const l=typeof getLayer==='function'?getLayer():null;
-    if(!l || !['text','label'].includes(l.type)){alert('Select a text or label first.');return;}
-    const input=safe$('linkUrlInput');
-    let url=(input&&input.value||l.href||'').trim();
-    if(!url) url=prompt('Paste the link URL for this button/text:','https://');
-    if(!url)return;
-    if(!/^https?:\/\//i.test(url)) url='https://'+url;
-    save();
-    l.href=url;
-    l.type='label';l.badgeShape='rounded';l.fill=l.fill==='transparent'?'#fff8fb':(l.fill||'#fff8fb');l.border=l.border||'#ff8ed6';l.borderW=l.borderW||2;l.text=l.text||'Download link';l.fontSize=l.fontSize||30;l.textPadding=14;
-    render();
-    updateLinkHint();
-  };
 
   window.addPastedTextBlock=function(){
     const area=safe$('pasteTextArea');
@@ -5706,10 +5661,6 @@ aside:last-of-type .shadowSliderBox{
     e.preventDefault();
   });
 
-  const oldSync=window.syncControls;
-  if(typeof oldSync==='function'){
-    window.syncControls=function(){oldSync.apply(this,arguments); updateLinkHint();};
-  }
   // NOTE(consolidation): a selectLayer wrap that lived here was removed - fully superseded
   // by later generations (confirmed via a fresh scan: the final selectLayer generation fully
   // replaces with no fallback to a previous version), so this was dead code.
@@ -5848,16 +5799,8 @@ aside:last-of-type .shadowSliderBox{
   }
   window.makePdfBlobFromPages=makePdfBlobFromPages;
   window.downloadBlob=downloadBlob;
-  async function pageToPdfItem(p){
-    const c=await renderPageToCanvas(p);
-    return {w:p.w,h:p.h,dataUrl:c.toDataURL('image/jpeg',0.94),links:p.layers.filter(l=>l.href).map(l=>({x:l.x,y:l.y,w:l.w,h:l.h,href:l.href}))};
-  }
-  window.downloadCurrentPagePDF=async function(){const p=current();if(!p)return;const blob=makePdfBlobFromPages([await pageToPdfItem(p)]);downloadBlob(blob,`pattern-pages-${state.selectedPage+1}.pdf`);};
-  window.downloadAllPagesPDF=async function(){const items=[];for(const p of state.pages)items.push(await pageToPdfItem(p));downloadBlob(makePdfBlobFromPages(items),'pattern-pages-instruction-pages.pdf');};
 
   insertA4Presets();
-  insertPdfTools();
-  updateLinkHint();
 })();
 </script>
 
