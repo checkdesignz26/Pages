@@ -1407,3 +1407,58 @@ test('the document editor\'s hit-testable bounds cover the whole page, not just 
   expect(Math.abs(rects.editor.width - rects.paper.width)).toBeLessThan(1);
   expect(Math.abs(rects.editor.height - rects.paper.height)).toBeLessThan(1);
 });
+
+// Real report: "bullet list" and "numbered list" in the text panel appeared completely
+// disconnected from document mode - clicking either while writing a document page did nothing
+// visible. Root cause: both only ever wrote into #textValue, the hidden input the OLD floating
+// layer-text editor uses, with zero awareness of a document page's contenteditable. Same
+// activeEditor split already used for bold/italic/text-align: apply a real list via execCommand
+// when a document editor is active, instead of touching an input that isn't even on screen.
+test('the bullet list and numbered list buttons apply real lists inside a document page', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.innerHTML = '<h1>Title</h1><p>Line one</p><p>Line two</p>';
+    state.pages[state.selectedPage].docHtml = ed.innerHTML;
+  });
+  await page.waitForTimeout(300);
+
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    const ps = ed.querySelectorAll('p');
+    const r = document.createRange();
+    r.setStart(ps[0], 0);
+    r.setEnd(ps[1], 1);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    ed.focus();
+  });
+
+  await expandAllBoxes(page);
+  await clickResilient(page, page.locator('#textStudioPanel button:text-is("bullet list")'));
+
+  const afterBullet = await page.evaluate(() => document.querySelector('.documentEditor').innerHTML);
+  expect(afterBullet).toMatch(/<ul[^>]*>[\s\S]*<li[^>]*>Line one/);
+  expect(afterBullet).toMatch(/<li[^>]*>Line two/);
+
+  // Undo the bullet list, then try numbered list on the same selection.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.innerHTML = '<h1>Title</h1><p>Line one</p><p>Line two</p>';
+    state.pages[state.selectedPage].docHtml = ed.innerHTML;
+    const ps = ed.querySelectorAll('p');
+    const r = document.createRange();
+    r.setStart(ps[0], 0);
+    r.setEnd(ps[1], 1);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    ed.focus();
+  });
+  await clickResilient(page, page.locator('#textStudioPanel button:text-is("numbered list")'));
+
+  const afterNumbered = await page.evaluate(() => document.querySelector('.documentEditor').innerHTML);
+  expect(afterNumbered).toMatch(/<ol[^>]*>[\s\S]*<li[^>]*>Line one/);
+  expect(afterNumbered).toMatch(/<li[^>]*>Line two/);
+});

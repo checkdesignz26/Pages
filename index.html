@@ -18449,6 +18449,16 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
   font:400 14px/1.55 Georgia,serif;
   text-align:left;
 }
+.documentEditor.ppPersistentDoc183 ul,
+.documentEditor.ppPersistentDoc183 ol{
+  margin:0 0 .72em!important;
+  padding-left:1.4em!important;
+  font:400 14px/1.55 Georgia,serif;
+  text-align:left;
+}
+.documentEditor.ppPersistentDoc183 li{
+  margin:0 0 .3em!important;
+}
 /* Real request: "Start writing here…" used to be literal text the user had to select and
    delete manually before typing their own content. This rule used to require the WHOLE editor
    to be :empty, which it never actually was (the default docHtml always had a real "Title"
@@ -18837,6 +18847,23 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     if(activeEditor){exec('italic');return;}
     if(typeof layerToggleItalic==='function')layerToggleItalic();
   };
+  // Real bug: "bullet list"/"numbered list" in the text panel only ever wrote into #textValue,
+  // the hidden input the OLD floating layer-text editor uses - it has no relationship to a
+  // document page's contenteditable at all, so clicking either button while writing a document
+  // silently did nothing. Same activeEditor split as bold/italic/setTextAlign above: in a
+  // document page, apply a real list via execCommand; otherwise fall back to the original
+  // #textValue-based behavior untouched.
+  var originalMakeBulletList=window.makeBulletList;
+  var originalMakeNumberedList=window.makeNumberedList;
+  window.makeBulletList=function(){
+    if(activeEditor&&document.contains(activeEditor)){exec('insertUnorderedList');return;}
+    if(typeof originalMakeBulletList==='function')originalMakeBulletList();
+  };
+  window.makeNumberedList=function(){
+    if(activeEditor&&document.contains(activeEditor)){exec('insertOrderedList');return;}
+    if(typeof originalMakeNumberedList==='function')originalMakeNumberedList();
+  };
+
 
   // Marks the empty body paragraph of a freshly created page (an <h1> followed by nothing but
   // one empty <p>) so the "Start writing here…" CSS placeholder shows on it - see
