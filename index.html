@@ -15111,8 +15111,9 @@ else install();
     const box=document.createElement('div');
     box.style.cssText='background:#1c1626;border:1px solid rgba(255,232,248,.18);border-radius:16px;padding:20px;max-width:340px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.5);text-align:center;';
     box.innerHTML='<div style="color:#fff8fb;font:900 15px system-ui;margin-bottom:14px;">Your PDF is ready</div>'+
-      '<div style="display:flex;gap:8px;justify-content:center;">'+
+      '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">'+
       '<button type="button" id="ppPdfReadyClose" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:#fff8fb;font-weight:700;">Close</button>'+
+      '<button type="button" id="ppPdfReadyOpen" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:#fff8fb;font-weight:700;">Open in new tab</button>'+
       '<button type="button" id="ppPdfReadyDownload" style="padding:9px 16px;border-radius:10px;border:0;background:linear-gradient(135deg,#9b6bff,#ff8ed6);color:#fff;font-weight:800;">Download PDF</button>'+
       '</div>';
     overlay.appendChild(box);
@@ -15120,12 +15121,29 @@ else install();
     function close(){overlay.remove()}
     box.querySelector('#ppPdfReadyClose').addEventListener('click',close);
     overlay.addEventListener('click',function(e){if(e.target===overlay)close()});
+    // Real report: after building the PDF, tapping to view it replaced the whole app tab with
+    // no way back to the project. window.open() called directly inside this click handler (a
+    // fresh, genuine user gesture - never delayed past it) opens the PDF in its own new tab
+    // instead, leaving the app itself untouched in the original tab. Falls back to a normal
+    // download only if the popup was actually blocked (win comes back null/undefined).
+    box.querySelector('#ppPdfReadyOpen').addEventListener('click',function(){
+      if(typeof window.ppDebugLog==='function')window.ppDebugLog('ppPdfReadyDialog:open-clicked',{filename:filename,size:blob.size});
+      const url=URL.createObjectURL(blob);
+      const win=window.open(url,'_blank');
+      if(!win){
+        window.downloadBlob(blob,filename);
+      }else{
+        setTimeout(function(){URL.revokeObjectURL(url)},300000);
+      }
+      close();
+    });
     box.querySelector('#ppPdfReadyDownload').addEventListener('click',function(){
       if(typeof window.ppDebugLog==='function')window.ppDebugLog('ppPdfReadyDialog:download-clicked',{filename:filename,size:blob.size});
       window.downloadBlob(blob,filename);
       close();
     });
   }
+  window.ppShowPdfReadyDialog=ppShowPdfReadyDialog;
   window.ppPrintDocument=async function(){
     const dlog=typeof window.ppDebugLog==='function'?window.ppDebugLog:function(){};
     const docs=pages().filter(isDoc);

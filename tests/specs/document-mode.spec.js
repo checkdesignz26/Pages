@@ -1499,3 +1499,26 @@ test('the add link button in the text panel wraps the current selection in a doc
   expect(afterLink).toMatch(/<a[^>]*href="https:\/\/example\.com\/manual-download"[^>]*>download page for more<\/a>/);
   expect(afterLink).toContain('Visit our ');
 });
+
+// Real report: viewing the built PDF replaced the whole app tab with no way back to the project.
+// The "print / save PDF" ready dialog now has an "Open in new tab" button that opens the PDF in
+// its own tab via window.open(), leaving the app's own tab/URL untouched.
+test('the PDF ready dialog opens the PDF in a new tab instead of navigating the app away', async ({ page }) => {
+  await openDocumentPage(page);
+  const appUrlBefore = page.url();
+
+  await page.evaluate(() => window.ppPrintDocument());
+  await page.waitForSelector('#ppPdfReadyOpen', { timeout: 10000 });
+
+  const [popup] = await Promise.all([
+    page.waitForEvent('popup'),
+    page.click('#ppPdfReadyOpen'),
+  ]);
+  await popup.waitForLoadState('domcontentloaded');
+
+  expect(popup.url()).toMatch(/^blob:/);
+  expect(page.url()).toBe(appUrlBefore);
+  // The app's own document should still be there, untouched, in the original tab/page.
+  expect(await page.evaluate(() => typeof window.render)).toBe('function');
+  await popup.close();
+});
