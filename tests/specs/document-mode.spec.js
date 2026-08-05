@@ -1462,3 +1462,40 @@ test('the bullet list and numbered list buttons apply real lists inside a docume
   expect(afterNumbered).toMatch(/<ol[^>]*>[\s\S]*<li[^>]*>Line one/);
   expect(afterNumbered).toMatch(/<li[^>]*>Line two/);
 });
+
+// After the non-document "links & pdf" panel section was removed, the text panel's own
+// description ("...add links from one place") was left broken for document mode - there was no
+// way left to insert a link into a document page from the panel that promised it. Verifies the
+// re-added "add link" button in #textStudioPanel wraps the CURRENT SELECTION in a real link,
+// not just some default/collapsed position.
+test('the add link button in the text panel wraps the current selection in a document page with a real link', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.innerHTML = '<h1>Title</h1><p>Visit our download page for more.</p>';
+    state.pages[state.selectedPage].docHtml = ed.innerHTML;
+  });
+  await page.waitForTimeout(300);
+
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    const p = ed.querySelector('p');
+    const r = document.createRange();
+    r.setStart(p.firstChild, 10);
+    r.setEnd(p.firstChild, 32);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    ed.focus();
+  });
+
+  page.once('dialog', (dialog) => dialog.accept('https://example.com/manual-download'));
+
+  await expandAllBoxes(page);
+  await clickResilient(page, page.locator('#textStudioPanel button:text-is("add link")'));
+  await page.waitForTimeout(200);
+
+  const afterLink = await page.evaluate(() => document.querySelector('.documentEditor').innerHTML);
+  expect(afterLink).toMatch(/<a[^>]*href="https:\/\/example\.com\/manual-download"[^>]*>download page for more<\/a>/);
+  expect(afterLink).toContain('Visit our ');
+});

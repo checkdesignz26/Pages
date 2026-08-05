@@ -1443,6 +1443,7 @@ body.autoGroupEditing .layer.collectionGrouped{
   <div class="textSectionTitle">write / edit</div>
   <textarea id="textValue" class="mainTextEditor" rows="3" placeholder="type your text…">Your label</textarea>
   <div class="grid2"><button onclick="makeBulletList()">bullet list</button><button onclick="makeNumberedList()">numbered list</button></div>
+  <button class="full ppDocAddLinkBtn" onclick="ppDocInsertLink()">add link</button>
   <textarea id="pasteTextArea" class="pasteArea" placeholder="paste text from Notes…"></textarea>
   <div class="grid2"><button onclick="addPastedTextBlock()">add pasted text</button><button onclick="pasteFromClipboardIntoPage()">paste clipboard</button></div>
   <div class="textSectionTitle">font</div>
@@ -5430,6 +5431,11 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 .textStudioBox button[onclick*="SmallSubtitle"],
 .textStudioBox button[onclick*="smallSubtitle"]{
   display:none!important;
+}
+/* Document mode needs its own way to insert a link now that the old "links & pdf" panel
+   section is gone - the generic onclick*="Link" hide rule above would otherwise catch it too. */
+.textStudioBox button.ppDocAddLinkBtn{
+  display:block!important;
 }
 
 /* Make text panel feel calmer */
