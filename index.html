@@ -11751,6 +11751,45 @@ window.addEventListener('DOMContentLoaded',function(){
 })();
 </script>
 
+<!-- GLOBAL ANTI-ZOOM SAFETY NET — real report + screen recording: double-tapping text to edit
+     it sometimes left the whole app stuck zoomed in (everything visibly bigger, header and right
+     panel pushed out of view) instead of opening the text editor, with no way back except
+     manually pinching back out. The viewport meta tag's maximum-scale=1.0/user-scalable=no
+     already blocks most native zoom, and pp-text-v176-js's own double-tap handler calls
+     preventDefault - but iOS has ignored user-scalable=no for actual two-finger pinch since
+     iOS 10 (an unblockable accessibility feature, confirmed against Apple's own documented
+     behavior), and any single missed tap/timing edge case can let a native double-tap-zoom
+     through too. Nothing in this app ever needs the BROWSER's own page zoom (the canvas has its
+     own +/- zoom controls) - so instead of trying to prevent every possible way native zoom can
+     slip in, this watches for it happening at all and snaps it back to 1x automatically, the same
+     way pp-text-v176-js already resets zoom on its own editor's close.
+-->
+<script id="pp-global-anti-zoom">
+(function(){
+  if(window.__PP_GLOBAL_ANTI_ZOOM__) return;
+  window.__PP_GLOBAL_ANTI_ZOOM__=true;
+  var meta=document.querySelector('meta[name="viewport"]');
+  if(!meta || !window.visualViewport) return;
+  var resetting=false;
+  function resetZoom(){
+    if(resetting) return;
+    resetting=true;
+    try{
+      var original=meta.getAttribute('content');
+      meta.setAttribute('content',original+', maximum-scale=1.0');
+      setTimeout(function(){
+        try{ meta.setAttribute('content',original); }catch(e){}
+        resetting=false;
+      },60);
+    }catch(e){ resetting=false; }
+  }
+  window.__ppResetGlobalZoom=resetZoom;
+  window.visualViewport.addEventListener('resize',function(){
+    if(window.visualViewport.scale>1.02) resetZoom();
+  });
+})();
+</script>
+
 
 
 <!-- FLASH MOP 168 — opacity state fix

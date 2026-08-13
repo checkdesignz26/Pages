@@ -224,3 +224,53 @@ test('Montserrat, Roboto, Lato, Bebas Neue, Anton, League Spartan, and Inter are
     expect(results[font].hasOption, `${font} listed in dropdown`).toBe(true);
   }
 });
+
+test('a native page zoom (double-tap slipping past prevention, or an unblockable iOS pinch) gets snapped back to 1x automatically', async ({ page }) => {
+  // Real report + screen recording: double-tapping a text layer to edit it sometimes left the
+  // whole app - header, canvas AND both side panels - stuck visibly zoomed in, with the text
+  // editor never opening and no way back except manually pinching back out. pp-text-v176-js's
+  // own double-tap handler already calls preventDefault(), and the viewport meta tag already
+  // sets maximum-scale=1.0/user-scalable=no, but iOS has ignored user-scalable=no for actual
+  // two-finger pinch since iOS 10 (an unblockable accessibility feature), and any single missed
+  // tap/timing edge case can let a native double-tap-zoom through too - no combination of
+  // preventDefault/meta tags can promise 100% prevention. Instead of only trying to prevent it,
+  // pp-global-anti-zoom watches visualViewport for a scale creeping above 1x and snaps it back
+  // down - simulated here since Chromium's own visualViewport.scale isn't driven by real pinch
+  // gestures in a headless test.
+  const originalContentBefore = await page.evaluate(() => document.querySelector('meta[name="viewport"]').getAttribute('content'));
+
+  // Record every content value the meta tag passes through, not just the final one - the fix
+  // briefly appends ", maximum-scale=1.0" then restores the original string 60ms later, and
+  // without the fix nothing touches the tag at all, which would otherwise (wrongly) look
+  // identical to "already back to normal" if only the end state were checked.
+  await page.evaluate(() => {
+    window.__ppMetaValues = [];
+    const meta = document.querySelector('meta[name="viewport"]');
+    window.__ppMetaObserver = new MutationObserver(() => window.__ppMetaValues.push(meta.getAttribute('content')));
+    window.__ppMetaObserver.observe(meta, { attributes: true });
+    Object.defineProperty(window.visualViewport, 'scale', { configurable: true, get: () => 1.6 });
+    window.visualViewport.dispatchEvent(new Event('resize'));
+  });
+  // The reset briefly appends ", maximum-scale=1.0" to the meta content, then restores the
+  // original string 60ms later - wait past that round trip before checking the end state.
+  await page.waitForTimeout(200);
+
+  const { values, contentAfter } = await page.evaluate(() => ({
+    values: window.__ppMetaValues,
+    contentAfter: document.querySelector('meta[name="viewport"]').getAttribute('content'),
+  }));
+  expect(values.some((v) => v && v.includes('maximum-scale=1.0') && v !== originalContentBefore)).toBe(true);
+  expect(contentAfter).toBe(originalContentBefore);
+
+  // A scale that's already at/under 1x (nothing to fix) must not trigger any meta tag churn.
+  let mutated = false;
+  await page.evaluate(() => {
+    window.__ppMetaObserver = new MutationObserver(() => { window.__ppMetaMutated = true; });
+    window.__ppMetaObserver.observe(document.querySelector('meta[name="viewport"]'), { attributes: true });
+    Object.defineProperty(window.visualViewport, 'scale', { configurable: true, get: () => 1.0 });
+    window.visualViewport.dispatchEvent(new Event('resize'));
+  });
+  await page.waitForTimeout(150);
+  mutated = await page.evaluate(() => !!window.__ppMetaMutated);
+  expect(mutated).toBe(false);
+});
