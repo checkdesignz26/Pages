@@ -15347,7 +15347,18 @@ else install();
       if(child.nodeType!==1)return;
       const tag=child.tagName;
       if(tag==='BR'){runs.push(Object.assign({text:'\n'},style));return}
-      if(tag==='IMG'){runs.push(Object.assign({img:child.getAttribute('src')},style));return}
+      if(tag==='IMG'){
+        // Real report, with screenshots: the PDF always drew an inserted image at up to 650px
+        // tall / full page width, regardless of how small the user had actually dragged it down
+        // to on the page (the resize handles in pp-document-image-adjust-js set the image's own
+        // style.width as a percentage - see selectedImg.style.width=pct+'%' - which this used to
+        // throw away entirely, reading only the src and re-deriving a size from the source
+        // file's raw pixel dimensions). Carry that percentage through so the rasterizer can
+        // reproduce the size actually shown on the page instead of guessing its own.
+        const widthPct=child.style&&/^\d+(\.\d+)?%$/.test(child.style.width)?parseFloat(child.style.width):null;
+        runs.push(Object.assign({img:child.getAttribute('src'),imgWidthPct:widthPct},style));
+        return;
+      }
       const cs=getComputedStyle(child);
       // Read the element's OWN inline font-family directly rather than its computed style -
       // this detached off-screen holder never gets the app's real .documentEditor/.documentPaper
@@ -15385,7 +15396,7 @@ else install();
     const runs=[];ppFlattenInlineRuns(block,null,runs);
     const tokens=[];
     runs.forEach(function(run){
-      if(run.img){tokens.push({img:run.img});return}
+      if(run.img){tokens.push({img:run.img,imgWidthPct:run.imgWidthPct});return}
       run.text.split(/(\n)/).forEach(function(part){
         if(part==='')return;
         if(part==='\n'){tokens.push({brk:true});return}
@@ -15410,9 +15421,19 @@ else install();
         await flush();
         try{
           const img=await new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=tok.img});
-          const maxW=contentW,maxH=650;
-          const scale=Math.min(maxW/img.width,maxH/img.height,1);
-          const dw=img.width*scale,dh=img.height*scale;
+          let dw,dh;
+          if(tok.imgWidthPct!=null){
+            // The user dragged this image to a specific size (style.width, a percentage of the
+            // editor's content width, mirrored here via contentW) - honor it instead of
+            // recomputing a size from the source file's raw pixel dimensions, the same way the
+            // live editor's own height:auto keeps it proportioned.
+            dw=contentW*(tok.imgWidthPct/100);
+            dh=dw*(img.height/img.width);
+          }else{
+            const maxW=contentW,maxH=650;
+            const scale=Math.min(maxW/img.width,maxH/img.height,1);
+            dw=img.width*scale;dh=img.height*scale;
+          }
           ctx.drawImage(img,pad.left+(contentW-dw)/2,y,dw,dh);
           y+=dh+20;
         }catch(e){}
@@ -15438,7 +15459,19 @@ else install();
     const ctx=canvas.getContext('2d');
     ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.textBaseline='alphabetic';
     let y=pad.top;
-    const blocks=holder.children.length?Array.from(holder.children):[holder];
+    // Real report, with screenshots: whole lines the user had typed (visible and editable on
+    // the actual page) were silently missing from the PDF entirely. holder.children only
+    // enumerates ELEMENT children - a contentEditable can genuinely leave typed text sitting
+    // directly under the editor root as a bare, unwrapped text node (a known browser quirk,
+    // e.g. after certain backspace/merge edits across block boundaries), and .children silently
+    // skips those. Walk childNodes instead so a stray text node isn't dropped, wrapping it in a
+    // synthetic paragraph below so it still gets a normal block's font/flow treatment.
+    const rawBlocks=Array.from(holder.childNodes).filter(function(n){return n.nodeType===1||(n.nodeType===3&&n.textContent.trim())});
+    const blocks=rawBlocks.length?rawBlocks.map(function(n){
+      if(n.nodeType!==3)return n;
+      const wrapper=document.createElement('p');wrapper.textContent=n.textContent;
+      return wrapper;
+    }):[holder];
     for(const block of blocks){
       if(y>h-pad.bottom)break;
       y=await ppDrawDocBlock(ctx,block,y,pad,contentW);

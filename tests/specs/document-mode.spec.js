@@ -1738,3 +1738,68 @@ test('the PDF ready dialog opens the PDF in a new tab instead of navigating the 
   expect(await page.evaluate(() => typeof window.render)).toBe('function');
   await popup.close();
 });
+
+// Real report, with screenshots: an image the user had dragged down to a small size on the page
+// came out full-width and much taller in the PDF - ppFlattenInlineRuns() only ever read an <img>
+// tag's src, throwing away the style.width percentage the resize handles set on it
+// (pp-document-image-adjust-js: selectedImg.style.width=pct+'%'), so ppDrawDocBlock() always
+// recomputed its own size from the source file's raw pixel dimensions capped at 650px tall
+// instead. Verified by checking the actual width ctx.drawImage() was called with, not just that
+// SOMETHING got drawn - the old code could easily draw an image at the "right" position with the
+// wrong size.
+test('the PDF honors an image\'s actual on-page size, not the source file\'s raw pixel size', async ({ page }) => {
+  const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  const html = `<p><img src="${tinyPng}" style="width:20%;height:auto"></p>`;
+
+  const drawCalls = await page.evaluate(async (h) => {
+    const calls = [];
+    const orig = CanvasRenderingContext2D.prototype.drawImage;
+    CanvasRenderingContext2D.prototype.drawImage = function (img, x, y, w, height) {
+      calls.push({ w, h: height });
+      return orig.apply(this, arguments);
+    };
+    try {
+      await window.ppRasterizeDocPage(h, 1240, 1754, 1);
+    } finally {
+      CanvasRenderingContext2D.prototype.drawImage = orig;
+    }
+    return calls;
+  }, html);
+
+  expect(drawCalls.length).toBe(1);
+  // contentW = 1240 - 106 - 106 = 1028; a 1x1 source image at style.width:20% should draw at
+  // ~20% of that (205.6px), not the old code's ~1px (a 1x1 source image capped by
+  // min(contentW/1, 650/1, 1) === 1) or some other size derived from the source file.
+  expect(Math.abs(drawCalls[0].w - 205.6)).toBeLessThan(3);
+  expect(Math.abs(drawCalls[0].h - 205.6)).toBeLessThan(3);
+});
+
+// Real report, with screenshots: whole lines the user had typed were visible and editable on the
+// actual page but silently missing from the PDF entirely. ppRasterizeDocPage() used to build its
+// list of blocks from holder.children, which only enumerates ELEMENT children - a contentEditable
+// can genuinely leave typed text sitting directly under the editor root as a bare, unwrapped text
+// node (a real browser quirk, e.g. after certain backspace/merge edits across block boundaries),
+// and .children silently skips those.
+test('the PDF does not drop a line of text that ended up as a bare, unwrapped text node', async ({ page }) => {
+  const html = '<p>First line</p>Bare unwrapped line<p>Third line</p>';
+
+  const drawnTexts = await page.evaluate(async (h) => {
+    const calls = [];
+    const orig = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text) {
+      calls.push(text);
+      return orig.apply(this, arguments);
+    };
+    try {
+      await window.ppRasterizeDocPage(h, 1240, 1754, 1);
+    } finally {
+      CanvasRenderingContext2D.prototype.fillText = orig;
+    }
+    return calls;
+  }, html);
+
+  const joined = drawnTexts.join(' ');
+  expect(joined).toContain('First');
+  expect(joined).toContain('Bare');
+  expect(joined).toContain('Third');
+});
