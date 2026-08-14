@@ -15180,7 +15180,25 @@ else install();
       if(editor.scrollHeight>editor.clientHeight+2){node.remove();break}
       temp.firstElementChild.remove();moved=true;
     }
-    if(moved){pages()[index].docHtml=editor.innerHTML;np.docHtml=temp.innerHTML||'<p><br></p>';np.__flowVer183=(np.__flowVer183||0)+1;if(cleanEmpty(temp)&&pages().length>1)pages().splice(ni,1);}
+    if(moved){
+      pages()[index].docHtml=editor.innerHTML;np.docHtml=temp.innerHTML||'<p><br></p>';np.__flowVer183=(np.__flowVer183||0)+1;
+      if(cleanEmpty(temp)&&pages().length>1){
+        // Real bug, confirmed live: typing until a later page emptied out (everything pulled
+        // back onto earlier pages) removed that page from the data array right here, but
+        // nothing ever told the DOM about it - unlike moveOverflow's own "content moved"
+        // branch just above, which always schedules a render(). The now-phantom page stayed
+        // on screen showing whatever it last had, which looked like duplicated text (since
+        // its old content usually overlapped with what had just flowed correctly onto the
+        // page before it), and its "x" button/Backspace-at-empty-page never had a chance to
+        // remove it since the array had already moved on without the DOM knowing. Mirrors
+        // moveOverflow's own deferred render()+caret-restore pattern - deferred so this
+        // finishes updating pages()/np first, and caret-restored since the user may still be
+        // actively typing in `editor` when a page they're not even looking at empties out.
+        pages().splice(ni,1);
+        const restoreInfo=captureCaretForRestore(editor);
+        setTimeout(()=>{render();restoreCaretAfterRender(index,restoreInfo);},0);
+      }
+    }
   }
   function onDocInput(e){
     const editor=e.currentTarget,index=+editor.dataset.pageIndex,p=pages()[index];if(!p)return;
@@ -15489,7 +15507,7 @@ else install();
   function installPanel(){
     if(document.getElementById('ppDocumentLitePanel'))return;
     const pageList=document.getElementById('pageList');const box=pageList&&pageList.closest('.box');if(!box)return;
-    const panel=document.createElement('div');panel.id='ppDocumentLitePanel';panel.className='box documentLiteBox';panel.innerHTML=`<h2>document mode lite</h2><div class="panelBody"><p class="smallText">Write a manual or welcome PDF. Text flows onto a new A4 page automatically.</p><button class="full primary" onclick="addDocumentLitePage()">add document page</button><div class="docQuickStyles"><button onclick="ppDocStyle('h1')">heading 1</button><button onclick="ppDocStyle('h2')">heading 2</button><button onclick="ppDocStyle('p')">body</button></div><p class="smallText">Format a heading or line of body text the way you want it, put your cursor in it, then tap below to use that look everywhere in the document.</p><div class="docQuickStyles"><button onclick="ppSetHeadingStyleFromSelection('h1')">set heading 1 style</button><button onclick="ppSetHeadingStyleFromSelection('h2')">set heading 2 style</button><button onclick="ppSetHeadingStyleFromSelection('p')">set body style</button></div><div class="grid2"><button onclick="ppDocInsertLink()">add link</button><button onclick="ppDocChooseImage()">add image</button></div><input id="ppDocImageInput" type="file" accept="image/*" onchange="ppDocInsertImage(this)"><div class="grid2"><button onclick="ppUpdateDocumentTOC()">create / update TOC</button><button onclick="ppRenameDocTOC()">rename contents title</button></div><button class="full" onclick="ppPrintDocument()">print / save PDF</button><div class="documentLiteStatus">Automatic page numbers appear at the bottom of every document page.</div></div>`;
+    const panel=document.createElement('div');panel.id='ppDocumentLitePanel';panel.className='box documentLiteBox';panel.innerHTML=`<h2>document mode</h2><div class="panelBody"><p class="smallText">Write a manual or welcome PDF. Text flows onto a new A4 page automatically.</p><button class="full primary" onclick="addDocumentLitePage()">add document page</button><div class="docQuickStyles"><button onclick="ppDocStyle('h1')">heading 1</button><button onclick="ppDocStyle('h2')">heading 2</button><button onclick="ppDocStyle('p')">body</button></div><p class="smallText">Format a heading or line of body text the way you want it, put your cursor in it, then tap below to use that look everywhere in the document.</p><div class="docQuickStyles"><button onclick="ppSetHeadingStyleFromSelection('h1')">set heading 1 style</button><button onclick="ppSetHeadingStyleFromSelection('h2')">set heading 2 style</button><button onclick="ppSetHeadingStyleFromSelection('p')">set body style</button></div><div class="grid2"><button onclick="ppDocInsertLink()">add link</button><button onclick="ppDocChooseImage()">add image</button></div><input id="ppDocImageInput" type="file" accept="image/*" onchange="ppDocInsertImage(this)"><div class="grid2"><button onclick="ppUpdateDocumentTOC()">create / update TOC</button><button onclick="ppRenameDocTOC()">rename contents title</button></div><button class="full" onclick="ppPrintDocument()">print / save PDF</button><div class="documentLiteStatus">Automatic page numbers appear at the bottom of every document page.</div></div>`;
     box.insertAdjacentElement('afterend',panel);
   }
   const oldRenderPages=window.renderPages;window.renderPages=function(){oldRenderPages.apply(this,arguments);decorate()};

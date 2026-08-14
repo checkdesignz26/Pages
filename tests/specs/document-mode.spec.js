@@ -1245,6 +1245,58 @@ test('a heading pulled back into a shorter page does not also survive on the pag
   expect(result.page1).toContain('Pattern Pages runs directly');
 });
 
+// Real report: writing a manual, the user saw text duplicated across two pages and the
+// page-list "no longer deleting" a page that should have vanished. Root cause: typing enough
+// to overflow onto a second page, then deleting content back out of the first page, pulls the
+// second page's content back in one paragraph at a time (pullBack()) - when that empties the
+// second page completely, it's correctly spliced out of state.pages, but nothing ever called
+// render() to tell the DOM. The now-phantom page stayed on screen showing its last content,
+// which looked like duplication (it usually overlapped whatever had just correctly flowed onto
+// the page before it) and could never be removed - the data array had already moved past it.
+test('typing content back out of an overflowed page that empties the next page removes it from the DOM too, not just the data', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.waitForTimeout(300);
+
+  // Fill page 0 with just enough paragraphs to overflow by exactly one, mirroring the precise
+  // fill-to-boundary approach used by the "heading pulled back" test above - a fixed paragraph
+  // count overflows by a different, environment-dependent amount under real timing/layout
+  // variance, which was flaking this test onto 3+ pages instead of the 2 it needs.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.innerHTML = '<h1>Title</h1>';
+    let i = 0;
+    while (ed.scrollHeight <= ed.clientHeight + 2 && i < 400) {
+      const p = document.createElement('p');
+      p.textContent = `Paragraph number ${i} filler text to take up space on the page.`;
+      ed.appendChild(p);
+      i++;
+    }
+    ed.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForFunction(() => state.pages.length === 2, null, { timeout: 5000 });
+  await page.waitForTimeout(300); // let the resulting flow settle before the next edit
+
+  // Trim page 0 down to almost nothing, freeing up enough room to pull all of page 1's content
+  // back in and empty it out entirely.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor[data-page-index="0"]');
+    ed.innerHTML = '<h1>Title</h1><p>Paragraph number 0 filler text to take up space on the page.</p>';
+    ed.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForFunction(() => state.pages.length === 1, null, { timeout: 5000 });
+  await page.waitForTimeout(200); // let the DOM catch up with the just-spliced page
+
+  const after = await page.evaluate(() => ({
+    pageCount: state.pages.length,
+    documentEditorCount: document.querySelectorAll('.documentEditor').length,
+    pageBlockCount: document.querySelectorAll('.pageBlock').length,
+  }));
+
+  expect(after.pageCount).toBe(1);
+  expect(after.documentEditorCount).toBe(after.pageCount);
+  expect(after.pageBlockCount).toBe(after.pageCount);
+});
+
 // Real bug, confirmed from a saved user file: a heading that had its font size nudged a few
 // times ended up 12 levels deep in nested <span style="font-size:..."> wrappers - applyCss()
 // (used for font size, letter spacing, and line height) wrapped the selection in a brand new
