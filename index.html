@@ -2811,7 +2811,27 @@ el.addEventListener('pointerup',e=>{
  document.body.classList.remove('autoGroupEditing');
  hideSnapGuides(el.parentElement);
  try{el.releasePointerCapture(e.pointerId)}catch(err){}
- renderPages();renderLayers();renderFrameList();syncControls();
+ if(wasDrag){
+   renderPages();renderLayers();renderFrameList();syncControls();
+ }else{
+   // Real bug, confirmed via a real-device screen recording: double-tap-to-edit worked
+   // intermittently. renderPages() rebuilds the whole canvas DOM (wrap.innerHTML='', then
+   // recreated from scratch) - this used to run unconditionally on every pointerup, even a
+   // plain tap that never moved. On a real touchscreen, pointerup for a tap can arrive before
+   // that same tap's own touchend - if it does, this rebuild replaces the layer node out from
+   // under it before touchend fires, so the double-tap handler's touchend listener finds its
+   // tap target already detached from the document and silently drops that tap (closest()
+   // on a detached node can't find the layer, so no preventDefault, no tap counted) - some
+   // taps get lost depending on per-device event timing, exactly what "sometimes it comes up,
+   // sometimes it doesn't" looks like. A plain tap only ever changes selection (state.selected,
+   // already applied directly above in pointerdown) - no layer property is mutated unless
+   // drag.active actually went true - so skip the destructive rebuild and just clear any
+   // other layer's stale selection classes by hand instead.
+   document.querySelectorAll('.stage .layer.selected,.stage .layer.justDeselected').forEach(other=>{
+     if(other!==el) other.classList.remove('selected','justDeselected');
+   });
+   renderLayers();renderFrameList();syncControls();
+ }
  e.preventDefault();
  e.stopPropagation();
 });
@@ -10177,6 +10197,17 @@ window.addEventListener('DOMContentLoaded',function(){
     document.addEventListener('pointerup',function(){
       setTimeout(function(){
         if(typeof window.__ppDocEditorActive==='function'&&window.__ppDocEditorActive())return;
+        // Real bug, confirmed via a real-device screen recording: double-tap-to-edit a canvas
+        // text layer worked, then the editor vanished again moments later on its own. This
+        // listener runs on EVERY pointerup anywhere in the app (not just after a stash drag)
+        // and, 40ms later, rebuilds the whole canvas DOM via renderPages() - which wipes the
+        // 'ppTextEditing176' class pp-text-v176-js just added, since that's runtime-only editor
+        // state, never part of the persisted layer model a fresh render rebuilds from. The
+        // second tap of a double-tap always fires its own pointerup right before opening the
+        // editor, so this fired on every single successful open, silently closing it 40ms
+        // later - "sometimes it comes up, sometimes it doesn't" was really "it always comes up,
+        // then almost always closes itself again too fast to notice which one happened."
+        if(typeof window.__ppCanvasTextEditorActive==='function'&&window.__ppCanvasTextEditorActive())return;
         fixStashZOrder(); if(typeof renderPages==='function')renderPages();
       },40);
     },true);
@@ -11735,8 +11766,19 @@ window.addEventListener('DOMContentLoaded',function(){
     else { lastTap.id=id; lastTap.t=now; }
   }
   document.addEventListener('touchend',handleTap,true);
-  document.addEventListener('pointerup',function(e){ if(!e.pointerType || e.pointerType==='mouse')return; handleTap(e); },true);
+  // Real touch input already drives handleTap via 'touchend' above; this listener exists to
+  // also catch non-touch pointers (mouse, pen) that never fire a TouchEvent at all. The
+  // condition used to be inverted - it skipped 'mouse' and fell through for 'touch' - so a real
+  // touchscreen tap called handleTap TWICE for the SAME physical tap (once via 'touchend', once
+  // via this 'pointerup'), close enough together that a single tap could satisfy its own
+  // double-tap window and open the editor prematurely, one tap early. Fixed to skip touch (and
+  // unknown) pointer types instead, so only 'touchend' drives real touch double-taps.
+  document.addEventListener('pointerup',function(e){ if(!e.pointerType || e.pointerType==='touch')return; handleTap(e); },true);
   document.addEventListener('dblclick',function(e){var n=textNodeFromEvent(e); if(n)startEditor(n,e);},true);
+  // Exposed so unrelated pointerup listeners elsewhere (e.g. the stash z-order fixer) can check
+  // whether this editor is open before doing a destructive canvas rebuild of their own - see the
+  // matching guard added at that call site for why.
+  window.__ppCanvasTextEditorActive=function(){return !!active;};
 
   document.addEventListener('pointerdown',function(e){ if(!active)return; if(e.target===active.ta||e.target===active.done)return; cleanup(true); },true);
   document.addEventListener('touchstart',function(e){ if(!active)return; if(e.target===active.ta||e.target===active.done)return; cleanup(true); },true);

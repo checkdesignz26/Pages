@@ -274,3 +274,118 @@ test('a native page zoom (double-tap slipping past prevention, or an unblockable
   mutated = await page.evaluate(() => !!window.__ppMetaMutated);
   expect(mutated).toBe(false);
 });
+
+test('double-tap-to-edit keeps working after a plain tap, even when pointerup races ahead of that tap\'s own touchend', async ({ page }) => {
+  // Real report + screen recording: double-tap-to-edit worked the first time, then failed
+  // intermittently afterwards - "sometimes it comes up, sometimes it doesn't". Root cause:
+  // makeDraggable()'s pointerup handler called the full, destructive renderPages() (which does
+  // wrap.innerHTML='' and rebuilds every page's layer DOM from scratch) unconditionally on
+  // EVERY tap, not just real drags - despite already computing an unused `wasDrag` flag meant
+  // for exactly this. On a real touchscreen, pointerup for a tap can fire before that same
+  // tap's own touchend. When it does, the rebuild replaces the layer node out from under the
+  // gesture before touchend arrives, so pp-text-v176-js's touchend-based double-tap detector
+  // finds its tap target already detached from the document (closest() on a detached node
+  // can't find anything) and silently drops that tap - some taps get lost depending on
+  // per-device event timing. Fixed by only doing the destructive rebuild when a real
+  // drag/resize/rotate happened (wasDrag), and clearing other layers' stale selection classes
+  // by hand otherwise.
+  await page.evaluate(() => { addText('text'); });
+  await page.waitForTimeout(200);
+
+  await page.evaluate(() => {
+    window.__mkTouch = (id, x, y, target) => new Touch({ identifier: id, target, clientX: x, clientY: y, pageX: x, pageY: y });
+  });
+
+  const layerId = await page.evaluate(() => state.pages[0].layers[0].id);
+  const box = await page.locator(`.layer[data-id="${layerId}"]`).boundingBox();
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+
+  // Fires touchstart + pointerdown, then pointerup BEFORE touchend - the exact real-device
+  // ordering that exposed the bug - for a single plain tap (no movement).
+  async function tapWithPointerupFirst(x, y) {
+    await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      const id = Math.floor(Math.random() * 1e6);
+      const t = window.__mkTouch(id, x, y, el);
+      el.dispatchEvent(new TouchEvent('touchstart', { touches: [t], targetTouches: [t], changedTouches: [t], bubbles: true, cancelable: true }));
+      el.dispatchEvent(new PointerEvent('pointerdown', { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true, clientX: x, clientY: y }));
+      el.dispatchEvent(new PointerEvent('pointerup', { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true, clientX: x, clientY: y }));
+      const t2 = window.__mkTouch(id, x, y, el);
+      el.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [t2], bubbles: true, cancelable: true }));
+    }, { x, y });
+    await page.waitForTimeout(60);
+  }
+
+  // A single plain tap first (the kind that used to trigger the destructive rebuild) - spaced
+  // well past handleTap's own 430ms double-tap window so it can't accidentally pair up with the
+  // real double-tap below.
+  await tapWithPointerupFirst(cx, cy);
+  await page.waitForTimeout(600);
+  // ... then the real double-tap, using the same pointerup-before-touchend ordering for each tap.
+  await tapWithPointerupFirst(cx, cy);
+  await page.waitForTimeout(100);
+  await tapWithPointerupFirst(cx, cy);
+  await page.waitForTimeout(300);
+
+  const hasEditor = await page.evaluate(() => !!document.querySelector('.ppTextArea176'));
+  expect(hasEditor).toBe(true);
+});
+
+test('the floating text editor stays open - an unrelated pointerup listener does not close it 40ms after it opens', async ({ page }) => {
+  // Real report + screen recording, second bug found while chasing the one above: even after
+  // fixing makeDraggable(), double-tap-to-edit would open the editor and then it would vanish
+  // again moments later on its own. Root cause: a completely separate listener (originally added
+  // to fix z-ordering for horizontal pattern "stash" strips after a drag) runs on EVERY pointerup
+  // anywhere in the app and, 40ms later, unconditionally calls the same destructive renderPages()
+  // rebuild - wiping the 'ppTextEditing176' class pp-text-v176-js had just added, since that's
+  // runtime-only editor state that a fresh render never reconstructs. The second tap of every
+  // double-tap fires its own pointerup right as the editor opens, so this fired almost every
+  // time, closing the editor ~40ms after it appeared. Fixed by exposing
+  // window.__ppCanvasTextEditorActive() and skipping the rebuild while it's open.
+  await page.evaluate(() => { addText('text'); });
+  await page.waitForTimeout(200);
+
+  await page.evaluate(() => {
+    window.__mkTouch = (id, x, y, target) => new Touch({ identifier: id, target, clientX: x, clientY: y, pageX: x, pageY: y });
+    window.__fireTouch = (type, touches, changed, target) => {
+      target.dispatchEvent(new TouchEvent(type, { touches, targetTouches: touches, changedTouches: changed, bubbles: true, cancelable: true }));
+    };
+  });
+
+  const layerId = await page.evaluate(() => state.pages[0].layers[0].id);
+  const box = await page.locator(`.layer[data-id="${layerId}"]`).boundingBox();
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+
+  async function tap(x, y) {
+    await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      const id = Math.floor(Math.random() * 1e6);
+      const t = window.__mkTouch(id, x, y, el);
+      el.dispatchEvent(new PointerEvent('pointerdown', { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true, clientX: x, clientY: y }));
+      window.__fireTouch('touchstart', [t], [t], el);
+      const el2 = document.elementFromPoint(x, y);
+      el2.dispatchEvent(new PointerEvent('pointerup', { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true, clientX: x, clientY: y }));
+      window.__fireTouch('touchend', [], [t], el2);
+    }, { x, y });
+    await page.waitForTimeout(60);
+  }
+
+  await tap(cx, cy);
+  await page.waitForTimeout(100);
+  await tap(cx, cy);
+  await page.waitForTimeout(120); // spans the 40ms delayed z-order-fix/renderPages call
+
+  const state = await page.evaluate((id) => {
+    // The floating textarea itself lives on document.body, entirely separate from the canvas -
+    // rebuilding the canvas wouldn't remove it. The real symptom is the canvas layer losing its
+    // editing class (and the app's internal editor reference going stale/detached) once a fresh
+    // render replaces the node - check the layer looked up fresh by id, not the textarea.
+    const node = document.querySelector(`.layer[data-id="${id}"]`);
+    return {
+      hasTextarea: !!document.querySelector('.ppTextArea176'),
+      layerIsEditing: node ? node.classList.contains('ppTextEditing176') : null,
+    };
+  }, layerId);
+  expect(state.hasTextarea).toBe(true);
+  expect(state.layerIsEditing).toBe(true);
+});
