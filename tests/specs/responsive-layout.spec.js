@@ -36,3 +36,38 @@ test('the header toolbar is not clipped off-screen at a narrow iPad viewport', a
   expect(box).not.toBeNull();
   expect(box.x + box.width).toBeLessThanOrEqual(1080 + 1);
 });
+
+// Real report, with screenshots: multi-line text on the canvas overlapped/crushed together after
+// toggling a side panel. Root cause - every text/label layer's font-size, letter-spacing and
+// border-width are absolute pixel values (positions/sizes use %, but text metrics never scale
+// with the on-screen canvas box), while several older "focus boost" patches made .stage grow or
+// shrink its own on-screen CSS width by up to ~50% depending on which side panels were open -
+// harmless for percentage-based geometry, but silent death for fixed-px text once the canvas
+// changed size that way. Verifies the canvas keeps the exact same on-screen width no matter which
+// combination of side panels is open or collapsed.
+test('the canvas keeps the same on-screen size regardless of which side panels are open, so text never rescales out of proportion', async ({ page }) => {
+  const stageWidth = () => page.evaluate(() => document.querySelector('.stage').getBoundingClientRect().width);
+
+  const initial = await stageWidth();
+  expect(initial).toBeGreaterThan(50);
+
+  await page.evaluate(() => toggleSidePanel('right'));
+  await page.waitForTimeout(300);
+  expect(await stageWidth()).toBeCloseTo(initial, 0);
+
+  await page.evaluate(() => toggleSidePanel('right'));
+  await page.waitForTimeout(300);
+  expect(await stageWidth()).toBeCloseTo(initial, 0);
+
+  await page.evaluate(() => toggleSidePanel('left'));
+  await page.waitForTimeout(300);
+  expect(await stageWidth()).toBeCloseTo(initial, 0);
+
+  await page.evaluate(() => toggleSidePanel('left'));
+  await page.waitForTimeout(300);
+  expect(await stageWidth()).toBeCloseTo(initial, 0);
+
+  await page.evaluate(() => { toggleSidePanel('left'); toggleSidePanel('right'); });
+  await page.waitForTimeout(300);
+  expect(await stageWidth()).toBeCloseTo(initial, 0);
+});

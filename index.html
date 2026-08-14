@@ -19662,3 +19662,95 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
 })();
 </script>
 
+<!-- STABLE CANVAS SIZE — real report + screenshots: multi-line text overlapped/crushed together
+     after toggling a side panel. Root cause: every text/label layer's font-size, letter-spacing
+     and border-width are set as absolute pixel values (by design - positions and sizes use %,
+     but text metrics never scale with the on-screen canvas box). Several older "focus boost"
+     patches (search this file for --stageOpenMax/--stageOneClosedMax/--stageBothClosedMax) make
+     .stage literally grow or shrink its own CSS box width by up to ~50% depending on which side
+     panels are open or collapsed. That's harmless for position/size (percentage-based), but it
+     silently breaks text (fixed px) any time the on-screen canvas changes size that way - nobody
+     had hit it until a page with enough multi-line text made the mismatch visible. Pinning the
+     on-screen canvas to the same width regardless of panel state removes the mismatch at its
+     source. This only affects the on-screen preview box - not the real export/PDF pixel
+     dimensions (those always use the page's actual w/h), and not the +/- zoom controls (those
+     apply their own separate transform:scale on top of whatever width resolves here). The
+     tradeoff: the canvas no longer visibly grows just because a side panel was collapsed - a
+     smaller loss than text becoming unreadable. -->
+<style id="pp-stage-stable-size-text-fix">
+/* Document-mode pages (.documentStage/.ppDocumentStage186) size text with relative em/% units
+   scoped to their own editor box, not the absolute-px layer text this fix is for - excluded so
+   their own dedicated width rules (e.g. .stage.documentStage) keep winning untouched. */
+.stage:not(.documentStage):not(.ppDocumentStage186),
+.stage.listing:not(.documentStage):not(.ppDocumentStage186),
+body.leftCollapsed .stage:not(.documentStage):not(.ppDocumentStage186),
+body.leftCollapsed .stage.listing:not(.documentStage):not(.ppDocumentStage186),
+body.rightCollapsed .stage:not(.documentStage):not(.ppDocumentStage186),
+body.rightCollapsed .stage.listing:not(.documentStage):not(.ppDocumentStage186),
+body.leftCollapsed:not(.rightCollapsed) .stage:not(.documentStage):not(.ppDocumentStage186),
+body.leftCollapsed:not(.rightCollapsed) .stage.listing:not(.documentStage):not(.ppDocumentStage186),
+body.rightCollapsed:not(.leftCollapsed) .stage:not(.documentStage):not(.ppDocumentStage186),
+body.rightCollapsed:not(.leftCollapsed) .stage.listing:not(.documentStage):not(.ppDocumentStage186),
+body.leftCollapsed.rightCollapsed .stage:not(.documentStage):not(.ppDocumentStage186),
+body.leftCollapsed.rightCollapsed .stage.listing:not(.documentStage):not(.ppDocumentStage186){
+  width:var(--pp-stable-stage-width,min(calc(100vw - 400px),670px))!important;
+  max-width:var(--pp-stable-stage-width,min(calc(100vw - 400px),670px))!important;
+}
+.stage.pattern,.stage.social,.stage.mockup,
+body.leftCollapsed .stage.pattern,body.leftCollapsed .stage.social,body.leftCollapsed .stage.mockup,
+body.rightCollapsed .stage.pattern,body.rightCollapsed .stage.social,body.rightCollapsed .stage.mockup,
+body.leftCollapsed:not(.rightCollapsed) .stage.pattern,body.leftCollapsed:not(.rightCollapsed) .stage.social,body.leftCollapsed:not(.rightCollapsed) .stage.mockup,
+body.rightCollapsed:not(.leftCollapsed) .stage.pattern,body.rightCollapsed:not(.leftCollapsed) .stage.social,body.rightCollapsed:not(.leftCollapsed) .stage.mockup,
+body.leftCollapsed.rightCollapsed .stage.pattern,body.leftCollapsed.rightCollapsed .stage.social,body.leftCollapsed.rightCollapsed .stage.mockup{
+  width:var(--pp-stable-stage-width,min(calc(100vw - 400px),670px))!important;
+  max-width:var(--pp-stable-stage-width,min(calc(100vw - 400px),670px))!important;
+}
+</style>
+<script id="pp-stage-stable-width-js">
+(function(){
+  // Measures the canvas width that would apply with BOTH side panels open (the most
+  // space-constrained, "reference" layout), regardless of which panels are actually
+  // open/collapsed right now, so pp-stage-stable-size-text-fix above always has a real,
+  // viewport-correct value instead of a guessed constant. Temporarily clears the collapsed
+  // classes and this fix's own <style> tag to read what the OLDER width rules would naturally
+  // produce, then restores both immediately - all synchronous, so nothing paints in between.
+  function measure(){
+    var body=document.body;
+    var styleTag=document.getElementById('pp-stage-stable-size-text-fix');
+    // Document-mode pages (.documentStage/.ppDocumentStage186) have their own dedicated,
+    // fixed-width rule and aren't affected by this fix - skip past one if it happens to be the
+    // first .stage in the DOM so a document page's width is never mistaken for this reading.
+    var stage=document.querySelector('.stage:not(.documentStage):not(.ppDocumentStage186)');
+    var main=document.querySelector('main');
+    if(!stage||!styleTag) return;
+    var hadLeft=body.classList.contains('leftCollapsed');
+    var hadRight=body.classList.contains('rightCollapsed');
+    var wasDisabled=styleTag.disabled;
+    // main{grid-template-columns} transitions over .22s - switching the collapsed classes off
+    // starts that transition, so reading layout in the same tick can catch a mid-flight value
+    // instead of the settled "both open" one. Kill the transition just for this synchronous
+    // measurement so the class change (and its layout effect) applies instantly.
+    var prevMainTransition=main?main.style.transition:null;
+    if(main)main.style.transition='none';
+    styleTag.disabled=true;
+    body.classList.remove('leftCollapsed','rightCollapsed');
+    stage.getBoundingClientRect(); // force layout to flush before reading the real value below
+    var w=stage.getBoundingClientRect().width;
+    if(hadLeft)body.classList.add('leftCollapsed');
+    if(hadRight)body.classList.add('rightCollapsed');
+    styleTag.disabled=wasDisabled;
+    if(main){
+      main.getBoundingClientRect();
+      main.style.transition=prevMainTransition||'';
+    }
+    if(w>50) document.documentElement.style.setProperty('--pp-stable-stage-width',Math.round(w)+'px');
+  }
+  window.addEventListener('resize',measure);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',measure);
+  else measure();
+  setTimeout(measure,150);
+  setTimeout(measure,800);
+  window.__ppMeasureStableStageWidth=measure;
+})();
+</script>
+
