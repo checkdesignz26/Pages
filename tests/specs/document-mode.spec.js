@@ -1146,6 +1146,69 @@ test('the keyboard-open scroll correction does nothing if the caret is not yet a
   expect(scrollByCall).toBeNull();
 });
 
+// Real report, with a screen recording: dragging out a text SELECTION (not just placing a
+// caret) right as the on-screen keyboard opened made the view snap away to the very top of the
+// page and get stuck there - nothing left above to reveal, so a further manual scroll-up gesture
+// had nowhere to go. The keyboard-open correction above is only meant to keep a typing CARET
+// visible; it should leave an active drag-selection alone rather than guess a scroll target from
+// a range that's still mid-gesture.
+test('the keyboard-open scroll correction leaves an active text selection alone, instead of jumping the view away from it', async ({ page }) => {
+  await openDocumentPage(page);
+
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.innerHTML = '<h1>Title</h1>';
+    for (let i = 0; i < 60; i++) {
+      const p = document.createElement('p');
+      p.textContent = `Line ${i} of a long page.`;
+      ed.appendChild(p);
+    }
+    state.pages[state.selectedPage].docHtml = ed.innerHTML;
+  });
+  await page.waitForTimeout(300);
+
+  // Select (not just place a caret in) a line partway down the page, the way dragging out a
+  // word/phrase with the selection handles would. The overflow pagination above may already
+  // have moved most of these paragraphs onto later pages by now, so anchor to whatever's left
+  // on this page rather than assuming a fixed index is still present.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    const ps = ed.querySelectorAll('p');
+    const targetP = ps[ps.length - 1];
+    targetP.scrollIntoView({ block: 'center' });
+    ed.focus();
+    const r = document.createRange();
+    r.setStart(targetP.firstChild, 0);
+    r.setEnd(targetP.firstChild, targetP.firstChild.length);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
+
+  const before = await page.evaluate(() => {
+    const sel = window.getSelection();
+    return { isCollapsed: sel.isCollapsed, rangeCount: sel.rangeCount };
+  });
+  expect(before.isCollapsed).toBe(false);
+  expect(before.rangeCount).toBe(1);
+
+  const realHeight = await page.evaluate(() => window.visualViewport.height);
+  const shrunkHeight = Math.round(realHeight * 0.3);
+  const scrollByCall = await page.evaluate((h) => new Promise((resolve) => {
+    const scroller = document.getElementById('workspace');
+    const orig = scroller.scrollBy;
+    let called = null;
+    scroller.scrollBy = function (opts) { called = opts; return orig.apply(this, arguments); };
+    Object.defineProperty(window.visualViewport, 'height', { get: () => h, configurable: true });
+    window.visualViewport.dispatchEvent(new Event('resize'));
+    setTimeout(() => resolve(called), 400);
+  }), shrunkHeight);
+
+  // An active selection isn't a caret - the fix is to leave it to the browser's own
+  // selection-handle UI rather than guess a (possibly wrong) scroll target from it.
+  expect(scrollByCall).toBeNull();
+});
+
 // Real report, with a screenshot: a heading the user had written once showed up twice in a row
 // on the same page after re-opening a saved .ppages file, and got worse (three copies) the more
 // times the file had been saved/reopened. Root cause: the fonts-ready recheck (added to fix the
@@ -1424,6 +1487,107 @@ test('a background cross-page reflow does not wipe out an active selection in th
 
   expect(after.stillFocused).toBe(true);
   expect(after.selectionText).toContain('Pattern Pages runs directly');
+});
+
+// Real report, confirmed from a screen recording: dragging out a text selection right as a
+// debounced overflow correction landed (moveOverflow/pullBack schedule render() ~120ms after the
+// keystroke that triggered them) flashed the page blank and left the view stuck scrolled to the
+// very top - nothing left above it to reveal. render() rebuilds #pageWrap's contents from
+// scratch, which resets #workspace's own scroll position right along with everything else;
+// captureCaretForRestore/restoreCaretAfterRender already put the caret back afterward but never
+// did the same for the scroll position, or for anything beyond a collapsed caret when the
+// selection wasn't collapsed to begin with.
+test('a debounced overflow correction restores the selection and scroll position it interrupted, instead of collapsing it and jumping to the top', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.waitForTimeout(200);
+
+  // Fill page 0 with just enough paragraphs to sit exactly at its overflow boundary, the same
+  // precise fill-to-boundary approach used elsewhere in this file - a fixed paragraph count
+  // overflows by an environment-dependent amount, which would make the "push it over by one
+  // more" step below land unpredictably (moving a handful of paragraphs instead of exactly one,
+  // possibly sweeping up the very paragraph this test selects).
+  await page.evaluate(() => {
+    const ed0 = document.querySelector('.documentEditor[data-page-index="0"]');
+    ed0.innerHTML = '<h1>Title</h1>';
+    let i = 0;
+    while (ed0.scrollHeight <= ed0.clientHeight + 2 && i < 400) {
+      const p = document.createElement('p');
+      p.textContent = `Line ${i} of a long page.`;
+      ed0.appendChild(p);
+      i++;
+    }
+    ed0.lastElementChild.remove();
+    state.pages[0].docHtml = ed0.innerHTML;
+  });
+
+  // A single document page usually fits within the test viewport with nothing left to scroll -
+  // add a couple more so #pageWrap genuinely overflows #workspace, the same way a real
+  // multi-page document would, instead of faking scrollability.
+  await page.evaluate(() => { addDocumentLitePage(0); });
+  await page.waitForTimeout(200);
+  await page.evaluate(() => { addDocumentLitePage(0); });
+  await page.waitForTimeout(300);
+
+  const setup = await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor[data-page-index="0"]');
+    const ps = ed.querySelectorAll('p');
+    // Select a paragraph that ISN'T the last one, so the overflow correction below moves a
+    // later, untouched paragraph out rather than the one holding the selection - landing on the
+    // captureCaretForRestore/restoreCaretAfterRender path rather than the separate
+    // caretWasInMovedContent one.
+    const targetP = ps[ps.length - 3];
+    ed.focus();
+    const r = document.createRange();
+    r.setStart(targetP.firstChild, 0);
+    r.setEnd(targetP.firstChild, targetP.firstChild.length);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+
+    // .workspace scrolls with CSS scroll-behavior:smooth, so an assignment here wouldn't be
+    // reflected in scrollTop right away - jump instantly instead, the same way the real bug's
+    // own render()-triggered DOM rebuild would (no animation involved there either).
+    const scroller = document.getElementById('workspace');
+    scroller.scrollTo({ top: Math.round(scroller.scrollHeight / 3), behavior: 'instant' });
+
+    return { selectedText: r.toString(), scrollTopBefore: scroller.scrollTop };
+  });
+  expect(setup.selectedText.length).toBeGreaterThan(0);
+  expect(setup.scrollTopBefore).toBeGreaterThan(0);
+
+  // Push page 0 over its overflow boundary again and let the debounced correction run, the same
+  // way a real keystroke elsewhere on the page would 120ms later.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor[data-page-index="0"]');
+    const p = document.createElement('p');
+    p.textContent = 'One more line pushing the page over its boundary.';
+    ed.appendChild(p);
+    ed.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  await page.waitForFunction(() => {
+    const ed = document.querySelector('.documentEditor[data-page-index="0"]');
+    return ed.scrollHeight <= ed.clientHeight + 2;
+  }, null, { timeout: 3000 });
+  // Let the deferred render()+restore settle (render() itself schedules a second, later
+  // decorate() pass, so the restore is deliberately nested a tick behind it), plus whatever
+  // smooth-scroll animation the restore itself kicks off (the same CSS applies to a JS-driven
+  // scrollTop assignment).
+  await page.waitForTimeout(1200);
+
+  const after = await page.evaluate(() => {
+    const sel = window.getSelection();
+    const scroller = document.getElementById('workspace');
+    return {
+      isCollapsed: sel.isCollapsed,
+      selectedText: sel.rangeCount ? sel.getRangeAt(0).toString() : '',
+      scrollTop: scroller.scrollTop,
+    };
+  });
+
+  expect(after.isCollapsed).toBe(false);
+  expect(after.selectedText).toBe(setup.selectedText);
+  expect(Math.abs(after.scrollTop - setup.scrollTopBefore)).toBeLessThan(5);
 });
 
 // Real report: dragging a text selection backward (right-to-left, extending the selection's

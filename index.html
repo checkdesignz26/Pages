@@ -15074,21 +15074,55 @@ else install();
     return range;
   }
   function captureCaretForRestore(editor){
+    // Real bug, confirmed from a screen recording: dragging out a text selection right as a
+    // debounced overflow/pullback check landed (moveOverflow/pullBack below both call render()
+    // a beat after the triggering keystroke) wiped the whole page away to a blank flash and left
+    // the view stuck scrolled to the very top - #workspace's own scroll position isn't tied to
+    // any particular DOM node, so rebuilding #pageWrap's contents from scratch (see the note on
+    // render() above) resets it right along with everything else. Capture it here alongside the
+    // caret so it can be put back, the same way the caret already is.
+    const scroller=document.getElementById('workspace');
+    const info={scrollTop:scroller?scroller.scrollTop:null};
     const sel=window.getSelection();
-    if(!sel||!sel.rangeCount)return null;
+    if(!sel||!sel.rangeCount)return info;
     const r=sel.getRangeAt(0);
-    let child=r.startContainer;
-    while(child&&child.parentElement!==editor)child=child.parentElement;
-    if(!child)return null;
-    return {childIndex:Array.prototype.indexOf.call(editor.children,child),charOffset:caretCharOffsetInNode(child,r.startContainer,r.startOffset)};
+    let startChild=r.startContainer;
+    while(startChild&&startChild.parentElement!==editor)startChild=startChild.parentElement;
+    if(!startChild)return info;
+    info.childIndex=Array.prototype.indexOf.call(editor.children,startChild);
+    info.charOffset=caretCharOffsetInNode(startChild,r.startContainer,r.startOffset);
+    // A drag-selection (not just a collapsed caret) hitting this same render() used to always
+    // collapse down to its start point once restored - capture the end point too, when there is
+    // one, so an in-progress selection survives the rebuild instead of silently shrinking.
+    if(!sel.isCollapsed){
+      let endChild=r.endContainer;
+      while(endChild&&endChild.parentElement!==editor)endChild=endChild.parentElement;
+      if(endChild){
+        info.endChildIndex=Array.prototype.indexOf.call(editor.children,endChild);
+        info.endCharOffset=caretCharOffsetInNode(endChild,r.endContainer,r.endOffset);
+      }
+    }
+    return info;
   }
   function restoreCaretAfterRender(pageIndex,info){
     if(!info)return;
+    if(info.scrollTop!=null){
+      const scroller=document.getElementById('workspace');
+      if(scroller)scroller.scrollTop=info.scrollTop;
+    }
+    if(info.childIndex==null)return;
     const ed=document.querySelector(`.documentEditor[data-page-index="${pageIndex}"]`);
     const child=ed&&ed.children[info.childIndex];
     if(!child)return;
     try{
       const range=setCaretAtCharOffset(child,info.charOffset);
+      if(info.endChildIndex!=null){
+        const endChild=ed.children[info.endChildIndex];
+        if(endChild){
+          const endRange=setCaretAtCharOffset(endChild,info.endCharOffset);
+          range.setEnd(endRange.startContainer,endRange.startOffset);
+        }
+      }
       ed.focus({preventScroll:true});
       const s=window.getSelection();s.removeAllRanges();s.addRange(range);
     }catch(e){}
@@ -15162,7 +15196,13 @@ else install();
         setTimeout(()=>{render();setTimeout(()=>{const ne=document.querySelector(`.documentEditor[data-page-index="${ni}"]`);if(ne){ne.focus();const r=document.createRange(),s=getSelection();r.selectNodeContents(ne);r.collapse(true);s.removeAllRanges();s.addRange(r)}},40)},0);
       }else{
         const restoreInfo=captureCaretForRestore(editor);
-        setTimeout(()=>{render();restoreCaretAfterRender(index,restoreInfo);},0);
+        // render() (see the note where window.render gets wrapped, above) schedules its OWN
+        // extra decorate() pass a beat after returning, on top of the one it already ran
+        // synchronously - restoring the caret/selection immediately after render() only
+        // survives until that second, un-coordinated pass rebuilds the editor again a moment
+        // later and silently drops it. Nest the restore in its own deferred call so it runs
+        // after both passes have settled, not racing the second one.
+        setTimeout(()=>{render();setTimeout(()=>{restoreCaretAfterRender(index,restoreInfo);},0);},0);
       }
       return true;
     }
@@ -15196,7 +15236,13 @@ else install();
         // actively typing in `editor` when a page they're not even looking at empties out.
         pages().splice(ni,1);
         const restoreInfo=captureCaretForRestore(editor);
-        setTimeout(()=>{render();restoreCaretAfterRender(index,restoreInfo);},0);
+        // render() (see the note where window.render gets wrapped, above) schedules its OWN
+        // extra decorate() pass a beat after returning, on top of the one it already ran
+        // synchronously - restoring the caret/selection immediately after render() only
+        // survives until that second, un-coordinated pass rebuilds the editor again a moment
+        // later and silently drops it. Nest the restore in its own deferred call so it runs
+        // after both passes have settled, not racing the second one.
+        setTimeout(()=>{render();setTimeout(()=>{restoreCaretAfterRender(index,restoreInfo);},0);},0);
       }
     }
   }
@@ -19313,7 +19359,16 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
             var scroller=document.getElementById('workspace');
             if(!scroller)return;
             var rect=null;
-            if(sel&&sel.rangeCount&&activeEditor.contains(sel.anchorNode)){
+            // Real bug, confirmed from a screen recording: dragging out a text SELECTION (not
+            // just placing a caret) right as the keyboard opens made the view snap away to the
+            // very top of the page and then stay stuck there - nothing above it left to reveal,
+            // so a further manual scroll-up gesture had nowhere to go. This correction was only
+            // ever meant to keep a typing CARET visible (see below); a drag-selection's range is
+            // mid-gesture and its endpoints can still be settling when this fires 60ms later,
+            // making it an unreliable thing to scroll to. Only act on a genuinely collapsed
+            // selection (a caret) - leave an active text selection to the browser's own
+            // selection-handle UI, which already keeps itself on-screen.
+            if(sel&&sel.rangeCount&&sel.isCollapsed&&activeEditor.contains(sel.anchorNode)){
               rect=sel.getRangeAt(0).getBoundingClientRect();
               if(!rect.width&&!rect.height&&!rect.top&&!rect.left)rect=null;
             }
