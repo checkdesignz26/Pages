@@ -12,6 +12,20 @@ const test = base.test.extend({
     const errors = [];
     page.on('pageerror', (e) => errors.push(e));
 
+    // The Quick Start Guide auto-shows once, ~900ms after load, for any browser that's never
+    // seen it (tracked via localStorage) - exactly like a real first-time visitor. Every test
+    // gets a fresh browser context with no localStorage, so without this every single test
+    // would hit that first-time case and get a full-screen modal blocking everything moments
+    // into the test. Mark it "seen" right away, like a returning visitor's browser, which is
+    // what nearly every test here already implicitly assumes. Uses addInitScript (runs before
+    // any of the page's own scripts, on every navigation) rather than a post-load
+    // page.evaluate() - a plain evaluate() after waitForFunction below can itself land after
+    // the guide's own 900ms timer if the app's boot happens to be slow, which does not reliably
+    // win the race. Tests that specifically want the genuine first-time-visitor path (the
+    // Quick Start Guide's own spec file) open their own separate context instead of fighting
+    // this.
+    await page.addInitScript(() => { try { localStorage.setItem('ppQuickStartSeen', '1'); } catch (e) {} });
+
     await page.goto('/index.html');
     // `state` is declared with `let` at the top level of the app's inline scripts, so it
     // never becomes a `window.state` property (unlike `function`/`var` declarations, which

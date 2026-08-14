@@ -3625,6 +3625,186 @@ function openFeedbackForm(){
 }
 </script>
 
+<script>
+/* ---------------------------------------------------------------------
+   Quick Start Guide / onboarding
+   - "? help" button opens it any time
+   - Shows itself once automatically on a brand new device/browser
+     (flag stored in localStorage, matching the pattern used for the
+     other one-time UI preferences in this file)
+--------------------------------------------------------------------- */
+const QUICKSTART_SEEN_KEY = 'ppQuickStartSeen';
+
+const QUICKSTART_STEPS = [
+  {
+    title: '1. Choose a page size',
+    body: 'Left panel &rarr; <strong>page size &amp; presets</strong> &rarr; pick a preset (Etsy, Instagram, Pinterest, Facebook) &rarr; <strong>add new page</strong>.'
+  },
+  {
+    title: '2. Upload your pattern',
+    body: 'Left panel &rarr; <strong>pattern tray</strong> &rarr; <strong>upload patterns</strong>.'
+  },
+  {
+    title: '3. Build a layout',
+    body: '<strong>pattern showcase</strong> &rarr; pick a layout (strips / squares / rectangles / circles) &rarr; set the number of slots &rarr; <strong>generate layout</strong>.'
+  },
+  {
+    title: '4. Fill it',
+    body: 'Tap a slot on the canvas, select your pattern in the tray, then tap <strong>fill selected slot</strong>. Or skip the tapping and use <strong>&#10024; fill all empty</strong> to fill every slot at once.'
+  },
+  {
+    title: '5. Export',
+    body: 'Top toolbar &rarr; <strong>download page</strong> for a single PNG, or <strong>download ZIP</strong> for every page at once.'
+  }
+];
+
+const QUICKSTART_SHORTCUTS = [
+  ['Add a realistic mock-up', '<strong>custom mock-up</strong> &rarr; upload background + white mask &rarr; <strong>create live custom mock-up &#10024;</strong>'],
+  ['Add a decorative shaped frame', '<strong>frames</strong> &rarr; <strong>add frame</strong> &rarr; pick a shape &rarr; fill it like a slot'],
+  ['Add text or a label', 'the <strong>badges &amp; labels</strong> or <strong>text</strong> panel'],
+  ['Generate Etsy tags &amp; titles', '<strong>Etsy Assistant</strong> &rarr; enter pattern name + theme &rarr; <strong>generate Etsy ideas</strong>'],
+  ['Save your work', 'Top toolbar &rarr; <strong>quick save</strong>, or <strong>save .ppages</strong> for a proper backup file'],
+  ['Undo a mistake', 'Top toolbar <strong>undo</strong>, or a two-finger double-tap on the canvas']
+];
+
+function ppBuildQuickStartHTML(){
+  const stepsHtml = QUICKSTART_STEPS.map(function(s){
+    return '<div class="qsStep"><div class="qsStepTitle">'+s.title+'</div><div class="qsStepBody">'+s.body+'</div></div>';
+  }).join('');
+
+  const shortcutsHtml = QUICKSTART_SHORTCUTS.map(function(row){
+    return '<tr><td>'+row[0]+'</td><td>'+row[1]+'</td></tr>';
+  }).join('');
+
+  return ''+
+    '<div class="qsHeader">'+
+      '<span class="qsBadge">PATTERN PAGES</span>'+
+      '<h2>Quick Start Guide</h2>'+
+      '<p>Get your first design exported in under 5 minutes.</p>'+
+    '</div>'+
+    '<div class="qsScreenGlance">'+
+      '<div class="qsGlanceItem"><strong>Left panel</strong><span>bring content in &mdash; patterns, mock-ups, frames, images, pages</span></div>'+
+      '<div class="qsGlanceItem"><strong>Centre canvas</strong><span>your page &mdash; tap to select, drag to move, pinch to zoom</span></div>'+
+      '<div class="qsGlanceItem"><strong>Right panel</strong><span>edit what&rsquo;s selected &mdash; layers, size, alignment, colour</span></div>'+
+    '</div>'+
+    '<h3>Your first design in 5 steps</h3>'+
+    '<div class="qsSteps">'+stepsHtml+'</div>'+
+    '<h3>Handy shortcuts</h3>'+
+    '<table class="qsTable"><tbody>'+shortcutsHtml+'</tbody></table>'+
+    '<div class="qsNote">Nothing is placed automatically &mdash; patterns wait in the tray until you fill a slot or frame with them. Save a <strong>.ppages</strong> file regularly; quick save and autosave are convenient, but a real saved file is your safest backup.</div>';
+}
+
+function openQuickStartGuide(){
+  const old = document.getElementById('ppQuickStartOverlay');
+  if(old) old.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ppQuickStartOverlay';
+  overlay.className = 'qsOverlay';
+
+  const box = document.createElement('div');
+  box.className = 'qsBox';
+  box.innerHTML = '<button type="button" class="qsClose" aria-label="Close quick start guide">&times;</button>'+
+    '<div class="qsScroll">'+ppBuildQuickStartHTML()+'</div>';
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  function close(){ overlay.remove(); }
+  box.querySelector('.qsClose').addEventListener('click', close);
+  overlay.addEventListener('click', function(e){ if(e.target === overlay) close(); });
+  document.addEventListener('keydown', function escHandler(e){
+    if(e.key === 'Escape'){ close(); document.removeEventListener('keydown', escHandler); }
+  });
+
+  try{ localStorage.setItem(QUICKSTART_SEEN_KEY, '1'); }catch(e){}
+}
+window.openQuickStartGuide = openQuickStartGuide;
+
+// Auto-show once for first-time users, after the app has had a moment to
+// finish its own startup rendering.
+(function ppMaybeAutoShowQuickStart(){
+  let seen = null;
+  try{ seen = localStorage.getItem(QUICKSTART_SEEN_KEY); }catch(e){}
+  if(seen) return;
+  setTimeout(function(){
+    try{ openQuickStartGuide(); }catch(e){}
+  }, 900);
+})();
+</script>
+
+<style>
+.qsOverlay{
+  position:fixed; inset:0; z-index:2147483000;
+  background:rgba(10,8,18,.6);
+  display:flex; align-items:center; justify-content:center;
+  padding:20px;
+}
+.qsBox{
+  position:relative;
+  width:100%; max-width:620px; max-height:88vh;
+  background:#1c1626;
+  border:1px solid rgba(255,232,248,.18);
+  border-radius:20px;
+  box-shadow:0 24px 60px rgba(0,0,0,.5);
+  overflow:hidden;
+}
+.qsScroll{
+  max-height:88vh;
+  overflow-y:auto;
+  padding:28px 26px 30px;
+  color:#fff8fb;
+}
+.qsClose{
+  position:absolute; top:12px; right:14px; z-index:2;
+  border:0; background:rgba(255,255,255,.08); color:#fff8fb;
+  width:34px; height:34px; border-radius:50%;
+  font-size:20px; line-height:1; cursor:pointer;
+}
+.qsHeader{ text-align:center; margin-bottom:18px; }
+.qsBadge{
+  display:inline-block;
+  background:linear-gradient(90deg,#9b6bff,#ff8ed6);
+  color:#fff; padding:5px 14px; border-radius:999px;
+  font-size:11px; font-weight:900; letter-spacing:.04em;
+}
+.qsHeader h2{ margin:12px 0 4px; font-size:22px; color:#fff8fb; }
+.qsHeader p{ margin:0; color:#cfc7dd; font-size:13.5px; }
+.qsScreenGlance{
+  display:grid; grid-template-columns:1fr; gap:8px;
+  margin:16px 0 20px;
+}
+.qsGlanceItem{
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,232,248,.12);
+  border-radius:12px; padding:10px 12px;
+  font-size:13px; color:#cfc7dd;
+}
+.qsGlanceItem strong{ display:block; color:#ff8ed6; margin-bottom:2px; font-size:13px; }
+.qsBox h3{ color:#ff8ed6; font-size:14.5px; margin:20px 0 10px; }
+.qsSteps{ display:flex; flex-direction:column; gap:10px; }
+.qsStep{
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,232,248,.1);
+  border-radius:12px; padding:10px 12px;
+}
+.qsStepTitle{ font-weight:900; font-size:13.5px; color:#fff8fb; margin-bottom:3px; }
+.qsStepBody{ font-size:13px; color:#cfc7dd; line-height:1.5; }
+.qsTable{ width:100%; border-collapse:collapse; font-size:12.5px; }
+.qsTable td{
+  border-top:1px solid rgba(255,232,248,.1);
+  padding:8px 6px; vertical-align:top; color:#cfc7dd;
+}
+.qsTable td:first-child{ color:#fff8fb; font-weight:800; width:42%; }
+.qsNote{
+  margin-top:18px; font-size:12.5px; font-style:italic;
+  color:#cfc7dd; border-left:3px solid #ff8ed6; padding-left:10px;
+}
+@media (max-width:480px){
+  .qsScroll{ padding:24px 18px 26px; }
+}
+</style>
+
 <style>
 .feedbackBtn{
 position:fixed;
@@ -3644,6 +3824,23 @@ left:auto;
 right:18px;
 bottom:86px;
 }
+.helpBtn{
+position:fixed;
+right:18px;
+bottom:18px;
+z-index:999999;
+border:0;
+background:linear-gradient(90deg,#9b6bff,#ff8ed6);
+color:#fff8ff;
+padding:13px 16px;
+border-radius:999px;
+font-weight:950;
+box-shadow:0 12px 30px rgba(0,0,0,.35);
+}
+/* NOTE: actual on-screen position (right side by default, left side in
+   left-handed mode, stacked above feedbackBtn, safe-area aware) is set
+   with !important later by #ppages-v182p-true-tap-only-css and its
+   body.leftHanded override. This base rule is just a fallback/default. */
 
 /* Warm Pattern Pages refinement: less cold, more Seamless Studio, calmer symmetry */
 :root{
@@ -3915,6 +4112,7 @@ button,select,input[type=number],input[type=text],input[type=color]{
 </style>
 
 <button class="feedbackBtn" onclick="openFeedbackForm()" title="Open feedback form">feedback 💌</button>
+<button class="helpBtn" onclick="openQuickStartGuide()" title="Open quick start guide">? help</button>
 
 
 <script>
@@ -13924,6 +14122,24 @@ document.addEventListener('DOMContentLoaded',function(){
     position:fixed!important;left:auto!important;right:max(16px,env(safe-area-inset-right))!important;
     bottom:max(16px,calc(env(safe-area-inset-bottom) + 10px))!important;top:auto!important;
     transform:none!important;z-index:999997!important
+  }
+  /* helpBtn stacked directly above feedbackBtn, using the same safe-area
+     logic, so the two never overlap regardless of device notch/home
+     indicator or which one loads/reflows last. */
+  #helpBtn,.helpBtn{
+    position:fixed!important;left:auto!important;right:max(16px,env(safe-area-inset-right))!important;
+    bottom:max(76px,calc(env(safe-area-inset-bottom) + 70px))!important;top:auto!important;
+    transform:none!important;z-index:999997!important
+  }
+  /* Left-handed mode: mirror feedback/help to the left edge instead of the
+     right. Higher specificity (body.leftHanded prefix) than the rules
+     above, so this wins even though both use !important - only left/right
+     are overridden here, bottom/top/z-index etc. are inherited unchanged. */
+  body.leftHanded #feedbackBtn,body.leftHanded .feedbackBtn,body.leftHanded .feedback-btn,body.leftHanded .feedbackButton{
+    right:auto!important;left:max(16px,env(safe-area-inset-left))!important;
+  }
+  body.leftHanded #helpBtn,body.leftHanded .helpBtn{
+    right:auto!important;left:max(16px,env(safe-area-inset-left))!important;
   }
 </style>
 <!-- NOTE(consolidation): ppages-v182p-true-tap-only-js used to live here. Its cloneNode-based
