@@ -15127,6 +15127,27 @@ else install();
       const s=window.getSelection();s.removeAllRanges();s.addRange(range);
     }catch(e){}
   }
+  // Real report, with screenshots: a document image the user had selected (drawing a purple
+  // "selected" outline via .ppDocImgSelected - see pp-document-image-adjust-js) sometimes stayed
+  // permanently framed and un-draggable no matter what was tried afterward - the app's own
+  // bookkeeping correctly cleared the selection (no more overlay/handles/delete button), but the
+  // outline itself never went away. Root cause: that class lives directly on the live <img> node
+  // inside the editor, and this engine's various docHtml=editor.innerHTML captures (below, and in
+  // onDocInput/moveOverflow/pullBack) run on a debounced timer independent of when the class gets
+  // added/removed - if one of them fires while the class happens to be present, it gets baked
+  // into the PERSISTED docHtml permanently. From then on every render() rebuilds the editor from
+  // that saved HTML, which still has the class, so the outline reappears no matter how many times
+  // it's "deselected". Strip it (and the similar ppDocEmptyPlaceholder UI-only marker) before any
+  // capture, the same way saveEditor() already does for ppDocEmptyPlaceholder elsewhere.
+  function cleanEditorHtml(el){
+    if(!el.querySelector('.ppDocImgSelected,.ppDocEmptyPlaceholder'))return el.innerHTML;
+    const clone=el.cloneNode(true);
+    clone.querySelectorAll('.ppDocImgSelected,.ppDocEmptyPlaceholder').forEach(function(marked){
+      marked.classList.remove('ppDocImgSelected','ppDocEmptyPlaceholder');
+      if(!marked.classList.length)marked.removeAttribute('class');
+    });
+    return clone.innerHTML;
+  }
   function moveOverflow(index,editor){
     // A page inserted/removed elsewhere (e.g. the TOC going in at index 0) shifts every
     // later page's array index, but a moveOverflow already scheduled via setTimeout before
@@ -15187,7 +15208,7 @@ else install();
       moved.unshift(n.outerHTML);n.remove();
     }
     paper.classList.toggle('hasOverflow',editor.scrollHeight>editor.clientHeight+2);
-    pages()[index].docHtml=editor.innerHTML;
+    pages()[index].docHtml=cleanEditorHtml(editor);
     if(moved.length){
       const ni=nextDocIndex(index,true),np=pages()[ni];ensureDocProps(np);
       np.docHtml=moved.join('')+(np.docHtml||'');
@@ -15221,7 +15242,7 @@ else install();
       temp.firstElementChild.remove();moved=true;
     }
     if(moved){
-      pages()[index].docHtml=editor.innerHTML;np.docHtml=temp.innerHTML||'<p><br></p>';np.__flowVer183=(np.__flowVer183||0)+1;
+      pages()[index].docHtml=cleanEditorHtml(editor);np.docHtml=cleanEditorHtml(temp)||'<p><br></p>';np.__flowVer183=(np.__flowVer183||0)+1;
       if(cleanEmpty(temp)&&pages().length>1){
         // Real bug, confirmed live: typing until a later page emptied out (everything pulled
         // back onto earlier pages) removed that page from the data array right here, but
@@ -15248,8 +15269,8 @@ else install();
   }
   function onDocInput(e){
     const editor=e.currentTarget,index=+editor.dataset.pageIndex,p=pages()[index];if(!p)return;
-    p.docHtml=editor.innerHTML;
-    clearTimeout(editor._flowTimer);editor._flowTimer=setTimeout(()=>{if(!moveOverflow(index,editor)){pullBack(index,editor);p.docHtml=editor.innerHTML;if(typeof scheduleAutosave==='function')scheduleAutosave()}},120);
+    p.docHtml=cleanEditorHtml(editor);
+    clearTimeout(editor._flowTimer);editor._flowTimer=setTimeout(()=>{if(!moveOverflow(index,editor)){pullBack(index,editor);p.docHtml=cleanEditorHtml(editor);if(typeof scheduleAutosave==='function')scheduleAutosave()}},120);
   }
   // Real bug: the last line of a page could render half-clipped. Custom/embedded fonts
   // (docStyles, uploaded fonts) aren't necessarily ready yet at the fixed 20ms mark decorate()
@@ -18877,17 +18898,19 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     var page=pageForEditor(editor);
     if(!page) return;
     page.documentLite=true;
-    // ppDocEmptyPlaceholder is a transient UI marker (drives the "Start writing here…" CSS
-    // placeholder) - strip it before persisting so it doesn't bloat every save with
-    // implementation detail, and so a stale copy can never linger in saved data.
-    var placeholderEl=editor.querySelector('.ppDocEmptyPlaceholder');
-    if(placeholderEl){
+    // ppDocEmptyPlaceholder ("Start writing here…") and ppDocImgSelected (a selected image's
+    // purple outline, from pp-document-image-adjust-js) are both transient, UI-only markers -
+    // strip them before persisting so neither bloats saved data, and so a selected image's
+    // outline can never get baked into docHtml permanently (real report: it did, via this exact
+    // gap - the image stayed visibly "framed" and un-draggable no matter how many times it was
+    // deselected afterward, since every render() kept rebuilding it from the tainted saved HTML).
+    var markedEl=editor.querySelector('.ppDocEmptyPlaceholder,.ppDocImgSelected');
+    if(markedEl){
       var clone=editor.cloneNode(true);
-      var markedClone=clone.querySelector('.ppDocEmptyPlaceholder');
-      if(markedClone){
-        markedClone.classList.remove('ppDocEmptyPlaceholder');
-        if(!markedClone.classList.length) markedClone.removeAttribute('class');
-      }
+      clone.querySelectorAll('.ppDocEmptyPlaceholder,.ppDocImgSelected').forEach(function(marked){
+        marked.classList.remove('ppDocEmptyPlaceholder','ppDocImgSelected');
+        if(!marked.classList.length) marked.removeAttribute('class');
+      });
       page.docHtml=clone.innerHTML;
     }else{
       page.docHtml=editor.innerHTML;
@@ -19450,6 +19473,10 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
 .ppDocImageActive .gestureHint{display:none!important}
 #ppDocImgOverlay{position:fixed;pointer-events:none;z-index:10001}
 #ppDocImgOverlay .handle,#ppDocImgOverlay .rotateHandle{pointer-events:auto;touch-action:none}
+/* Real request: a document image's only delete route was a button inside the (often
+   scrolled-away) side panel - every other selectable element in this app puts a small "x" right
+   on its own selection box, and a document image should too. */
+#ppDocImgOverlay .deleteMini{pointer-events:auto;touch-action:manipulation;top:-38px!important;right:-6px!important}
 </style>
 <script id="pp-document-image-adjust-js">
 (function(){
@@ -19492,9 +19519,10 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     ov=document.createElement('div');
     ov.id='ppDocImgOverlay';
     ov.className='selected';
-    ov.innerHTML='<div class="rotateHandle"></div><div class="handle"></div><div class="resizeHint">drag to resize · top handle rotates</div>';
+    ov.innerHTML='<div class="rotateHandle"></div><div class="handle"></div><div class="resizeHint">drag to resize · top handle rotates</div><button type="button" class="deleteMini" aria-label="delete image">×</button>';
     document.body.appendChild(ov);
     var handle=ov.querySelector('.handle'),rotateHandle=ov.querySelector('.rotateHandle');
+    ov.querySelector('.deleteMini').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();deleteSelectedImage();});
     function startDrag(mode){
       return function(e){
         if(!selectedImg)return;

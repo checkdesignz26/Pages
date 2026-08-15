@@ -553,6 +553,66 @@ test('document image: select, resize via handle, rotate via handle, align, delet
   expect(stillThere).toBe(false);
 });
 
+// Real report, with screenshots: a selected image's purple outline stayed stuck permanently -
+// visibly "framed" and un-draggable - no matter how many times it was tapped away from
+// afterward. Root cause: .ppDocImgSelected lives directly on the live <img> node, and a
+// debounced docHtml=editor.innerHTML capture (onDocInput's 120ms follow-up, independent of
+// exactly when the class gets added/removed) could catch it mid-selection and bake it into the
+// PERSISTED docHtml - from then on every render() rebuilds the editor from that tainted HTML,
+// permanently reintroducing the class regardless of the app's own selection state.
+test('selecting a document image never lets its outline get permanently baked into the saved document', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.waitForTimeout(1800);
+
+  const png1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+  await page.setInputFiles('#ppDocImageInput', { name: 'test.png', mimeType: 'image/png', buffer: png1x1 });
+  await page.waitForSelector('.documentEditor img');
+
+  await page.click('.documentEditor img');
+  await page.waitForTimeout(150);
+  expect(await page.evaluate(() => document.querySelector('.documentEditor img').classList.contains('ppDocImgSelected'))).toBe(true);
+
+  // Simulate anything at all triggering a background render() while the image is still
+  // selected - typing on a different page, an autosave tick, resizing a panel. None of these
+  // have anything to do with this image, so none of them should leave a permanent mark on it.
+  await page.evaluate(() => { addDocumentLitePage(0); });
+  await page.waitForTimeout(400);
+
+  const docHtml = await page.evaluate(() => state.pages[0].docHtml);
+  expect(docHtml).not.toContain('ppDocImgSelected');
+
+  // The bug's real symptom: reload from that saved state and confirm the image comes back
+  // without the class baked in, rather than permanently "selected"-looking from now on.
+  await page.evaluate(() => { if (typeof render === 'function') render(); });
+  await page.waitForTimeout(300);
+  const stillClean = await page.evaluate(() => {
+    const img = document.querySelector('.documentEditor img');
+    return img ? img.classList.contains('ppDocImgSelected') : null;
+  });
+  expect(stillClean).toBe(false);
+});
+
+// Real request: every other selectable element in the app (canvas layers) shows a small "x"
+// directly on its own selection box - a document image only had a delete button buried in the
+// (often scrolled-away) side panel, which read as "can't delete it" even though a route existed.
+test('a selected document image shows a delete "x" directly on its selection box', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.waitForTimeout(1800);
+
+  const png1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+  await page.setInputFiles('#ppDocImageInput', { name: 'test.png', mimeType: 'image/png', buffer: png1x1 });
+  await page.waitForSelector('.documentEditor img');
+
+  await page.click('.documentEditor img');
+  await page.waitForSelector('#ppDocImgOverlay .deleteMini');
+  await expect(page.locator('#ppDocImgOverlay .deleteMini')).toBeVisible();
+
+  await page.click('#ppDocImgOverlay .deleteMini');
+  await page.waitForTimeout(150);
+  const stillThere = await page.evaluate(() => !!document.querySelector('.documentEditor img'));
+  expect(stillThere).toBe(false);
+});
+
 test('the shared opacity control still drives a normal layer after being used on a document image', async ({ page }) => {
   // selectImage() replaces the shared #opacity slider's oninput with a document-image-specific
   // handler (since it isn't wired through the normal layer-based applyControls() at all); this
