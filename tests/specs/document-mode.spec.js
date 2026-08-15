@@ -138,6 +138,97 @@ test('pasting rich HTML from another app keeps content on one page and drops sty
   expect(pages.filter((p) => p.type === 'Document')).toHaveLength(1);
 });
 
+// Real report, with a screenshot: cutting an image already in the document and pasting it back
+// in typed out "manual image" - the image's own alt text - as literal characters instead of the
+// picture. The paste handler only ever read text/plain, which for a cut/copied <img> is just
+// that alt-text fallback; the real picture was sitting on the clipboard as text/html the whole
+// time and was never looked at.
+test('pasting a cut/copied image (real image data on the clipboard) inserts the picture, not its alt text as literal characters', async ({ page }) => {
+  const png1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  await openDocumentPage(page);
+
+  await page.click('.documentEditor');
+  await page.keyboard.press('Control+A');
+  await page.keyboard.type('Before image: ');
+
+  // Re-focus and re-establish a collapsed selection at the end, the same way the existing
+  // "pasting rich HTML" test above does - without this, focus can already have drifted away
+  // from the editor by the time the paste event below dispatches (a real, pre-existing app
+  // behavior unrelated to this fix - see the caret/focus-restore notes throughout this file),
+  // making the dispatched paste land nowhere.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.focus();
+    const r = document.createRange();
+    r.selectNodeContents(ed);
+    r.collapse(false);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
+
+  await page.evaluate((src) => {
+    const ed = document.querySelector('.documentEditor');
+    const dt = new DataTransfer();
+    dt.setData('text/plain', 'manual image');
+    dt.setData('text/html', `<img src="${src}" alt="manual image">`);
+    const evt = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+    ed.dispatchEvent(evt);
+  }, png1x1);
+
+  const result = await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    const img = ed.querySelector('img');
+    return { hasImg: !!img, imgSrcStartsWithData: img ? img.src.startsWith('data:image/png') : false, text: ed.textContent };
+  });
+  expect(result.hasImg).toBe(true);
+  expect(result.imgSrcStartsWithData).toBe(true);
+  // The alt text should never show up as literal, typed-out characters in the document body.
+  expect(result.text).not.toContain('manual image');
+});
+
+// Real request/companion case: copying an actual photo (from the Photos app, camera roll, etc.)
+// puts real image bytes on the clipboard rather than HTML markup - a separate code path from the
+// text/html one above, since there's no markup at all in that case.
+test('pasting a photo copied directly from outside the app (raw image bytes, no HTML) inserts the picture', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.click('.documentEditor');
+  await page.keyboard.press('Control+A');
+  await page.keyboard.type('Before photo: ');
+
+  // See the matching comment in the test above - re-establish focus/selection right before
+  // dispatching, matching the existing "pasting rich HTML" test's already-proven-reliable
+  // pattern.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.focus();
+    const r = document.createRange();
+    r.selectNodeContents(ed);
+    r.collapse(false);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
+
+  await page.evaluate(async () => {
+    const ed = document.querySelector('.documentEditor');
+    const png1x1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const bytes = Uint8Array.from(atob(png1x1), (c) => c.charCodeAt(0));
+    const file = new File([bytes], 'photo.png', { type: 'image/png' });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const evt = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+    ed.dispatchEvent(evt);
+  });
+
+  await page.waitForSelector('.documentEditor img', { timeout: 5000 });
+  const result = await page.evaluate(() => {
+    const img = document.querySelector('.documentEditor img');
+    return { imgSrcStartsWithData: img.src.startsWith('data:image/png') };
+  });
+  expect(result.imgSrcStartsWithData).toBe(true);
+});
+
 test('pasting a long plain-text block paginates into multiple document pages', async ({ page }) => {
   await openDocumentPage(page);
 

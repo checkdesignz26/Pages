@@ -19290,15 +19290,86 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     editor.addEventListener('paste',function(e){
       e.preventDefault();
       e.stopPropagation();
-      var text=(e.clipboardData||window.clipboardData).getData('text/plain')||'';
-      if(!text)return;
-      var lines=text.split(/\r\n|\r|\n/);
-      lines.forEach(function(line,i){
-        if(i>0)document.execCommand('insertParagraph');
-        if(line)document.execCommand('insertText',false,line);
-      });
-      saveEditor(editor,false);
-      rememberRange();
+      var cd=e.clipboardData||window.clipboardData;
+      function insertImage(src){
+        document.execCommand('insertHTML',false,'<img src="'+src+'" alt="manual image"><p><br></p>');
+        saveEditor(editor,false);
+        rememberRange();
+      }
+      function pasteText(){
+        var text=cd.getData('text/plain')||'';
+        if(!text)return;
+        var lines=text.split(/\r\n|\r|\n/);
+        lines.forEach(function(line,i){
+          if(i>0)document.execCommand('insertParagraph');
+          if(line)document.execCommand('insertText',false,line);
+        });
+        saveEditor(editor,false);
+        rememberRange();
+      }
+      // Real report, with a screenshot: cutting an image already in the document (or a photo
+      // straight from the Photos app) and pasting it back in typed out "manual image" - the
+      // image's own alt text - as literal characters instead of the picture. This used to only
+      // ever look at text/plain, which for a cut/copied <img> is just that fallback alt text;
+      // the real picture was sitting right there on the clipboard as either HTML markup (cutting
+      // from within the document) or actual image bytes (copying a photo), neither of which was
+      // ever read. A pasted <img> pointing at an external (non-data:) URL is deliberately left to
+      // the plain-text fallback below rather than embedded directly - this app stays a fully
+      // self-contained file with zero runtime network dependencies, and fetching a remote image
+      // would break that (and often fail outright on a site that blocks hotlinking anyway).
+      var html=cd.getData('text/html')||'';
+      var imgSrcMatch=/<img[^>]+src="(data:[^"]+)"/i.exec(html);
+      if(imgSrcMatch){insertImage(imgSrcMatch[1]);return;}
+      var imgFile=null;
+      if(cd.files&&cd.files.length){
+        for(var i=0;i<cd.files.length;i++){if(/^image\//.test(cd.files[i].type)){imgFile=cd.files[i];break;}}
+      }
+      if(!imgFile&&cd.items){
+        for(var j=0;j<cd.items.length;j++){if(/^image\//.test(cd.items[j].type)){imgFile=cd.items[j].getAsFile();break;}}
+      }
+      if(imgFile){
+        // Real bug, confirmed by direct testing: reading the file into a data: URL first
+        // (FileReader.readAsDataURL is always async, even for a tiny file) and only THEN
+        // inserting it intermittently lost the paste entirely, sometimes along with unrelated
+        // text typed moments earlier. document.execCommand('insertHTML',...) needs to run
+        // synchronously within the trusted paste event to reliably land - by the time an async
+        // read resolves, a background render() elsewhere (this app rebuilds a document editor's
+        // DOM fairly readily) can have already replaced this editor's content from whatever
+        // docHtml last held, silently swallowing an insertion that arrives after the fact.
+        // URL.createObjectURL() is synchronous, so insert with that immediately (same
+        // reliability as the data: URL branch above), then swap it for a real data: URL once the
+        // read finishes - a blob: URL only stays valid for this browser tab/session, so it can
+        // never be allowed to be what actually ends up saved.
+        var blobUrl=URL.createObjectURL(imgFile);
+        var nonce='ppPasteImg'+Date.now()+Math.random().toString(36).slice(2);
+        document.execCommand('insertHTML',false,'<img src="'+blobUrl+'" alt="manual image" data-pptemp="'+nonce+'"><p><br></p>');
+        saveEditor(editor,false);
+        rememberRange();
+        var reader=new FileReader();
+        reader.onload=function(){
+          try{
+            var page=pageForEditor(editor);
+            var liveImg=editor.isConnected?editor.querySelector('img[data-pptemp="'+nonce+'"]'):null;
+            if(liveImg){
+              liveImg.src=reader.result;
+              liveImg.removeAttribute('data-pptemp');
+              saveEditor(editor,false);
+            }else if(page&&page.docHtml&&page.docHtml.indexOf(blobUrl)!==-1){
+              // The editor was rebuilt (from a render() elsewhere) before this finished - the
+              // blob: URL still made it into the persisted docHtml via the saveEditor() call
+              // above, so patch that string directly rather than leaving a dead reference that
+              // would break on the next reload/PDF export.
+              page.docHtml=page.docHtml.split(blobUrl).join(reader.result).replace(' data-pptemp="'+nonce+'"','');
+            }
+          }finally{
+            URL.revokeObjectURL(blobUrl);
+          }
+        };
+        reader.onerror=function(){URL.revokeObjectURL(blobUrl);};
+        reader.readAsDataURL(imgFile);
+        return;
+      }
+      pasteText();
     },true);
     editor.addEventListener('keydown',function(e){
       // WebKit's default Enter behavior continues a heading's tag onto the new line, so
