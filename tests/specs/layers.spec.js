@@ -200,3 +200,52 @@ test('locking a layer blocks dragging and deleting it, until unlocked', async ({
   }, id);
   expect(afterUnlockDrag.x).not.toBe(before.x);
 });
+
+// Real report: a small badge became nearly impossible to just drag and move - almost any tap
+// landed on a resize handle instead, moving/resizing it unintentionally. Confirmed directly by
+// sampling elementFromPoint() across a shrunk badge's whole box: even its dead center resolved to
+// a handle, not the layer itself. Four corner resize handles (added later - see
+// pp-doggy-94-selection-rescue-css - superseding an older single bottom-right handle that never
+// got cleaned up and, for text/label layers specifically, had an even larger touch-target
+// expansion of its own), each with a further +15px invisible touch-target expansion reaching
+// inward from every corner, was simply more hit-area than a small layer had room for.
+test('a small selected badge still has a safe centre area to drag-move, not just its resize handles', async ({ page }) => {
+  const id = await page.evaluate(() => {
+    addBadge('circle');
+    const l = current().layers[0];
+    l.w = 6; l.h = 6; // shrink it down to a genuinely tiny badge
+    state.selected = l.id;
+    render();
+    return l.id;
+  });
+  await page.waitForTimeout(300);
+
+  const centreHit = await page.evaluate((layerId) => {
+    const el = document.querySelector(`.layer[data-id="${layerId}"]`);
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return hit ? hit.className : null;
+  }, id);
+  expect(centreHit).not.toMatch(/ppResizeHandle|(^|\s)handle(\s|$)/);
+
+  // A drag starting from the centre should move it, not resize it.
+  const before = await page.evaluate((layerId) => {
+    const l = current().layers.find((x) => x.id === layerId);
+    return { x: l.x, y: l.y, w: l.w, h: l.h };
+  }, id);
+  const box = await page.locator(`.layer[data-id="${id}"]`).boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 50, box.y + box.height / 2 + 30, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const after = await page.evaluate((layerId) => {
+    const l = current().layers.find((x) => x.id === layerId);
+    return { x: l.x, y: l.y, w: l.w, h: l.h };
+  }, id);
+
+  expect(after.x).not.toBe(before.x);
+  expect(after.y).not.toBe(before.y);
+  expect(after.w).toBe(before.w);
+  expect(after.h).toBe(before.h);
+});

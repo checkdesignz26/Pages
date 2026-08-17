@@ -8742,14 +8742,28 @@ function makeNumberedList(){
     touch-action:none!important;
   }
   .layer.selected > .ppResizeHandle{display:block!important;}
-  .ppResizeHandle::before{content:"";position:absolute;inset:-15px;border-radius:20px;}
+  /* Real report: a small badge became nearly impossible to just drag and move - almost any tap
+     landed on a resize handle instead. Confirmed directly: sampling elementFromPoint() across a
+     shrunk badge's whole box showed even its dead center resolving to a handle, not the layer
+     itself. Four corner handles, each with a further +15px invisible touch-target expansion
+     reaching inward from every corner, was simply more hit-area than a small layer had room for.
+     Trimmed to a more modest expansion - still comfortably touch-friendly on its own (the handle
+     itself is already 22px), just no longer able to swallow an entire small layer between the
+     four corners. */
+  .ppResizeHandle::before{content:"";position:absolute;inset:-5px;border-radius:12px;}
   .ppResizeHandle.nw{left:-11px!important;top:-11px!important;cursor:nwse-resize;}
   .ppResizeHandle.ne{right:-11px!important;top:-11px!important;cursor:nesw-resize;}
   .ppResizeHandle.sw{left:-11px!important;bottom:-11px!important;cursor:nesw-resize;}
   .ppResizeHandle.se{right:-11px!important;bottom:-11px!important;cursor:nwse-resize;}
 
-  /* Avoid duplicate-looking bottom-right dots: the new SE handle is the visible one. */
-  .stage .layer.selected > .handle{opacity:0!important;}
+  /* Avoid duplicate-looking bottom-right dots: the new SE handle is the visible one. Also no
+     longer just visually hidden - a later patch (further down, targeting text/label layers
+     specifically) turned this single old handle's opacity back on without knowing the four-corner
+     handles above had already superseded it, so text/label layers were showing a redundant fifth
+     handle graphic overlapping the real SE corner one. pointer-events:none here (which also
+     disables its own ::before touch-target expansion) removes its contribution to the small-badge
+     hit-area pile-up regardless of which layer type it is. */
+  .stage .layer.selected > .handle{opacity:0!important;pointer-events:none!important;}
 
 </style>
 <script id="pp-doggy-94-selection-rescue-js">
@@ -10532,25 +10546,20 @@ window.addEventListener('DOMContentLoaded',function(){
     outline-offset:4px!important;
     box-shadow:0 0 0 2px rgba(255,255,255,.9),0 0 0 8px rgba(255,142,214,.18)!important;
   }
+  /* Real report: a small badge (type "label") was nearly impossible to just drag and move -
+     almost any tap grabbed a resize handle instead. This block used to turn the old single
+     bottom-right handle's visibility back on for text/label layers specifically, written before
+     the four-corner .ppResizeHandle system (added later, see pp-doggy-94-selection-rescue-css)
+     existed and made this one fully redundant for every layer type - text/label layers alone
+     were left showing (and able to grab) a fifth, overlapping handle with an even larger +18px
+     touch-target expansion than the others got. Keep it inert here too now that every layer type
+     genuinely shares the same four-corner handles. */
   .stage .layer.text.selected > .handle,
   .stage .layer.label.selected > .handle{
-    opacity:1!important;
-    visibility:visible!important;
-    display:block!important;
-    width:34px!important;
-    height:34px!important;
-    right:-17px!important;
-    bottom:-17px!important;
-    border-radius:12px!important;
-    z-index:100200!important;
-    touch-action:none!important;
-  }
-  .stage .layer.text.selected > .handle::before,
-  .stage .layer.label.selected > .handle::before{
-    content:"";
-    position:absolute;
-    inset:-18px;
-    border-radius:24px;
+    opacity:0!important;
+    visibility:hidden!important;
+    display:none!important;
+    pointer-events:none!important;
   }
   .stage .layer.text.selected > .resizeHint,
   .stage .layer.label.selected > .resizeHint{
