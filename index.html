@@ -14228,6 +14228,15 @@ document.addEventListener('DOMContentLoaded',function(){
   body.leftHanded #helpBtn,body.leftHanded .helpBtn{
     right:auto!important;left:max(16px,env(safe-area-inset-left))!important;
   }
+  /* Real report: the last control in a scrolled-down right-panel section (e.g. shape colours'
+     border slider) sat directly under the fixed feedback/help buttons, which float on top of
+     panel content rather than pushing it - the buttons intercepted taps meant for whatever was
+     underneath. Reserve real scroll space at the bottom of BOTH side panels (not just whichever
+     edge feedback/help currently sit on - left-handed mode moves them to the other side, and
+     padding here is harmless on the side that doesn't have them) so every control can scroll
+     clear of the buttons instead of living permanently behind them.
+     Clearance: helpBtn's own bottom offset (76px) + its height (~44px) + a small margin. */
+  .side{padding-bottom:140px!important;}
 </style>
 <!-- NOTE(consolidation): ppages-v182p-true-tap-only-js used to live here. Its cloneNode-based
      tap-only listeners on .box>h2/#toggleLeftPanel/#toggleRightPanel are structurally shadowed by

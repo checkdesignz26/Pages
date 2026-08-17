@@ -9,7 +9,7 @@
 // fit whatever space was left after the fixed-width side panels, the whole layout grew to fit
 // its content's natural width, overflowing the actual viewport with nothing to bring the
 // clipped-off content (like the right panel) back into view.
-const { test, expect } = require('../support/fixtures');
+const { test, expect, expandAllBoxes } = require('../support/fixtures');
 
 test.use({ viewport: { width: 1080, height: 810 } });
 
@@ -70,4 +70,40 @@ test('the canvas keeps the same on-screen size regardless of which side panels a
   await page.evaluate(() => { toggleSidePanel('left'); toggleSidePanel('right'); });
   await page.waitForTimeout(300);
   expect(await stageWidth()).toBeCloseTo(initial, 0);
+});
+
+// Real report, with a screenshot: on a real iPad the fixed feedback/help buttons in the
+// bottom-right corner sat on top of the last control in a scrolled-down right-panel section
+// (shape colours' border slider) instead of the panel making room for them - the buttons
+// intercepted taps meant for whatever control was underneath. .side is overflow-y:auto with
+// height:100%, and feedback/help are position:fixed (so they float over panel content rather
+// than push it), which is exactly the combination that lets a fixed corner button permanently
+// cover the bottom of a scrollable region. Fixed by reserving real bottom padding on the side
+// panels so every control can scroll clear of the buttons.
+test('a control scrolled to the bottom of the right panel is not covered by the fixed feedback/help buttons', async ({ page }) => {
+  await page.evaluate(() => { addText('t'); });
+  const input = page.locator('#borderWidth');
+
+  // expandAllBoxes is a one-shot classList tweak that can race a re-render collapsing boxes
+  // back (see fixtures.js) - keep re-expanding and re-scrolling to the bottom until the box
+  // this test needs actually stays open long enough to get a real bounding box.
+  let box = null;
+  await expect
+    .poll(async () => {
+      await expandAllBoxes(page);
+      await page.evaluate(() => {
+        const side = document.querySelector('.side.right');
+        side.scrollTop = side.scrollHeight;
+      });
+      box = await input.boundingBox();
+      return box;
+    }, { timeout: 5000 })
+    .not.toBeNull();
+
+  const hitId = await page.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y);
+    return el ? el.id : null;
+  }, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+
+  expect(hitId).toBe('borderWidth');
 });
