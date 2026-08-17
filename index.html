@@ -48,6 +48,20 @@ main{width:100%;display:grid;grid-template-columns:300px minmax(0,1fr) 340px;min
 .workspace{position:relative;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:38px 26px 110px;touch-action:pan-y;background:linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px);background-size:36px 36px}.pageWrap{display:flex;flex-direction:column;align-items:center;gap:70px;min-width:0}.pageBlock{position:relative;text-align:center;width:100%;display:flex;flex-direction:column;align-items:center}.pageTitle{display:inline-block;margin-bottom:12px;background:#0d1326;border-radius:18px;padding:8px 15px;font-weight:950;box-shadow:0 8px 18px rgba(0,0,0,.25)}
 .stage{position:relative;background:#fff;overflow:hidden;box-shadow:0 24px 65px rgba(0,0,0,.45);border:0;width:min(100%,620px);aspect-ratio:3000/2250;touch-action:none}.stage.listing{width:min(100%,620px);aspect-ratio:3000/2250}.stage.pattern{width:min(100%,560px);aspect-ratio:1/1}.stage.social{width:min(100%,520px);aspect-ratio:1/1}.stage.mockup{width:min(100%,680px)}.blankHint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#8e829d;font-weight:950;font-size:clamp(36px,6vw,78px);pointer-events:none}
 .layer{position:absolute;touch-action:none;user-select:none;transform-origin:center center}
+/* Real request: a lock that's visible on the canvas itself, not just in the layer list - a
+   locked layer is untouchable by tap (see makeDraggable's pointerdown guard), so it shows a
+   dashed outline and a small padlock badge instead of the normal selection handles, which never
+   appear for it since it can't be dragged/resized in the first place. */
+.layer.positionLocked{cursor:not-allowed!important;}
+.layer.positionLocked::after{
+  content:'🔒';
+  position:absolute;top:4px;right:4px;
+  font-size:13px;line-height:1;
+  background:rgba(20,25,45,.82);border:1px solid rgba(255,255,255,.28);border-radius:50%;
+  width:22px;height:22px;display:grid;place-items:center;
+  pointer-events:none;z-index:10060;
+}
+.layer.positionLocked.selected{outline:2px dashed rgba(255,232,248,.55)!important;}
 .layer.strip{box-shadow:12px 0 18px rgba(0,0,0,.15),-12px 0 18px rgba(0,0,0,.10);background:#fff}.layer.strip .placeholder{height:100%;display:flex;align-items:center;justify-content:center;color:#b9b4c2;font-weight:950;font-size:22px}
 .layer.selected{outline:2px solid rgba(155,107,255,.95);outline-offset:0}.layer.justDeselected{animation:deselectPulse .65s ease-out}@keyframes deselectPulse{0%{outline:3px solid rgba(255,142,214,.95);outline-offset:2px}100%{outline:0 solid transparent;outline-offset:8px}}.layer img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}.layer.contain img{object-fit:contain}.shapeText{width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden;line-height:1.05;white-space:pre-wrap}
 .labelBadge .shapeText{padding:.12em .45em}.labelOval .shapeText{border-radius:999px}.labelCircle .shapeText{border-radius:50%}.labelRounded .shapeText{border-radius:22px}.labelSquare .shapeText{border-radius:0}.labelRibbon .shapeText{clip-path:polygon(0 0,100% 0,92% 50%,100% 100%,0 100%,8% 50%);padding-left:12%;padding-right:12%}.strip{background:#fff;box-shadow:10px 0 18px rgba(0,0,0,.16),-8px 0 14px rgba(0,0,0,.08);overflow:hidden}.strip .placeholder{height:100%;display:flex;align-items:flex-start;justify-content:center;padding-top:26px;color:#bbb7c2;font-weight:950;font-size:22px}.stripCard{background:#fff;box-shadow:12px 0 18px rgba(0,0,0,.15),-12px 0 18px rgba(0,0,0,.10);overflow:hidden}.stripCard .placeholder,.card .placeholder{height:100%;display:flex;align-items:center;justify-content:center;color:#302842;font-weight:950;font-size:22px}.card{background:#fff;box-shadow:0 18px 35px rgba(20,20,50,.24);overflow:hidden}.handle{position:absolute;width:24px;height:24px;border-radius:8px;background:linear-gradient(90deg,var(--purple),var(--pink));border:3px solid #fff;right:-12px;bottom:-12px;display:none;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,.35)}.resizeHint{position:absolute;left:8px;bottom:8px;background:rgba(12,16,32,.78);color:#fff;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:900;display:none;z-index:10000;pointer-events:none}.rotateHandle{
@@ -1671,7 +1685,7 @@ function relayoutGeneratedStripsPreserveFills(){
   }
   state.selected=null;
   render();
-  autosaveSoon();
+  try{if(typeof autosaveSoon==='function')autosaveSoon();}catch(e){}
   return true;
 }
 
@@ -2126,6 +2140,19 @@ function toggleLayerSelection(id){
   else state.selectedLayerIds.push(id);
   renderLayers();
 }
+// Real request: a lock so a layer can't be accidentally moved/resized while working around it
+// on the canvas. Deliberately a NEW flag (not the existing l.locked/l.lockText) - those are
+// legacy fields a separate migration (ppages-text-unlocked-flashmop-js, pp-v172-text-free-the-
+// box-js) force-clears to false on every render() for any text/label layer (including badges),
+// left over from fixing imported files that got stuck permanently locked. Reusing them here
+// would make a badge's lock silently vanish the moment anything else on the page re-rendered.
+function toggleLayerPositionLock(id){
+  const l=current().layers.find(o=>o.id===id);
+  if(!l)return;
+  save();
+  l.positionLocked=!l.positionLocked;
+  render();
+}
 function groupSelectedLayers(){
   ensureGroupState();
   const ids=state.selectedLayerIds.slice();
@@ -2400,7 +2427,7 @@ function renderAutoGroupOverlay(stage,pi){
     renderLayers();
     renderFrameList();
     syncControls();
-    autosaveSoon();
+    try{if(typeof autosaveSoon==='function')autosaveSoon();}catch(e){}
     e.preventDefault();
     e.stopPropagation();
   },{passive:false});
@@ -2448,17 +2475,30 @@ function renderManualGroupOverlay(stage,pi){
  overlay.addEventListener('pointerup',e=>{
    drag=null;
    try{overlay.releasePointerCapture(e.pointerId)}catch(err){}
-   renderPages();renderLayers();syncControls();autosaveSoon();
+   renderPages();renderLayers();syncControls();try{if(typeof autosaveSoon==='function')autosaveSoon();}catch(e){}
    e.preventDefault();e.stopPropagation();
  },{passive:false});
 }
 
 function renderLayer(l,pi){
-if(isGroupLayer(l)){return document.createComment('group layer');}
+if(isGroupLayer(l)){
+  // Real bug, confirmed by directly exercising the (re-enabled) grouping feature: several
+  // later render()-wrapping scripts (applyStack and others) assume every node this function
+  // returns is a real, stylable element - a Comment node has no .style at all, so the first
+  // group created crashed the whole render chain the moment any of those wraps tried to set
+  // z-index on it. A group has no visual box of its own (only its members are drawn), so keep
+  // it invisible, but as a real, inert element every downstream .style/.dataset access can
+  // safely touch.
+  const gd=document.createElement('div');
+  gd.className='layer group';
+  gd.dataset.id=l.id;
+  gd.style.display='none';
+  return gd;
+}
 let d=document.createElement('div');
 const selectedGroupLayer=selectedAutoGroupLayer(pi);
 const isGroupMate=selectedGroupLayer && isSameAutoGroupMember(l,selectedGroupLayer);
-d.className='layer '+l.type+(isAutoGroupedCollectionLayer(l)?' collectionGrouped':'')+(isGroupMate?' groupMate':'')+(l.type==='label'?' labelBadge label'+((l.badgeShape||'rounded').charAt(0).toUpperCase()+(l.badgeShape||'rounded').slice(1)):'')+(l.patternSlot?' patternSlot '+(l.slotShape==='circle'?'circleSlot':(l.slotShape==='strip'?'stripSlot '+((l.stripDirection==='horizontal'||l.horizontalStash)?'horizontalStrip':'verticalStrip'):'')):'')+(l.type==='frame'?' frameSlot frame'+((l.frameShape||'custom').charAt(0).toUpperCase()+(l.frameShape||'custom').slice(1)):'')+(l.patternSlot&&l.src?' filledSlot':'')+(l.disclosureBadge?' disclosureBadge':'')+(l.customMockup?' customMockupLayer':'')+(!l.customMockup&&state.selected===l.id&&state.selectedPage===pi?' selected':'')+(!l.customMockup&&state.lastDeselected===l.id&&state.selectedPage===pi?' justDeselected':'')+(l.fit==='contain'?' contain':'');
+d.className='layer '+l.type+(isAutoGroupedCollectionLayer(l)?' collectionGrouped':'')+(isGroupMate?' groupMate':'')+(l.type==='label'?' labelBadge label'+((l.badgeShape||'rounded').charAt(0).toUpperCase()+(l.badgeShape||'rounded').slice(1)):'')+(l.patternSlot?' patternSlot '+(l.slotShape==='circle'?'circleSlot':(l.slotShape==='strip'?'stripSlot '+((l.stripDirection==='horizontal'||l.horizontalStash)?'horizontalStrip':'verticalStrip'):'')):'')+(l.type==='frame'?' frameSlot frame'+((l.frameShape||'custom').charAt(0).toUpperCase()+(l.frameShape||'custom').slice(1)):'')+(l.patternSlot&&l.src?' filledSlot':'')+(l.disclosureBadge?' disclosureBadge':'')+(l.customMockup?' customMockupLayer':'')+(!l.customMockup&&state.selected===l.id&&state.selectedPage===pi?' selected':'')+(!l.customMockup&&state.lastDeselected===l.id&&state.selectedPage===pi?' justDeselected':'')+(l.fit==='contain'?' contain':'')+(l.positionLocked?' positionLocked':'');
 d.style.left=l.x+'%';
 d.style.top=l.y+'%';
 d.style.width=l.w+'%';
@@ -2724,6 +2764,10 @@ el.addEventListener('pointerdown',e=>{
  if(e.target.closest && e.target.closest('.deleteMini'))return;
  if(e.pointerType==='touch' && e.isPrimary===false)return;
  if(state.handMode){return;}
+ // Real request: a lock that actually stops a layer from being dragged/resized/rotated on the
+ // canvas, not just a data flag - untouchable by tap here, same as the app's other "locked"
+ // controls (custom mock-ups etc.); still reachable to select/unlock via its layer list row.
+ if(l.positionLocked){return;}
  state.selectedPage=pi;
  state.selected=l.id;
  el.classList.add('selected');
@@ -3068,11 +3112,18 @@ function setTextAlign(value){
 function fitSelected(mode){let l=getLayer();if(!l)return;save();if(mode==='width'){l.x=0;l.w=100;if(['banner','label','text','rectangle'].includes(l.type))l.h=Math.min(l.h,25)}else{l.x=0;l.y=0;l.w=100;l.h=100}render()}
 function bringForward(){let l=getLayer();if(!l)return;save();l.z=nextZ();normaliseZ();render()}function sendBack(){let l=getLayer();if(!l)return;save();l.z=0;normaliseZ();render()}
 function duplicateSelected(){let l=getLayer();if(!l)return;save();let c=JSON.parse(JSON.stringify(l));c.id=uid();c.name=l.name+' copy';c.x+=3;c.y+=3;c.z=nextZ();current().layers.push(c);state.selected=c.id;render()}
-function deleteSelected(){if(!state.selected){return;}save();current().layers=current().layers.filter(l=>l.id!==state.selected);state.selected=null;render()}
+function deleteSelected(){
+  if(!state.selected){return;}
+  const l=current().layers.find(o=>o.id===state.selected);
+  if(l&&l.positionLocked){alert('This layer is locked. Unlock it first to delete it.');return;}
+  save();current().layers=current().layers.filter(l=>l.id!==state.selected);state.selected=null;render()
+}
 function deleteLayerById(id,pageIndex){
   if(typeof pageIndex==='number') state.selectedPage=pageIndex;
   const p=current();
   if(!p)return;
+  const l=p.layers.find(o=>o.id===id);
+  if(l&&l.positionLocked){alert('This layer is locked. Unlock it first to delete it.');return;}
   save();
   p.layers=p.layers.filter(l=>l.id!==id);
   if(state.selected===id)state.selected=null;
@@ -12123,7 +12174,7 @@ window.addEventListener('DOMContentLoaded',function(){
 
 
 
-<!-- v171 Calm layer selection: no disco flash, no selected badge, hide grouping controls for launch -->
+<!-- v171 Calm layer selection: no disco flash, no selected badge -->
 <style id="pp-v171-calm-layer-selection-css">
   /* Keep selection calm: the pink outline is enough. No badge, no disco, no jumpy feedback. */
   #layerList .layerItem.ppCleanThumbRow.active::after,
@@ -12139,41 +12190,11 @@ window.addEventListener('DOMContentLoaded',function(){
     100%{outline:inherit;outline-offset:inherit;box-shadow:inherit}
   }
 
-  /* Grouping is back-bench/post-launch: hide the ghost controls without disturbing the layer panel. */
-  #multiSelectBtn,
-  #groupSelectedBtn,
-  #ungroupBtn{
-    display:none !important;
-  }
-  .layerV2Toolbar:has(#multiSelectBtn):has(#groupSelectedBtn):has(#ungroupBtn){
-    display:none !important;
-  }
-  .layerPanelV2 .panelBody > p.smallText:first-child{
-    display:none !important;
-  }
+  /* Real request: group/multi-select layers together so a badge and its label can be moved as
+     one instead of separately - this control set already existed (multi-select, group, ungroup)
+     but had been held back post-launch; re-enabled rather than rebuilt. */
 
 </style>
-<script id="pp-v171-calm-layer-selection-js">
-(function(){
-  'use strict';
-  if(window.__PP_CALM_LAYER_SELECTION_V171__) return;
-  window.__PP_CALM_LAYER_SELECTION_V171__=true;
-
-  /* NOTE(consolidation): calmSelectLayer() and its selectLayer/ppSelectLayerFromRow
-     assignments that lived here were removed - fully superseded by later generations
-     (confirmed via a fresh scan: the final selectLayer generation fully replaces with no
-     fallback to a previous version), so this was dead code. */
-
-  function hideGroupControls(){
-    ['multiSelectBtn','groupSelectedBtn','ungroupBtn'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});
-    var tb=document.querySelector('.layerV2Toolbar'); if(tb)tb.style.display='none';
-    var intro=document.querySelector('.layerPanelV2 .panelBody > p.smallText:first-child'); if(intro)intro.style.display='none';
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',hideGroupControls); else hideGroupControls();
-  setTimeout(hideGroupControls,250);
-  setTimeout(hideGroupControls,900);
-})();
-</script>
 
 
 
@@ -16574,7 +16595,7 @@ else install();
      They never screenshot the stage/workspace, never reuse old frozen pixels, and never include handles/guides. -->
 <style id="pp-v167-clean-thumbs-css">
   #layerList .layerItem.ppCleanThumbRow{
-    grid-template-columns:24px 38px 28px minmax(0,1fr) 28px!important;
+    grid-template-columns:24px 38px 28px 28px minmax(0,1fr) 28px!important;
     gap:7px!important;
     min-height:50px!important;
     align-items:center!important;
@@ -16600,9 +16621,13 @@ else install();
   #layerList .ppCleanLayerThumb.hiddenThumb{opacity:.45;filter:grayscale(.45)}
   #layerList .layerItem.ppCleanThumbRow .layerName{cursor:pointer!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
   #layerList .layerItem.ppCleanThumbRow .visibilityBtn,
+  #layerList .layerItem.ppCleanThumbRow .lockBtn,
   #layerList .layerItem.ppCleanThumbRow .deleteLayerBtn{width:28px!important;height:28px!important;padding:0!important;border-radius:9px!important;display:grid!important;place-items:center!important;font-size:12px!important;}
+  #layerList .layerItem.ppCleanThumbRow .lockBtn.layerLocked{background:rgba(255,142,214,.22)!important;border:1px solid rgba(255,142,214,.55)!important;}
+  #layerList .layerItem.ppCleanThumbRow .lockBtnSpacer{width:28px!important;height:28px!important;}
+  #layerList .layerItem.ppCleanThumbRow.rowLocked{opacity:.72!important;}
   body.ppLayersWide #layerList .ppCleanLayerThumb{width:42px!important;height:42px!important;}
-  body.ppLayersWide #layerList .layerItem.ppCleanThumbRow{grid-template-columns:22px 42px 28px minmax(0,1fr) 28px!important;min-height:56px!important;}
+  body.ppLayersWide #layerList .layerItem.ppCleanThumbRow{grid-template-columns:22px 42px 28px 28px minmax(0,1fr) 28px!important;min-height:56px!important;}
 
 </style>
 <script id="pp-v167-clean-thumbs-js">
@@ -16900,18 +16925,39 @@ else install();
     mode=mode||'all';
     var s=S()||{};
     var group=isGroup(l);
+    var multiSelecting=!!s.layerMultiSelect && !group;
+    var checkedForGroup=Array.isArray(s.selectedLayerIds) && s.selectedLayerIds.indexOf(l.id)>=0;
     var row=document.createElement('div');
-    row.className='layerItem ppCleanThumbRow '+(!l.customMockup&&l.id===s.selected?'active ':'')+(l.hidden?'isHidden ':'')+(group?'groupRow ':'')+(l.customMockup?'customMockupRow ':'');
+    row.className='layerItem ppCleanThumbRow '+(!l.customMockup&&l.id===s.selected?'active ':'')+(l.hidden?'isHidden ':'')+(group?'groupRow ':'')+(l.customMockup?'customMockupRow ':'')+(checkedForGroup?'multiChecked ':'')+(l.positionLocked?'rowLocked ':'');
     row.dataset.id=l.id; row.dataset.mode=mode; row.draggable=!group;
 
-    var grip=document.createElement('span');
-    grip.className='dragGrip';
-    grip.title=group?'open / hide group':'drag to reorder';
-    grip.textContent=group?(s.collapsedGroups&&s.collapsedGroups[l.id]?'▶':'▼'):'⋮⋮';
-    grip.addEventListener('click',function(e){
-      e.stopPropagation();
-      if(group && typeof toggleGroupExpanded==='function')toggleGroupExpanded(l.id);
-    });
+    // Real request: group/select multiple layers so a badge and its label can be moved together
+    // instead of separately - toggleLayerMultiSelect()/groupSelectedLayers() already existed
+    // (data-level) but this row generator (the live one; the older rowForLayer with its own
+    // checkbox got superseded by this v170 generation) never grew matching UI for it. Swap the
+    // reorder grip for a checkbox while multi-select mode is on, matching the base rowForLayer's
+    // original approach - you don't reorder while picking layers to group anyway.
+    var grip;
+    if(multiSelecting){
+      grip=document.createElement('button');
+      grip.type='button';
+      grip.className='layerCheck';
+      grip.title='select for grouping';
+      grip.textContent=checkedForGroup?'☑':'☐';
+      grip.addEventListener('click',function(e){
+        e.stopPropagation();
+        if(typeof toggleLayerSelection==='function')toggleLayerSelection(l.id);
+      });
+    }else{
+      grip=document.createElement('span');
+      grip.className='dragGrip';
+      grip.title=group?'open / hide group':'drag to reorder';
+      grip.textContent=group?(s.collapsedGroups&&s.collapsedGroups[l.id]?'▶':'▼'):'⋮⋮';
+      grip.addEventListener('click',function(e){
+        e.stopPropagation();
+        if(group && typeof toggleGroupExpanded==='function')toggleGroupExpanded(l.id);
+      });
+    }
 
     var thumb=makeThumb(l) || document.createElement('span');
     if(thumb) thumb.title='tap row to select';
@@ -16924,6 +16970,27 @@ else install();
       if(typeof toggleLayerVisibility==='function')toggleLayerVisibility(l.id);
       else{ l.hidden=!l.hidden; try{render();}catch(_){try{renderPages();renderLayers();}catch(__){}} }
     });
+
+    // Real request: lock a layer in place so it can't be accidentally dragged/resized while
+    // working around it - not offered for group rows (locking is per-member; lock each member
+    // instead) or custom mock-ups (already have their own separate controls).
+    // Always emit something for this grid column (even when there's no lock button to show) -
+    // the row is a fixed-column CSS grid shared with every other row, so skipping the element
+    // entirely would shift everything after it out of alignment with rows that do have one.
+    var lockBtn;
+    if(!group && !l.customMockup){
+      lockBtn=document.createElement('button');
+      lockBtn.type='button'; lockBtn.className='lockBtn '+(l.positionLocked?'layerLocked':'');
+      lockBtn.title=l.positionLocked?'unlock layer':'lock layer in place';
+      lockBtn.textContent=l.positionLocked?'🔒':'🔓';
+      lockBtn.addEventListener('click',function(e){
+        e.stopPropagation();
+        if(typeof toggleLayerPositionLock==='function')toggleLayerPositionLock(l.id);
+      });
+    }else{
+      lockBtn=document.createElement('span');
+      lockBtn.className='lockBtnSpacer';
+    }
 
     var zone=document.createElement('span');
     zone.className='ppLayerSelectZone';
@@ -16941,7 +17008,7 @@ else install();
       else{var p=P(); if(p){p.layers=layers().filter(function(x){return x.id!==l.id;}); if((S()||{}).selected===l.id)(S()||{}).selected=null; try{render();}catch(_){}}}
     });
 
-    row.appendChild(grip); row.appendChild(thumb); row.appendChild(eye); row.appendChild(zone); row.appendChild(del);
+    row.appendChild(grip); row.appendChild(thumb); row.appendChild(eye); row.appendChild(lockBtn); row.appendChild(zone); row.appendChild(del);
     row.addEventListener('click',function(){ window.ppSelectLayerFromRow(l.id); });
     row.addEventListener('pointerup',function(e){
       if(e.target.closest('button,.dragGrip'))return;
@@ -17038,6 +17105,14 @@ else install();
     var s=S(); if(!s||id==null)return;
     var l=layers().find(function(x){return x&&String(x.id)===String(id);});
     if(!l)return;
+    // Real request: group/select multiple layers to move them together. Tapping a row (not just
+    // its checkbox) while multi-select mode is on should toggle it into/out of the group
+    // selection like the checkbox does, not perform a normal single-select and silently drop out
+    // of multi-select mode - this is the single path every row tap (thumb, name, or the row
+    // itself) and the document-level capture-phase listener below both funnel through.
+    if(s.layerMultiSelect && !l.customMockup && !(typeof isGroupLayer==='function' && isGroupLayer(l))){
+      if(typeof toggleLayerSelection==='function'){toggleLayerSelection(id);return;}
+    }
     var scroll=saveScroll();
     if(l.customMockup){
       s.selected=null;
@@ -17963,9 +18038,39 @@ else install();
     row.appendChild(grip);row.appendChild(thumb);row.appendChild(eye);row.appendChild(name);row.appendChild(del);
     return row;
   }
+  // Real request: group/select multiple layers. This rewrite (below) replaced the base
+  // renderLayers() wholesale and dropped two things the manual-grouping feature needs: rendering
+  // a group's member rows underneath it when expanded (list.forEach already skips any layer with
+  // a groupId, so without this a grouped layer simply vanished from the panel with no way back to
+  // it individually), and syncing the multi-select/group/ungroup toolbar buttons' active/disabled
+  // state (the base renderLayers did this at its own end; this rewrite never picked it up, so
+  // "group selected" stayed permanently disabled even with two layers checked).
+  function appendGroupRow(el,g){
+    if(typeof window.rowForLayer==='function')el.appendChild(window.rowForLayer(g,'all'));
+    var st=getState();
+    if(st&&st.collapsedGroups&&st.collapsedGroups[g.id])return;
+    groupMembers(g.id).slice().sort(function(a,b){return (b.z||0)-(a.z||0);}).forEach(function(child){
+      var r=typeof window.rowForLayer==='function'?window.rowForLayer(child,'all'):null;
+      if(r){r.classList.add('childLayerRow');el.appendChild(r);}
+    });
+  }
+  function syncGroupToolbarButtons(){
+    var st=getState();if(!st)return;
+    var msBtn=document.getElementById('multiSelectBtn');
+    if(msBtn)msBtn.classList.toggle('active',!!st.layerMultiSelect);
+    var gBtn=document.getElementById('groupSelectedBtn');
+    if(gBtn)gBtn.disabled=!(st.layerMultiSelect&&Array.isArray(st.selectedLayerIds)&&st.selectedLayerIds.length>=2);
+    var uBtn=document.getElementById('ungroupBtn');
+    if(uBtn){
+      var sel=typeof getLayer==='function'?getLayer():null;
+      uBtn.disabled=!(sel&&typeof isGroupLayer==='function'&&isGroupLayer(sel));
+    }
+  }
   function installRenderLayers(){
     window.renderLayers=function(){
       var el=document.getElementById('layerList');if(!el)return;
+      if(typeof ensureGroupState==='function')ensureGroupState();
+      if(typeof updateAllGroupBounds==='function')updateAllGroupBounds();
       var list=normalLayers().slice().sort(function(a,b){return (b.z||0)-(a.z||0);});
       var showcase=slots().slice().sort(function(a,b){return (b.z||0)-(a.z||0);});
       el.innerHTML='';
@@ -17980,16 +18085,19 @@ else install();
         list.forEach(function(l){
           if(l&&l.groupId)return;
           if(!inserted && (l.z||0)<showcaseZ){el.appendChild(makeGroupRow(showcase));inserted=true;}
-          if(typeof window.rowForLayer==='function')el.appendChild(window.rowForLayer(l,'all'));
+          if(l&&typeof isGroupLayer==='function'&&isGroupLayer(l))appendGroupRow(el,l);
+          else if(typeof window.rowForLayer==='function')el.appendChild(window.rowForLayer(l,'all'));
         });
         if(!inserted)el.appendChild(makeGroupRow(showcase));
       }else{
         list.forEach(function(l){
           if(l&&l.groupId)return;
-          if(typeof window.rowForLayer==='function')el.appendChild(window.rowForLayer(l,'all'));
+          if(l&&typeof isGroupLayer==='function'&&isGroupLayer(l))appendGroupRow(el,l);
+          else if(typeof window.rowForLayer==='function')el.appendChild(window.rowForLayer(l,'all'));
         });
       }
       if(!showcase.length&&!list.length)el.innerHTML='<div class="smallText">No layers yet. Add a pattern frame, banner, label or shape.</div>';
+      syncGroupToolbarButtons();
     };
     try{renderLayers=window.renderLayers;}catch(e){}
   }

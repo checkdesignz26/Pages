@@ -81,3 +81,122 @@ test('toggling wide panel mode actually grows the layer list', async ({ page }) 
   expect(before).toBe('390px');
   expect(after).toBe('440px');
 });
+
+// Real request: group/select multiple layers so a badge and its label can be moved together
+// instead of separately. Multi-select/group/ungroup (toggleLayerMultiSelect, groupSelectedLayers,
+// ungroupSelected) already existed at the data level but had been held back post-launch (hidden
+// via CSS + a repeating JS hider), and turned out to be genuinely broken once actually exercised:
+// a group layer rendered as a bare Comment node, which crashed the first render() a later script
+// (applyStack, added after grouping and never tested against it) tried to run against it -
+// changed to an inert-but-real element instead. Separately, the row generator that's actually
+// live today (rowForLayerV170, added after grouping and also never updated for it) had no
+// checkbox UI at all, and the document-level tap handler unconditionally single-selected +
+// cleared multi-select mode on every row tap, defeating it entirely even with the toolbar
+// visible. Fixed both. This exercises the whole flow through the real UI, not by calling the
+// underlying functions directly, since that's exactly the level every one of those gaps lived at.
+test('grouping two layers via the layer panel lets them be dragged together, then splits apart again on ungroup', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => { addText('text'); addBadge('oval'); });
+  await page.waitForTimeout(1800); // let the layer-panel boot()/re-render timers settle first
+
+  await clickResilient(page, page.locator('#multiSelectBtn'));
+  const checks = page.locator('#layerList .layerCheck');
+  await expect(checks).toHaveCount(2);
+  await clickResilient(page, checks.nth(0));
+  await clickResilient(page, checks.nth(1));
+
+  await expect(page.locator('#groupSelectedBtn')).toBeEnabled();
+  await clickResilient(page, page.locator('#groupSelectedBtn'));
+
+  const afterGroup = await page.evaluate(() => current().layers.map((l) => ({ type: l.type, groupId: l.groupId })));
+  expect(afterGroup.filter((l) => l.type === 'group')).toHaveLength(1);
+  expect(afterGroup.filter((l) => l.groupId)).toHaveLength(2);
+
+  await page.waitForTimeout(300); // let drawManualGroups()'s 60ms-delayed overlay draw settle
+  const overlay = page.locator('.manualGroupOverlay');
+  await expect(overlay).toBeVisible();
+  const box = await overlay.boundingBox();
+
+  const before = await page.evaluate(() => current().layers.filter((l) => l.groupId).map((l) => ({ id: l.id, x: l.x, y: l.y })));
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 40, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  const after = await page.evaluate(() => current().layers.filter((l) => l.groupId).map((l) => ({ id: l.id, x: l.x, y: l.y })));
+
+  // Both members should have moved by roughly the same delta - dragged together, not separately.
+  for (const b of before) {
+    const a = after.find((x) => x.id === b.id);
+    expect(a.x - b.x).toBeGreaterThan(4);
+    expect(a.y - b.y).toBeGreaterThan(2);
+  }
+  const dxs = before.map((b) => after.find((a) => a.id === b.id).x - b.x);
+  expect(Math.abs(dxs[0] - dxs[1])).toBeLessThan(0.5);
+
+  await expect(page.locator('#ungroupBtn')).toBeEnabled();
+  await clickResilient(page, page.locator('#ungroupBtn'));
+  const afterUngroup = await page.evaluate(() => current().layers.map((l) => ({ type: l.type, groupId: l.groupId })));
+  expect(afterUngroup.some((l) => l.type === 'group')).toBe(false);
+  expect(afterUngroup.every((l) => !l.groupId)).toBe(true);
+});
+
+// Real request: a lock so a layer can't be accidentally moved while working around it on the
+// canvas, separate from grouping. Deliberately its own new flag (l.positionLocked) rather than
+// the existing l.locked/l.lockText - those get force-cleared to false on every render() for any
+// text/label layer (a legacy migration for old files that got stuck permanently locked), which
+// would silently undo a lock on a text layer or badge the moment anything else on the page
+// re-rendered.
+test('locking a layer blocks dragging and deleting it, until unlocked', async ({ page }) => {
+  await expandAllBoxes(page);
+  const id = await page.evaluate(() => { addText('text'); return current().layers[0].id; });
+  await page.waitForTimeout(1800);
+
+  const lockBtn = page.locator('#layerList .lockBtn').first();
+  await clickResilient(page, lockBtn);
+  const afterLock = await page.evaluate((layerId) => ({
+    dataLocked: current().layers.find((l) => l.id === layerId).positionLocked,
+    canvasClass: document.querySelector(`.layer[data-id="${layerId}"]`).classList.contains('positionLocked'),
+  }), id);
+  expect(afterLock.dataLocked).toBe(true);
+  expect(afterLock.canvasClass).toBe(true);
+
+  const before = await page.evaluate((layerId) => {
+    const l = current().layers.find((x) => x.id === layerId);
+    return { x: l.x, y: l.y };
+  }, id);
+  const box = await page.locator(`.layer[data-id="${id}"]`).boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 60, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const afterDragAttempt = await page.evaluate((layerId) => {
+    const l = current().layers.find((x) => x.id === layerId);
+    return { x: l.x, y: l.y, selected: state.selected };
+  }, id);
+  expect(afterDragAttempt.x).toBe(before.x);
+  expect(afterDragAttempt.y).toBe(before.y);
+  expect(afterDragAttempt.selected).not.toBe(id);
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await clickResilient(page, page.locator('#layerList .deleteLayerBtn').first());
+  await page.waitForTimeout(150);
+  expect(await page.evaluate(() => current().layers.length)).toBe(1);
+
+  await clickResilient(page, lockBtn);
+  expect(await page.evaluate((layerId) => current().layers.find((l) => l.id === layerId).positionLocked, id)).toBe(false);
+  await page.waitForTimeout(150);
+
+  const box2 = await page.locator(`.layer[data-id="${id}"]`).boundingBox();
+  await page.mouse.move(box2.x + box2.width / 2, box2.y + box2.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box2.x + box2.width / 2 + 80, box2.y + box2.height / 2 + 60, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const afterUnlockDrag = await page.evaluate((layerId) => {
+    const l = current().layers.find((x) => x.id === layerId);
+    return { x: l.x, y: l.y };
+  }, id);
+  expect(afterUnlockDrag.x).not.toBe(before.x);
+});
