@@ -76,6 +76,69 @@ test('a large image uploaded through the real image-layer file input is capped t
   expect(Math.max(dims.w, dims.h)).toBeLessThanOrEqual(1250);
 });
 
+test('an uploaded image layer starts as a tight fit around the picture, and stays tight after a corner resize', async ({ page }) => {
+  // Real report, from a page that isn't square (a 3000x2250 listing page): a tall/narrow
+  // photo placed on the canvas got a visibly loose selection box, worse after resizing it -
+  // gaps between the pink outline and the actual picture. fittedLayerSizeForImage() computes h
+  // from the image's real aspect ratio adjusted for the page's own w/h ratio, but then clamped
+  // h to [minH,maxH] without ever re-deriving w to match - so a clamp silently left the box's
+  // shape not matching the image's shape at all, and every later resize (which just preserves
+  // whatever ratio the box already has) carried that mismatch forward under fit:contain's
+  // letterboxing instead of fixing it. Use a very tall image (2:1 landscape page, portrait
+  // photo) so the unclamped height would badly overshoot maxH and force the old clamp bug.
+  await page.evaluate(() => {
+    const p = current();
+    p.w = 3000; p.h = 1500; // wide page, so a portrait photo's natural fit needs a tall box
+  });
+
+  await page.evaluate(async () => {
+    const c = document.createElement('canvas');
+    c.width = 400; c.height = 1200; // 1:3 portrait photo
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#3355ff';
+    ctx.fillRect(0, 0, 400, 1200);
+    const dataUrl = c.toDataURL('image/png');
+    const blob = await (await fetch(dataUrl)).blob();
+    const file = new File([blob], 'portrait.png', { type: blob.type });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const input = document.getElementById('imageLayerInput');
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  await expect
+    .poll(() => page.evaluate(() => current().layers.some((l) => l.type === 'image')), { timeout: 5000 })
+    .toBe(true);
+
+  function boxAspectVsImageAspect() {
+    return page.evaluate(() => {
+      const p = current();
+      const l = p.layers.find((x) => x.type === 'image');
+      const pageAspect = p.w / p.h;
+      const boxVisualAspect = (l.w * pageAspect) / l.h; // convert %/% into a real on-page ratio
+      return { boxVisualAspect, naturalAspect: l.aspect, hasAspect: typeof l.aspect === 'number' };
+    });
+  }
+
+  const initial = await boxAspectVsImageAspect();
+  expect(initial.hasAspect).toBe(true);
+  expect(initial.boxVisualAspect).toBeCloseTo(initial.naturalAspect, 1);
+
+  // Drag a corner handle to resize - the real interaction from the report.
+  const layerId = await page.evaluate(() => current().layers.find((l) => l.type === 'image').id);
+  const handle = page.locator(`.layer[data-id="${layerId}"] .ppResizeHandle.se`);
+  const hb = await handle.boundingBox();
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hb.x + 140, hb.y + 90, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+
+  const afterResize = await boxAspectVsImageAspect();
+  expect(afterResize.boxVisualAspect).toBeCloseTo(afterResize.naturalAspect, 1);
+});
+
 test('a small pattern upload through the pattern tray passes through uncapped', async ({ page }) => {
   await page.evaluate(async () => {
     const c = document.createElement('canvas');

@@ -157,6 +157,54 @@ test('double-tapping text opens the floating editor, hides resize handles, and D
   expect(afterDone.hasDoneBtn).toBe(false);
 });
 
+test('tapping delete on a text layer right after selecting it deletes it - the editor does not jump up instead', async ({ page }) => {
+  // Real bug from a user recording: tap once to select a text layer (arms handleTap's
+  // double-tap window), then tap the delete "x" on its boundary box to remove it. The "x"
+  // button is a child of .layer.text, so textNodeFromEvent's closest('.stage .layer.text,
+  // .stage .layer.label') matched it too - the tap on delete satisfied the double-tap window
+  // and opened the floating editor instead of deleting. The delete button's own listener then
+  // still fired afterward (preventDefault() doesn't stop propagation), deleting the layer out
+  // from under the editor that had just opened for it. Fixed by excluding taps on
+  // .deleteMini/.handle/.rotateHandle/.resizeHint from counting as a tap on the text layer.
+  await page.evaluate(() => { addText('text'); });
+  await page.waitForTimeout(200);
+
+  await page.evaluate(() => {
+    window.__mkTouch = (id, x, y, target) => new Touch({ identifier: id, target, clientX: x, clientY: y, pageX: x, pageY: y });
+  });
+
+  const layerId = await page.evaluate(() => state.pages[0].layers[0].id);
+
+  // A bare touchend is all handleTap (arming/consuming the double-tap window) and a control's
+  // own touchend listener need - real device order without pointerdown/setPointerCapture noise
+  // that has nothing to do with the bug under test.
+  async function tapTouchend(el) {
+    await el.evaluate((node) => {
+      const t = new Touch({ identifier: Date.now() + Math.random(), target: node, clientX: 0, clientY: 0 });
+      node.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [t], bubbles: true, cancelable: true }));
+    });
+  }
+
+  // Tap 1: select the layer (arms handleTap's double-tap window for this layer's id).
+  await page.evaluate((id) => { window.selectLayer(id); }, layerId);
+  await tapTouchend(page.locator(`.layer[data-id="${layerId}"]`));
+  await page.waitForTimeout(80);
+
+  // Tap 2: tap the delete "x" - within the double-tap window, on an element nested inside
+  // .layer.text.
+  await tapTouchend(page.locator(`.layer[data-id="${layerId}"] .deleteMini`));
+  await page.waitForTimeout(200);
+
+  const after = await page.evaluate((id) => ({
+    hasTextarea: !!document.querySelector('.ppTextArea176'),
+    stillExists: state.pages[0].layers.some((l) => l.id === id),
+    nodeStillInDom: !!document.querySelector(`.layer[data-id="${id}"]`),
+  }), layerId);
+  expect(after.hasTextarea).toBe(false);
+  expect(after.stillExists).toBe(false);
+  expect(after.nodeStillInDom).toBe(false);
+});
+
 test('double-tapping text calls preventDefault on both taps, blocking iOS Safari\'s native double-tap-zoom', async ({ page }) => {
   // A real bug: stop() in pp-text-v176-js only called stopPropagation()/stopImmediatePropagation(),
   // which stops the app's OWN listeners from seeing the event but has zero effect on the browser's
