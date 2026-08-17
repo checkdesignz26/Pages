@@ -394,6 +394,56 @@ test('the parked-page preview applies mix-blend-mode:multiply for custom mock-up
   expect(pixel[0]).toBeLessThan(200);
 });
 
+test('the parked-page preview draws a text layer\'s actual caption, not the caption glued to the hidden delete/resize-hint chrome text', async ({ page }) => {
+  // Real report (screenshot): a page full of text layers came back from the parked-page
+  // preview looking garbled, with oversized/overlapping-looking text. The preview's text
+  // branch read node.textContent straight off the whole .layer wrapper - but the delete "x"
+  // button and the "drag corner to resize · <type>" hint are always present in that wrapper's
+  // DOM (just CSS display:none until selected), as siblings of the actual caption, which lives
+  // in a dedicated .shapeText child. textContent doesn't care about CSS visibility, so every
+  // cached preview was silently drawing "<real text>×drag corner to resize · text" as one
+  // fillText call instead of just the real caption. Patch fillText to record exactly what text
+  // the preview asked to draw, rather than trying to OCR pixels back out of a JPEG.
+  await page.evaluate(() => {
+    window.__ppFillTextCalls = [];
+    const proto = CanvasRenderingContext2D.prototype;
+    if (!proto.__ppOrigFillText) {
+      proto.__ppOrigFillText = proto.fillText;
+      proto.fillText = function (text, ...rest) {
+        window.__ppFillTextCalls.push(text);
+        return proto.__ppOrigFillText.call(this, text, ...rest);
+      };
+    }
+  });
+
+  await page.evaluate(() => {
+    save();
+    state.pages = [
+      { type: 'listing', w: 3000, h: 2250, layers: [
+        { id: 'l1', type: 'text', name: 'headline', text: 'Etsy Listing', x: 10, y: 10, w: 60, h: 14, z: 1, opacity: 1, r: 0, fontSize: 42, color: '#111111', textAlign: 'center' },
+      ] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+    ];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+  });
+
+  await expect(page.locator('.stage[data-page="0"] .layer.text')).toHaveCount(1);
+  await page.evaluate(() => { window.__ppFillTextCalls.length = 0; state.selectedPage = 2; state.selected = null; render(); });
+
+  await expect(page.locator('.stage[data-page="0"] .pp95ParkedPreviewImg')).toHaveCount(1, { timeout: 5000 });
+
+  const calls = await page.evaluate(() => window.__ppFillTextCalls);
+  expect(calls.length).toBeGreaterThan(0);
+  for (const text of calls) {
+    expect(text).not.toMatch(/×/);
+    expect(text).not.toMatch(/drag corner to resize/i);
+  }
+  expect(calls.some((t) => t.includes('Etsy Listing'))).toBe(true);
+});
+
 test('the parked-page preview clips a circular pattern slot to a circle, instead of drawing its square bounding box', async ({ page }) => {
   // Real bug (screenshot): a "pattern tile square" page has a big round pattern-fill slot in
   // the middle (a type:'card' patternSlot layer with slotShape:'circle', styled entirely via

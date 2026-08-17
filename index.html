@@ -15968,12 +15968,19 @@ else install();
         // straight from CSS). Check both, and clip to the actual border-radius either way so a
         // circle/pill shape doesn't come out as a flat rectangle.
         let styleSrc=cs;
-        try{ const shapeEl=node.querySelector('.shapeText'); if(shapeEl) styleSrc=getComputedStyle(shapeEl); }catch(e){}
+        let textEl=node;
+        try{ const shapeEl=node.querySelector('.shapeText'); if(shapeEl){ styleSrc=getComputedStyle(shapeEl); textEl=shapeEl; } }catch(e){}
         const bg=styleSrc.backgroundColor;
         const clipped=clipRoundedBox(ctx, x, y, w, h, styleSrc.borderRadius, k);
         ctx.fillStyle=(bg&&bg!=='rgba(0, 0, 0, 0)'&&bg!=='transparent')?bg:'rgba(0,0,0,.05)';
         ctx.fillRect(x,y,w,h);
-        const text=(node.textContent||'').trim();
+        // node.textContent used to be read straight off the outer .layer wrapper - but the
+        // delete "x", "drag corner to resize" hint, and rotate/resize handles all live as
+        // sibling DOM nodes right alongside the real caption (.shapeText), always present
+        // (just CSS-hidden when not selected), so textContent silently concatenated all of
+        // that UI chrome onto the actual text in every cached preview. Read the caption
+        // element's own text instead, same as the style lookup right above already does.
+        const text=(textEl.textContent||'').trim();
         if(text){
           ctx.fillStyle=styleSrc.color||'#333';
           let fs=parseFloat(styleSrc.fontSize)*k; if(!fs||fs<4) fs=Math.max(6,h*0.35);
