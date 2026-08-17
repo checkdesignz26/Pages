@@ -20483,3 +20483,22 @@ body.leftCollapsed.rightCollapsed .stage.pattern,body.leftCollapsed.rightCollaps
 })();
 </script>
 
+<!-- Real report, with a screenshot: the "drag corner to resize · text" hint pill sat directly
+     on top of a small selected layer (a tiny circular showcase image), completely covering it -
+     wrapping across several lines inside a box too small to hold it. Earlier patches already
+     fought over exactly where/whether this hint shows for particular layer types (text/label
+     moved outside the box, builtin frames force it on, a general rule hides it) - rather than
+     add yet another type-specific carve-out, remove it everywhere: it's a redundant tooltip once
+     you know the corner handles resize, not something the resize gesture itself depends on. This
+     is placed last in the document specifically so it wins every earlier "show it" rule
+     regardless of that rule's own specificity or !important, without editing each one. -->
+<style id="pp-remove-resize-hint-everywhere-css">
+  .resizeHint,
+  .stage .layer.selected > .resizeHint,
+  .stage .layer.text.selected > .resizeHint,
+  .stage .layer.label.selected > .resizeHint,
+  .layer.builtinFrame.selected .resizeHint{
+    display:none!important;
+  }
+</style>
+

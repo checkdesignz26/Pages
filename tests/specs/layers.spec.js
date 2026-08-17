@@ -314,3 +314,29 @@ test('a small selected badge still has a safe centre area to drag-move, not just
   expect(after.w).toBe(before.w);
   expect(after.h).toBe(before.h);
 });
+
+// Real report, with a screenshot: the "drag corner to resize · <type>" hint pill sat directly on
+// top of a small selected showcase image, wrapping across several lines inside a box too small
+// to hold it, hiding the actual content. Several earlier patches fought over exactly where/
+// whether this hint shows for particular layer types - rather than add yet another type-specific
+// carve-out, it's removed everywhere now: a redundant tooltip once you know the corner handles
+// resize, not something the resize gesture itself depends on.
+test('the "drag corner to resize" hint no longer covers small selected layers of any type', async ({ page }) => {
+  const ids = await page.evaluate(() => {
+    addText('text');
+    addBadge('circle');
+    addShape('rectangle');
+    return current().layers.map((l) => l.id);
+  });
+
+  for (const id of ids) {
+    const display = await page.evaluate((layerId) => {
+      state.selected = layerId;
+      render();
+      const node = document.querySelector(`.layer[data-id="${layerId}"]`);
+      const hint = node.querySelector('.resizeHint');
+      return hint ? getComputedStyle(hint).display : 'no-hint-element';
+    }, id);
+    expect(display).toBe('none');
+  }
+});
