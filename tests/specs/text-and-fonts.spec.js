@@ -225,6 +225,42 @@ test('Montserrat, Roboto, Lato, Bebas Neue, Anton, League Spartan, and Inter are
   }
 });
 
+// Real request: add Lora (elegant serif) and Liberation Sans (clean sans) to the font list and
+// the font matchmaker. Different provenance from the batch above - Lora is a Google Font under
+// the SIL Open Font License like the others, but Liberation Sans comes from Red Hat's Liberation
+// Fonts project instead (also SIL OFL, free to embed/redistribute; it's the metric-compatible
+// Arial replacement bundled with most Linux distros). Embedded the same way: data: URI @font-face
+// rules, zero external requests.
+test('Lora and Liberation Sans are embedded, actually load, and are wired into the font matchmaker', async ({ page }) => {
+  const fonts = ['Lora', 'Liberation Sans'];
+  for (const font of fonts) {
+    const result = await page.evaluate(async (f) => {
+      await document.fonts.load(`16px "${f}"`);
+      return {
+        loaded: document.fonts.check(`16px "${f}"`),
+        hasFontDropdownOption: [...document.getElementById('fontFamily').options].some((o) => o.value === f),
+        hasMatchmakerOption: [...document.getElementById('matchBaseFont').options].some((o) => o.value === f),
+      };
+    }, font);
+    expect(result.loaded, `${font} loaded`).toBe(true);
+    expect(result.hasFontDropdownOption, `${font} listed in the font dropdown`).toBe(true);
+    expect(result.hasMatchmakerOption, `${font} listed as a matchmaker base font`).toBe(true);
+  }
+
+  // Picking either one as the matchmaker's base font should generate real suggestions that
+  // reference it, not silently fall back to Georgia's default matches.
+  for (const font of fonts) {
+    const matches = await page.evaluate((f) => {
+      const sel = document.getElementById('matchBaseFont');
+      sel.value = f;
+      generateFontMatches();
+      return [...document.querySelectorAll('#fontMatchResults .fontPairBtn .pairFonts strong')].map((el) => el.textContent);
+    }, font);
+    expect(matches.length).toBeGreaterThan(0);
+    expect(matches.every((heading) => heading === font), `all suggested headings are ${font}`).toBe(true);
+  }
+});
+
 test('a native page zoom (double-tap slipping past prevention, or an unblockable iOS pinch) gets snapped back to 1x automatically', async ({ page }) => {
   // Real report + screen recording: double-tapping a text layer to edit it sometimes left the
   // whole app - header, canvas AND both side panels - stuck visibly zoomed in, with the text
