@@ -157,6 +157,61 @@ test('double-tapping text opens the floating editor, hides resize handles, and D
   expect(afterDone.hasDoneBtn).toBe(false);
 });
 
+test('tapping an unselected text layer once (then again quickly, out of habit) only selects it - it takes a deliberate double-tap on an already-selected layer to edit', async ({ page }) => {
+  // Real report: "it still wants to edit the text with one click/tap". The tap that FIRST
+  // selects a layer (transitioning it from unselected to selected) used to be eligible to arm
+  // or close handleTap's own double-tap-to-edit pair just like any other tap - so a user tapping
+  // once to select, then quickly tapping again (a natural "did that register?" reflex, or aiming
+  // for a nearby control) landed well inside the 430ms window and popped the floating editor
+  // open, which read as "one tap opens it" even though it was technically two. Only a tap on a
+  // layer that was ALREADY selected before its own gesture began should be able to arm/close
+  // that pair now. Start from a genuinely unselected layer (not the auto-selected state
+  // addText() leaves behind) to match the real scenario.
+  await page.evaluate(() => { addText('text'); state.selected = null; render(); });
+  await page.waitForTimeout(200);
+
+  const layerId = await page.evaluate(() => state.pages[0].layers[0].id);
+  const box = await page.locator(`.layer[data-id="${layerId}"]`).boundingBox();
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+
+  // Real CDP-level touch dispatch (not hand-built DOM events) - it goes through the actual
+  // browser input pipeline, so pointerdown carries a genuinely active pointer (isPrimary,
+  // setPointerCapture-eligible) exactly like a real device tap, unlike a manually constructed
+  // PointerEvent/TouchEvent pair.
+  async function tap(x, y) {
+    await page.touchscreen.tap(x, y);
+    await page.waitForTimeout(60);
+  }
+
+  const wasUnselected = await page.evaluate(() => state.selected == null);
+  expect(wasUnselected).toBe(true);
+
+  // Tap 1: selects the previously-unselected layer.
+  await tap(cx, cy);
+  await page.waitForTimeout(100);
+  // Tap 2, still well inside the double-tap window: the exact "quick re-tap right after
+  // selecting" the report describes. Must NOT open the editor on its own.
+  await tap(cx, cy);
+  await page.waitForTimeout(300);
+
+  const afterTwoTaps = await page.evaluate((id) => ({
+    selected: state.selected === id,
+    hasTextarea: !!document.querySelector('.ppTextArea176'),
+  }), layerId);
+  expect(afterTwoTaps.selected).toBe(true);
+  expect(afterTwoTaps.hasTextarea).toBe(false);
+
+  // Tap 3, inside the window of tap 2: the layer has now been selected since before THIS tap's
+  // own gesture began, so this is a genuine deliberate double-tap on an already-selected layer -
+  // must open the editor, matching the existing "double-tapping text opens the floating editor"
+  // behavior.
+  await tap(cx, cy);
+  await page.waitForTimeout(300);
+
+  const afterThirdTap = await page.evaluate(() => !!document.querySelector('.ppTextArea176'));
+  expect(afterThirdTap).toBe(true);
+});
+
 test('tapping delete on a text layer right after selecting it deletes it - the editor does not jump up instead', async ({ page }) => {
   // Real bug from a user recording: tap once to select a text layer (arms handleTap's
   // double-tap window), then tap the delete "x" on its boundary box to remove it. The "x"

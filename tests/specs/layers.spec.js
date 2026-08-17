@@ -141,6 +141,65 @@ test('grouping two layers via the layer panel lets them be dragged together, the
   expect(afterUngroup.every((l) => !l.groupId)).toBe(true);
 });
 
+// Real report: grouped two layers, tapped "duplicate", and the copy was invisible - nothing
+// changed on the page the group was copied from. A group is a synthetic, invisible
+// (display:none) organizational layer; its actual visible content lives in separate member
+// layers tagged with a matching groupId. duplicateSelected() only deep-cloned whatever single
+// layer was selected - for a group, that's just the invisible wrapper, so the "copy" had zero
+// members and nothing to draw, while the real content (the member layers) never got duplicated
+// at all.
+test('duplicating a selected group copies its member layers too, not just the invisible group wrapper', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => { addText('text'); addBadge('oval'); });
+  await page.waitForTimeout(1800);
+
+  await clickResilient(page, page.locator('#multiSelectBtn'));
+  const checks = page.locator('#layerList .layerCheck');
+  await expect(checks).toHaveCount(2);
+  await clickResilient(page, checks.nth(0));
+  await clickResilient(page, checks.nth(1));
+  await clickResilient(page, page.locator('#groupSelectedBtn'));
+
+  const beforeDup = await page.evaluate(() => ({
+    total: current().layers.length,
+    groupId: state.selected,
+    members: current().layers.filter((l) => l.groupId === state.selected).map((l) => ({ type: l.type, x: l.x, y: l.y })),
+  }));
+  expect(beforeDup.members).toHaveLength(2);
+
+  await page.evaluate(() => { window.duplicateSelected(); });
+  await page.waitForTimeout(200);
+
+  const afterDup = await page.evaluate((oldGroupId) => {
+    const layers = current().layers;
+    const newGroupId = state.selected;
+    return {
+      total: layers.length,
+      newGroupId,
+      changedSelection: newGroupId !== oldGroupId,
+      newGroupIsGroupType: layers.find((l) => l.id === newGroupId)?.type,
+      newMembers: layers.filter((l) => l.groupId === newGroupId).map((l) => ({ type: l.type, x: l.x, y: l.y })),
+      oldMembersStillPresent: layers.filter((l) => l.groupId === oldGroupId).length,
+    };
+  }, beforeDup.groupId);
+
+  // One new group layer + two new member layers.
+  expect(afterDup.total).toBe(beforeDup.total + 3);
+  expect(afterDup.changedSelection).toBe(true);
+  expect(afterDup.newGroupIsGroupType).toBe('group');
+  expect(afterDup.oldMembersStillPresent).toBe(2);
+  expect(afterDup.newMembers).toHaveLength(2);
+  const newTypes = afterDup.newMembers.map((m) => m.type).sort();
+  const oldTypes = beforeDup.members.map((m) => m.type).sort();
+  expect(newTypes).toEqual(oldTypes);
+  // Copies land offset from the originals, matching the existing single-layer duplicate offset.
+  for (const nm of afterDup.newMembers) {
+    const original = beforeDup.members.find((m) => m.type === nm.type);
+    expect(nm.x).toBeCloseTo(original.x + 3, 1);
+    expect(nm.y).toBeCloseTo(original.y + 3, 1);
+  }
+});
+
 // Real request: a lock so a layer can't be accidentally moved while working around it on the
 // canvas, separate from grouping. Deliberately its own new flag (l.positionLocked) rather than
 // the existing l.locked/l.lockText - those get force-cleared to false on every render() for any
@@ -160,6 +219,12 @@ test('locking a layer blocks dragging and deleting it, until unlocked', async ({
   }), id);
   expect(afterLock.dataLocked).toBe(true);
   expect(afterLock.canvasClass).toBe(true);
+
+  // addText() selects the new layer immediately (its real, intended behavior - the drag-attempt
+  // assertion below tests that a locked layer can't be newly selected via a canvas tap, which
+  // needs a genuinely unselected starting point, not the one addText already left behind).
+  await page.evaluate(() => { state.selected = null; render(); });
+  await page.waitForTimeout(100);
 
   const before = await page.evaluate((layerId) => {
     const l = current().layers.find((x) => x.id === layerId);

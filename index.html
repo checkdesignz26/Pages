@@ -1428,7 +1428,7 @@ body.autoGroupEditing .layer.collectionGrouped{
     <strong>Editing panel</strong>
     <span>Select something on the page, then adjust layers, size, fonts, alignment and colours here.</span>
   </div>
-  <div class="box layerPanelV2"><h2>layers</h2><div class="panelBody"><p class="smallText">Layer Panel 2.0: select layers, group them, then move or resize the group as one.</p><div class="layerV2Toolbar"><button id="multiSelectBtn" onclick="toggleLayerMultiSelect()">select</button><button id="groupSelectedBtn" onclick="groupSelectedLayers()" disabled>group selected</button><button id="ungroupBtn" onclick="ungroupSelected()" disabled>ungroup</button></div><div id="layerList" class="layerList"></div><div class="grid2"><button onclick="bringForward()">to front</button><button onclick="sendBack()">to back</button></div><div class="grid2"><button onclick="selectedForwardOne()">↑ one step</button><button onclick="selectedBackOne()">↓ one step</button></div><button class="full" onclick="duplicateSelected()">duplicate selected</button><button class="full" onclick="deleteSelected()">delete selected</button></div></div>
+  <div class="box layerPanelV2"><h2>layers</h2><div class="panelBody"><p class="smallText">Layer Panel 2.0: select layers, group them, then move or resize the group as one.</p><div class="layerV2Toolbar"><button id="multiSelectBtn" onclick="toggleLayerMultiSelect()">select</button><button id="groupSelectedBtn" onclick="groupSelectedLayers()" disabled>group</button><button id="ungroupBtn" onclick="ungroupSelected()" disabled>ungroup</button></div><div id="layerList" class="layerList"></div><div class="grid2"><button onclick="bringForward()">to front</button><button onclick="sendBack()">to back</button></div><div class="grid2"><button onclick="selectedForwardOne()">↑ one step</button><button onclick="selectedBackOne()">↓ one step</button></div><button class="full" onclick="duplicateSelected()">duplicate selected</button><button class="full" onclick="deleteSelected()">delete selected</button></div></div>
   <div class="box"><h2>edit & adjust</h2><div class="rangeRow"><label>scale</label><input id="scale" type="range" min="20" max="250" value="100" oninput="applyControls()"></div><div class="rangeRow"><label>opacity</label><input id="opacity" type="range" min="0" max="100" value="100" oninput="applyControls()"></div><div class="rangeRow"><label>x move</label><input id="xpos" type="range" min="-30" max="120" value="10" oninput="applyControls()"></div><div class="rangeRow"><label>y move</label><input id="ypos" type="range" min="-30" max="120" value="10" oninput="applyControls()"></div><div class="rangeRow"><label>width</label><input id="width" type="range" min="3" max="130" value="40" oninput="applyControls()"></div><div class="rangeRow"><label>height</label><input id="height" type="range" min="3" max="130" value="20" oninput="applyControls()"></div><div class="rangeRow"><label>rotate</label><input id="rotate" type="range" min="-180" max="180" value="0" oninput="applyControls()"></div><div class="grid2"><button onclick="fitSelected('width')">fit width</button><button onclick="fitSelected('canvas')">fit canvas</button></div><div class="editMiniGroup"><button onclick="setSelectedFit('contain')">fit</button><button onclick="setSelectedFit('cover')">fill</button><button onclick="setSelectedFit('cover');fitSelected('canvas')">cover page</button><button onclick="deselect()">done</button></div><div class="gestureHint">Tap empty canvas to deselect. Pinch with two fingers to zoom the page. Two-finger double tap = undo.</div><div class="status" id="selectedHint">Nothing selected</div></div>
   <div class="box" id="alignPanel"><h2>alignment</h2><p class="smallText">Align the selected text, banner, image, label or frame to the page.</p><div class="grid3"><button onclick="alignSelected('left')">left</button><button onclick="alignSelected('hcenter')">centre</button><button onclick="alignSelected('right')">right</button></div><div class="grid3"><button onclick="alignSelected('top')">top</button><button onclick="alignSelected('vcenter')">middle</button><button onclick="alignSelected('bottom')">bottom</button></div><div class="grid2"><button onclick="alignSelected('centerBoth')">centre page</button><button onclick="alignSelected('safeMiddle')">safe middle</button></div></div>
   <div class="box matchmakerBox"><h2>font matchmaker</h2>
@@ -10011,6 +10011,34 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
   window.duplicateSelected=function(){
     var l=(typeof getLayer==='function')?getLayer():null; if(!l)return;
     try{save();}catch(e){}
+    // A group is a synthetic, invisible (display:none) layer whose real content lives in
+    // separate member layers tagged with a matching groupId - the plain single-layer clone
+    // below only copied the invisible wrapper itself, leaving the new "group" with zero
+    // members and nothing visible on the page, while the real content never got duplicated.
+    if(typeof isGroupLayer==='function' && isGroupLayer(l)){
+      var members=(typeof groupMembers==='function')?groupMembers(l.id):[];
+      var newGroupId=(typeof uid==='function')?uid():('l'+Date.now());
+      var newMembers=members.map(function(m){
+        var mc=JSON.parse(JSON.stringify(m));
+        mc.id=(typeof uid==='function')?uid():('l'+Date.now()+Math.random());
+        mc.groupId=newGroupId;
+        mc._manualName=false; mc._autoNamed=true;
+        mc.x=(+mc.x||0)+3; mc.y=(+mc.y||0)+3;
+        mc.z=(typeof nextZ==='function')?nextZ():((+mc.z||1)+1);
+        return mc;
+      });
+      var gc=JSON.parse(JSON.stringify(l));
+      gc.id=newGroupId;
+      gc._manualName=false; gc._autoNamed=true;
+      gc.name=copyName(l.name||baseNameFor(l), page());
+      gc.z=(typeof nextZ==='function')?nextZ():((+gc.z||1)+1);
+      newMembers.forEach(function(mc){ page().layers.push(mc); });
+      page().layers.push(gc);
+      if(typeof updateGroupLayerBounds==='function') updateGroupLayerBounds(gc);
+      state.selected=gc.id;
+      try{render();}catch(e){try{renderPages();renderLayers();syncControls();}catch(_){}}
+      return;
+    }
     var c=JSON.parse(JSON.stringify(l));
     c.id=(typeof uid==='function')?uid():('l'+Date.now());
     c._manualName=false; c._autoNamed=true;
@@ -12061,6 +12089,27 @@ window.addEventListener('DOMContentLoaded',function(){
     if(t.closest('.deleteMini,.handle,.rotateHandle,.resizeHint'))return null;
     return t.closest('.stage .layer.text,.stage .layer.label');
   }
+  // Real report: tapping a text layer once to select it, then tapping again shortly after
+  // (a natural "did that register?" reflex, or aiming for a nearby control) opened the floating
+  // editor - felt like "one tap opens it" even though it's technically two. The tap that
+  // performs the FIRST selection of a layer shouldn't be eligible to arm/close a double-tap-to-
+  // edit pair at all; only a tap landing on a layer that was ALREADY selected before this tap's
+  // own gesture began should count. Record "was it already selected" at pointerdown time (before
+  // makeDraggable's own pointerdown handler mutates state.selected for THIS tap) - by the time
+  // handleTap runs on touchend/pointerup, that mutation has already happened, so checking
+  // selection state there would always see "yes, selected" even for the very tap that just
+  // selected it. A capture-phase listener on document runs before any listener bound directly to
+  // the layer element (makeDraggable's), regardless of script order - a DOM-structural guarantee.
+  // Checked via the node's own "selected" DOM class, not state.selected - several patch-era
+  // code paths (e.g. the currently-live addText()) visually mark a layer selected by adding the
+  // class directly without state.selected ever actually being set to match, so the class is the
+  // more reliable "is this really shown as selected right now" signal.
+  var preTapSelect={id:null,wasSelected:false};
+  document.addEventListener('pointerdown',function(e){
+    var node=textNodeFromEvent(e); if(!node){ preTapSelect.id=null; return; }
+    preTapSelect.id=node.dataset&&node.dataset.id;
+    preTapSelect.wasSelected=node.classList.contains('selected');
+  },true);
   function handleTap(e){
     if(active)return;
     var node=textNodeFromEvent(e); if(!node)return;
@@ -12076,6 +12125,12 @@ window.addEventListener('DOMContentLoaded',function(){
     // whole two-tap sequence.
     if(e.cancelable)e.preventDefault();
     var id=node.dataset&&node.dataset.id, now=Date.now();
+    // If this exact tap never got a pointerdown recorded (e.g. a synthetic touchend-only
+    // dispatch, or the tap started on a different element than it ended on), fall back to the
+    // older unrestricted behavior rather than silently never arming - real device taps always
+    // fire pointerdown before touchend/pointerup, so this only affects edge cases.
+    var wasSelected = preTapSelect.id===id ? preTapSelect.wasSelected : true;
+    if(!wasSelected){ lastTap.id=null; lastTap.t=0; return; }
     if(id&&id===lastTap.id&&(now-lastTap.t)<430){ lastTap.id=null; lastTap.t=0; startEditor(node,e); }
     else { lastTap.id=id; lastTap.t=now; }
   }
@@ -14648,7 +14703,14 @@ window.generatePatternShowcaseLayout=function(){
     }
 
     p.layers.push(textLayer);
+    // state is declared with `let` at the top level of the app's inline scripts, so it never
+    // becomes window.state (unlike function/var declarations) - checking window.state alone
+    // meant this branch never ran, so a newly added text layer never actually became
+    // state.selected (only visually looked selected, via the setTimeout DOM class add below).
     if(window.state){
+      window.state.selected=textLayer.id;
+      window.state.ppSelectedBackgroundTexture=false;
+    }else if(typeof state!=='undefined'){
       state.selected=textLayer.id;
       state.ppSelectedBackgroundTexture=false;
     }
@@ -14667,7 +14729,13 @@ window.generatePatternShowcaseLayout=function(){
       try{
         var node=document.querySelector('.stage .layer[data-id="'+textLayer.id+'"]');
         if(node){
-          node.classList.add('selected');
+          // Only reassert "selected" here if it's still actually the selected layer - render()
+          // above already applies the class correctly from state.selected now that the dead
+          // window.state check is fixed, so unconditionally adding it here used to be able to
+          // re-select this layer behind the app's back even after something legitimately
+          // deselected it (or selected something else) in the moments before this timer fired.
+          var s=(typeof state!=='undefined'&&state)||window.state;
+          if(s&&s.selected===textLayer.id) node.classList.add('selected');
           node.scrollIntoView({block:'nearest',inline:'nearest'});
         }
       }catch(_){ }
@@ -16690,7 +16758,15 @@ else install();
   #layerList .layerItem.ppCleanThumbRow .visibilityBtn,
   #layerList .layerItem.ppCleanThumbRow .lockBtn,
   #layerList .layerItem.ppCleanThumbRow .deleteLayerBtn{width:28px!important;height:28px!important;padding:0!important;border-radius:9px!important;display:grid!important;place-items:center!important;font-size:12px!important;}
-  #layerList .layerItem.ppCleanThumbRow .lockBtn.layerLocked{background:rgba(255,142,214,.22)!important;border:1px solid rgba(255,142,214,.55)!important;}
+  /* Real report: locked vs unlocked was hard to tell apart at a glance - the lock/unlock emoji
+     glyphs look near-identical at this size, and the old locked background (a 22%-opacity pink
+     tint) barely showed up against the dark theme, especially confusable with the app's own
+     pink "this row is selected" highlight (a locked AND selected row had no way to tell which
+     signal the pink was even for). Locked now gets its own distinct amber colour, reserving
+     pink for "selected" only, and unlocked gets a visibly dimmer/flatter chip so the two read
+     as clearly different states without needing to read the tiny emoji at all. */
+  #layerList .layerItem.ppCleanThumbRow .lockBtn{background:rgba(255,255,255,.05)!important;border:1px solid rgba(255,255,255,.14)!important;opacity:.68!important;}
+  #layerList .layerItem.ppCleanThumbRow .lockBtn.layerLocked{background:rgba(255,196,64,.30)!important;border:1px solid rgba(255,196,64,.85)!important;opacity:1!important;box-shadow:0 0 0 1px rgba(255,196,64,.18)!important;}
   #layerList .layerItem.ppCleanThumbRow .lockBtnSpacer{width:28px!important;height:28px!important;}
   #layerList .layerItem.ppCleanThumbRow.rowLocked{opacity:.72!important;}
   body.ppLayersWide #layerList .ppCleanLayerThumb{width:42px!important;height:42px!important;}
