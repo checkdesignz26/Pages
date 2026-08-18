@@ -8784,6 +8784,15 @@ function makeNumberedList(){
   .ppResizeHandle.ne{right:-11px!important;top:-11px!important;cursor:nesw-resize;}
   .ppResizeHandle.sw{left:-11px!important;bottom:-11px!important;cursor:nesw-resize;}
   .ppResizeHandle.se{right:-11px!important;bottom:-11px!important;cursor:nwse-resize;}
+  /* Real follow-up report: the fixed -5px expansion above still swallows a genuinely tiny layer
+     (a small circular pattern swatch, ~17px on screen) - four corner handles each still reaching
+     5px inward is enough hit-area, combined, to cover a box that small entirely, so its center
+     still resolved to a handle instead of the layer body. A fixed pixel expansion can never work
+     for every layer size; ppTinyResizeTarget (toggled in JS from each layer's real rendered
+     size, see pp-tiny-resize-target-hitbox-js) drops the expansion to nothing for layers small
+     enough that any inward reach at all would eat the whole thing - the handle's own visible
+     14px stays grabbable on its own, just without the extra generous touch-target. */
+  .layer.ppTinyResizeTarget .ppResizeHandle::before{inset:0!important;}
 
   /* Avoid duplicate-looking bottom-right dots: the new SE handle is the visible one. Also no
      longer just visually hidden - a later patch (further down, targeting text/label layers
@@ -8872,6 +8881,21 @@ function makeNumberedList(){
     });
   }
 
+  // Real follow-up report: even the trimmed -5px handle hit-area (above) still swallows a
+  // genuinely tiny layer (a small circular swatch, ~17px on screen) - four corners each
+  // reaching 5px inward is still enough combined hit-area to cover a box that small entirely.
+  // A fixed pixel expansion can never work for every layer size, so measure each layer's real
+  // rendered size here (after render() has actually laid it out) and mark it "tiny" below a
+  // reasonable minimum touch target (44px, the common accessibility baseline) - the matching
+  // CSS rule drops the hit-area expansion to nothing for marked layers, leaving just the
+  // handle's own visible box, which frees up the rest of the layer to be tapped/dragged.
+  function updateTinyResizeClass(node){
+    try{
+      var r=node.getBoundingClientRect();
+      var tiny=r.width>0 && r.height>0 && (r.width<44 || r.height<44);
+      node.classList.toggle('ppTinyResizeTarget', tiny);
+    }catch(e){}
+  }
   function patchVisibleLayers(){
     var s=getState(); if(!s) return;
     document.querySelectorAll('.stage').forEach(function(stage,pi){
@@ -8880,6 +8904,7 @@ function makeNumberedList(){
         var id=node.dataset&&node.dataset.id;
         var l=id?p.layers.find(function(x){return x.id===id;}):null;
         if(l) addHandlesToNode(node,l,pi);
+        updateTinyResizeClass(node);
       });
     });
   }

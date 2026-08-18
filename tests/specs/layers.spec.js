@@ -443,6 +443,82 @@ test('a small selected badge still has a safe centre area to drag-move, not just
   expect(after.h).toBe(before.h);
 });
 
+// Real follow-up report: the fixed -5px handle hit-area above still isn't enough for a
+// genuinely tiny layer (a small circular image swatch, ~17px on screen at a normal zoom level) -
+// four corners each still reaching 5px inward is enough combined hit-area to cover a box that
+// small entirely. A fixed pixel expansion can never work for every layer size, so this checks a
+// layer small enough to defeat the earlier fix specifically.
+test('an even smaller image layer also keeps a safe centre to drag-move, not just its resize handles', async ({ page }) => {
+  const pngSrc = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 40; c.height = 40;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ff69b4';
+    ctx.beginPath(); ctx.arc(20, 20, 18, 0, Math.PI * 2); ctx.fill();
+    return c.toDataURL('image/png');
+  });
+
+  const id = await page.evaluate((src) => {
+    const l = { id: uid(), type: 'image', name: 'tiny swatch', x: 40, y: 40, w: 2, h: 2, z: 1, opacity: 1, r: 0, src, fit: 'contain', aspect: 1 };
+    current().layers.push(l);
+    state.selected = l.id;
+    render();
+    return l.id;
+  }, pngSrc);
+  await page.waitForTimeout(300);
+
+  const centreHit = await page.evaluate((layerId) => {
+    const el = document.querySelector(`.layer[data-id="${layerId}"]`);
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return hit ? hit.className : null;
+  }, id);
+  expect(centreHit).not.toMatch(/ppResizeHandle|(^|\s)handle(\s|$)/);
+
+  const before = await page.evaluate((layerId) => {
+    const l = current().layers.find((x) => x.id === layerId);
+    return { x: l.x, y: l.y, w: l.w, h: l.h };
+  }, id);
+  const box = await page.locator(`.layer[data-id="${id}"]`).boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2 + 30, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const after = await page.evaluate((layerId) => {
+    const l = current().layers.find((x) => x.id === layerId);
+    return { x: l.x, y: l.y, w: l.w, h: l.h };
+  }, id);
+
+  expect(after.x).not.toBe(before.x);
+  expect(after.y).not.toBe(before.y);
+  expect(after.w).toBe(before.w);
+  expect(after.h).toBe(before.h);
+
+  // The handle itself must still be independently grabbable for an intentional resize.
+  const seHandleCentre = await page.evaluate((layerId) => {
+    const node = document.querySelector(`.layer[data-id="${layerId}"]`);
+    const se = node.querySelector('.ppResizeHandle.se');
+    const r = se.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }, id);
+  const beforeResize = await page.evaluate((layerId) => {
+    const l = current().layers.find((x) => x.id === layerId);
+    return { w: l.w, h: l.h };
+  }, id);
+  await page.mouse.move(seHandleCentre.x, seHandleCentre.y);
+  await page.mouse.down();
+  await page.mouse.move(seHandleCentre.x + 30, seHandleCentre.y + 20, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const afterResize = await page.evaluate((layerId) => {
+    const l = current().layers.find((x) => x.id === layerId);
+    return { w: l.w, h: l.h };
+  }, id);
+  expect(afterResize.w).toBeGreaterThan(beforeResize.w);
+  expect(afterResize.h).toBeGreaterThan(beforeResize.h);
+});
+
 // Real report, with a screenshot: the "drag corner to resize · <type>" hint pill sat directly on
 // top of a small selected showcase image, wrapping across several lines inside a box too small
 // to hold it, hiding the actual content. Several earlier patches fought over exactly where/
