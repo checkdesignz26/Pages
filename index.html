@@ -2160,6 +2160,22 @@ function toggleLayerPositionLock(id){
   l.positionLocked=!l.positionLocked;
   render();
 }
+// Real request: lock/unlock a whole group at once instead of having to lock every member
+// individually. Stores the lock on each member (so canvas dragging of an individual member,
+// and the group-drag overlay via g.positionLocked, both actually respect it) and mirrors it
+// onto the group's own synthetic layer too, purely so the layer panel's row can show a single
+// locked/unlocked icon for the group without having to inspect every member on every render.
+function toggleGroupPositionLock(groupId){
+  const g=current().layers.find(o=>o.id===groupId);
+  if(!g || !isGroupLayer(g))return;
+  const members=groupMembers(groupId);
+  if(!members.length)return;
+  save();
+  const nowLocked=!members.every(m=>m.positionLocked);
+  members.forEach(m=>{ m.positionLocked=nowLocked; });
+  g.positionLocked=nowLocked;
+  render();
+}
 function groupSelectedLayers(){
   ensureGroupState();
   const ids=state.selectedLayerIds.slice();
@@ -2463,6 +2479,7 @@ function renderManualGroupOverlay(stage,pi){
  let drag=null;
  overlay.addEventListener('pointerdown',e=>{
    if(state.handMode)return;
+   if(g.positionLocked)return;
    save();
    const rect=stage.getBoundingClientRect();
    drag={x:e.clientX,y:e.clientY,rect,snap:makeGroupSnapshot(g.id),resize:!!(e.target.closest&&e.target.closest('.manualGroupHandle'))};
@@ -10298,7 +10315,12 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
   function updateButton(){
     var btn=document.getElementById('ppLayerPanelWideToggle');
     if(!btn)return;
-    btn.textContent=isWide()?'normal panel':'wide panel';
+    // Real report: the button's visible text used to name the OTHER mode (what clicking
+    // switches to), while the hint text right next to it names the CURRENT mode ("Normal mode:
+    // compact layer list." + a button reading "wide panel") - reading them together, "wide
+    // panel" looked like it was describing what's on screen right now, when it was actually
+    // narrow. Match the hint's convention: the button now names whichever mode is active.
+    btn.textContent=isWide()?'wide panel':'normal panel';
     btn.title=isWide()?'Return Layers panel to normal width':'Expand Layers panel for bigger thumbnails and longer names';
     btn.setAttribute('aria-pressed', isWide()?'true':'false');
     var hint=document.getElementById('ppLayerPanelWideHint');
@@ -17161,20 +17183,26 @@ else install();
     });
 
     // Real request: lock a layer in place so it can't be accidentally dragged/resized while
-    // working around it - not offered for group rows (locking is per-member; lock each member
-    // instead) or custom mock-ups (already have their own separate controls).
+    // working around it - not offered for custom mock-ups (already have their own separate
+    // controls). Group rows get one too now: locks/unlocks every member together instead of
+    // requiring each member to be locked one at a time (locked shows whenever every member is
+    // already locked, matching toggleGroupPositionLock's own "lock all unless all already
+    // locked" direction).
     // Always emit something for this grid column (even when there's no lock button to show) -
     // the row is a fixed-column CSS grid shared with every other row, so skipping the element
     // entirely would shift everything after it out of alignment with rows that do have one.
     var lockBtn;
-    if(!group && !l.customMockup){
+    if(!l.customMockup){
+      var groupLocked=group && (function(){ var mem=typeof groupMembers==='function'?groupMembers(l.id):[]; return mem.length>0 && mem.every(function(m){return m.positionLocked;}); })();
+      var lockedNow=group?groupLocked:l.positionLocked;
       lockBtn=document.createElement('button');
-      lockBtn.type='button'; lockBtn.className='lockBtn '+(l.positionLocked?'layerLocked':'');
-      lockBtn.title=l.positionLocked?'unlock layer':'lock layer in place';
-      lockBtn.textContent=l.positionLocked?'🔒':'🔓';
+      lockBtn.type='button'; lockBtn.className='lockBtn '+(lockedNow?'layerLocked':'');
+      lockBtn.title=lockedNow?(group?'unlock all layers in this group':'unlock layer'):(group?'lock all layers in this group':'lock layer in place');
+      lockBtn.textContent=lockedNow?'🔒':'🔓';
       lockBtn.addEventListener('click',function(e){
         e.stopPropagation();
-        if(typeof toggleLayerPositionLock==='function')toggleLayerPositionLock(l.id);
+        if(group){ if(typeof toggleGroupPositionLock==='function')toggleGroupPositionLock(l.id); }
+        else if(typeof toggleLayerPositionLock==='function')toggleLayerPositionLock(l.id);
       });
     }else{
       lockBtn=document.createElement('span');

@@ -82,6 +82,29 @@ test('toggling wide panel mode actually grows the layer list', async ({ page }) 
   expect(after).toBe('440px');
 });
 
+// Real report: the wide-panel toggle button's own visible text used to name the OTHER mode -
+// the mode clicking it switches TO - while the hint text right next to it names the CURRENT
+// mode ("Normal mode: compact layer list." sitting next to a button reading "wide panel").
+// Read together, "wide panel" looked like it was describing what's on screen right now, when
+// the panel was actually narrow. The button now names whichever mode is actually active,
+// matching the hint's own convention.
+test('the wide/normal panel button names the mode that is actually active, not the other one', async ({ page }) => {
+  const initial = await page.evaluate(() => ({
+    isWide: document.body.classList.contains('ppLayersWide'),
+    btnText: document.getElementById('ppLayerPanelWideToggle')?.textContent,
+  }));
+  expect(initial.isWide).toBe(false);
+  expect(initial.btnText).toBe('normal panel');
+
+  await page.evaluate(() => window.ppToggleLayersPanelWide());
+  const afterToggle = await page.evaluate(() => ({
+    isWide: document.body.classList.contains('ppLayersWide'),
+    btnText: document.getElementById('ppLayerPanelWideToggle')?.textContent,
+  }));
+  expect(afterToggle.isWide).toBe(true);
+  expect(afterToggle.btnText).toBe('wide panel');
+});
+
 // Real request: group/select multiple layers so a badge and its label can be moved together
 // instead of separately. Multi-select/group/ungroup (toggleLayerMultiSelect, groupSelectedLayers,
 // ungroupSelected) already existed at the data level but had been held back post-launch (hidden
@@ -310,6 +333,65 @@ test('locking a layer blocks dragging and deleting it, until unlocked', async ({
     return { x: l.x, y: l.y };
   }, id);
   expect(afterUnlockDrag.x).not.toBe(before.x);
+});
+
+// Real request: lock a whole group at once instead of having to lock every member one at a
+// time. Locking now applies positionLocked to every member (so a member's own canvas drag is
+// blocked the same way a normal locked layer's is) and to the group's own synthetic layer (so
+// the group-drag overlay - a separate interaction path with its own pointerdown handler - also
+// refuses to move it).
+test('locking a group from its row locks every member, blocks the group-drag overlay, and unlocks them all together', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => { addText('text'); addBadge('oval'); });
+  await page.waitForTimeout(1800);
+
+  await clickResilient(page, page.locator('#multiSelectBtn'));
+  const checks = page.locator('#layerList .layerCheck');
+  await expect(checks).toHaveCount(2);
+  await clickResilient(page, checks.nth(0));
+  await clickResilient(page, checks.nth(1));
+  await clickResilient(page, page.locator('#groupSelectedBtn'));
+  await page.waitForTimeout(300);
+
+  const groupId = await page.evaluate(() => state.selected);
+  const groupLockBtn = page.locator('#layerList .layerItem.groupRow .lockBtn').first();
+  await expect(groupLockBtn).toHaveText('🔓');
+
+  await clickResilient(page, groupLockBtn);
+  await page.waitForTimeout(200);
+
+  const afterLock = await page.evaluate((gid) => ({
+    memberLocks: current().layers.filter((l) => l.groupId === gid).map((l) => l.positionLocked),
+    groupLocked: current().layers.find((l) => l.id === gid).positionLocked,
+  }), groupId);
+  expect(afterLock.memberLocks).toEqual([true, true]);
+  expect(afterLock.groupLocked).toBe(true);
+  await expect(groupLockBtn).toHaveText('🔒');
+
+  // The group-drag overlay is a separate interaction path from a single member's own drag -
+  // it must independently refuse to move a locked group.
+  await page.evaluate((gid) => { state.selected = gid; render(); }, groupId);
+  await page.waitForTimeout(300);
+  const before = await page.evaluate((gid) => current().layers.filter((l) => l.groupId === gid).map((l) => ({ x: l.x, y: l.y })), groupId);
+  const overlay = page.locator('.manualGroupOverlay');
+  await expect(overlay).toBeVisible();
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 40, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  const afterDragAttempt = await page.evaluate((gid) => current().layers.filter((l) => l.groupId === gid).map((l) => ({ x: l.x, y: l.y })), groupId);
+  expect(afterDragAttempt).toEqual(before);
+
+  await clickResilient(page, groupLockBtn);
+  await page.waitForTimeout(200);
+  const afterUnlock = await page.evaluate((gid) => ({
+    memberLocks: current().layers.filter((l) => l.groupId === gid).map((l) => l.positionLocked),
+    groupLocked: current().layers.find((l) => l.id === gid).positionLocked,
+  }), groupId);
+  expect(afterUnlock.memberLocks).toEqual([false, false]);
+  expect(afterUnlock.groupLocked).toBe(false);
 });
 
 // Real report: a small badge became nearly impossible to just drag and move - almost any tap
