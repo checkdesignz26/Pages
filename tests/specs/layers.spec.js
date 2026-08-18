@@ -164,6 +164,49 @@ test('grouping two layers via the layer panel lets them be dragged together, the
   expect(afterUngroup.every((l) => !l.groupId)).toBe(true);
 });
 
+// Real report: "you can't close the group layer". Two independent, unrelated bugs stacked to
+// silently swallow every tap on a group row's collapse/expand arrow (a <span class="dragGrip">,
+// not a <button>):
+// 1. The touch-friendly layer-panel reorder patch (pp-layer-panel-touch-drag-patch) treated any
+//    tap that landed exactly on a .dragGrip as the start of a drag-to-reorder gesture and called
+//    preventDefault()/stopPropagation() on the pointerdown - which suppresses the browser's
+//    follow-up synthetic click entirely - without checking whether the row was even draggable
+//    (group rows aren't; their grip is the collapse toggle, not a reorder handle).
+// 2. Even with that fixed, a much older document-level CAPTURE-phase click listener ("v169 layer
+//    panel selection sync surgery") ran before the grip's own click listener ever got a chance -
+//    its own exclusion list only checked for real <button> elements, missed the grip <span>
+//    entirely, and called stopPropagation() + selectLayer() instead, re-rendering the row (and
+//    replacing the grip DOM node) out from under the gesture before the real toggle could run.
+test('collapsing and expanding a group via its row arrow actually works', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => { addText('text'); addBadge('oval'); });
+  await page.waitForTimeout(1800);
+
+  await clickResilient(page, page.locator('#multiSelectBtn'));
+  const checks = page.locator('#layerList .layerCheck');
+  await expect(checks).toHaveCount(2);
+  await clickResilient(page, checks.nth(0));
+  await clickResilient(page, checks.nth(1));
+  await clickResilient(page, page.locator('#groupSelectedBtn'));
+  await page.waitForTimeout(300);
+
+  await expect(page.locator('#layerList .childLayerRow')).toHaveCount(2);
+
+  const grip = page.locator('#layerList .layerItem.groupRow .dragGrip').first();
+  await expect(grip).toHaveText('▼');
+  await clickResilient(page, grip);
+  await page.waitForTimeout(200);
+
+  await expect(page.locator('#layerList .childLayerRow')).toHaveCount(0);
+  await expect(page.locator('#layerList .layerItem.groupRow .dragGrip').first()).toHaveText('▶');
+
+  await clickResilient(page, page.locator('#layerList .layerItem.groupRow .dragGrip').first());
+  await page.waitForTimeout(200);
+
+  await expect(page.locator('#layerList .childLayerRow')).toHaveCount(2);
+  await expect(page.locator('#layerList .layerItem.groupRow .dragGrip').first()).toHaveText('▼');
+});
+
 // Real report: grouped two layers, tapped "duplicate", and the copy was invisible - nothing
 // changed on the page the group was copied from. A group is a synthetic, invisible
 // (display:none) organizational layer; its actual visible content lives in separate member

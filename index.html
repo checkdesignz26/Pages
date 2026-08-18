@@ -12358,6 +12358,13 @@ window.addEventListener('DOMContentLoaded',function(){
   document.addEventListener('click',function(e){
     const row=e.target && e.target.closest ? e.target.closest('#layerList .layerItem[data-id]') : null;
     if(!row) return;
+    // Real report: a group row's collapse/expand toggle (v/>) is a <span class="dragGrip">, not
+    // a <button> - this capture-phase listener runs before the grip's own click listener even
+    // gets a chance to fire (its stopPropagation() below cuts the event off before it reaches
+    // the target), and the exclusion just below only ever checked for real <button> elements,
+    // so every tap on the collapse arrow got silently hijacked into a plain row-select instead
+    // of toggling anything.
+    if(e.target.closest && e.target.closest('.dragGrip')) return;
     const hitButton=e.target.closest && e.target.closest('button');
     // Let drag/drop, hide/open, and multi-select checkbox buttons keep their own behaviour.
     if(hitButton && !/select/i.test(hitButton.textContent||'')) return;
@@ -13341,9 +13348,18 @@ window.addEventListener('DOMContentLoaded',function(){
     var GRIP_TOLERANCE=14; // px - the visible grip icon is small (~20px), so
     // forgive near-misses instead of requiring a pixel-perfect finger tap.
     function findGripNear(e){
+      // A group row's grip is its collapse/expand toggle (v/>), not a reorder handle - groups
+      // can't be dragged to reorder anyway (row.draggable is false for them). Checked before
+      // the "direct hit" shortcut just below, not just the near-miss fallback path further down
+      // - a tap that lands exactly on the grip (the common case) took that shortcut and skipped
+      // straight past a check placed only in the fallback, still preventDefault()'ing/
+      // stopPropagation()'ing the pointerdown before the grip's own click listener (which calls
+      // toggleGroupExpanded) ever ran - preventDefault() on pointerdown suppresses the browser's
+      // follow-up synthetic click entirely, so tapping the arrow silently did nothing.
+      var row=closestRow(e.target);
+      if(row && row.classList.contains('groupRow')) return null;
       var direct=e.target && e.target.closest && e.target.closest('.dragGrip');
       if(direct) return direct;
-      var row=closestRow(e.target);
       if(!row) return null;
       var grip=row.querySelector('.dragGrip');
       if(!grip) return null;
@@ -13445,7 +13461,9 @@ window.addEventListener('DOMContentLoaded',function(){
   function markRows(){
     var list=layerList(); if(!list) return;
     list.querySelectorAll('.layerItem[data-id]').forEach(function(row){
-      row.setAttribute('draggable','true');
+      var isGroup=row.classList.contains('groupRow');
+      row.setAttribute('draggable', isGroup?'false':'true');
+      if(isGroup) return; // its grip is the collapse toggle, not a reorder handle - leave its own title alone
       var grip=row.querySelector('.dragGrip');
       if(grip){ grip.title='drag to reorder layer'; grip.setAttribute('aria-label','drag to reorder layer'); }
     });
