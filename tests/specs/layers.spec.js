@@ -200,6 +200,52 @@ test('duplicating a selected group copies its member layers too, not just the in
   }
 });
 
+// Real report, with a screenshot: grouped two layers, tapped "duplicate" on the canvas reuse
+// bar (a SEPARATE implementation from the layer panel's own duplicateSelected(), fixed above),
+// and the copy was empty again - the reuse bar's ppDuplicateSelectedLayer() had the identical
+// bug, cloning only the invisible group wrapper via a completely separate insertLayer() helper
+// that had never been made group-aware either.
+test('duplicating a group from the canvas reuse bar also copies its member layers, not just the wrapper', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => { addText('text'); addBadge('oval'); });
+  await page.waitForTimeout(1800);
+
+  await clickResilient(page, page.locator('#multiSelectBtn'));
+  const checks = page.locator('#layerList .layerCheck');
+  await expect(checks).toHaveCount(2);
+  await clickResilient(page, checks.nth(0));
+  await clickResilient(page, checks.nth(1));
+  await clickResilient(page, page.locator('#groupSelectedBtn'));
+  await page.waitForTimeout(300);
+
+  const beforeDup = await page.evaluate(() => ({
+    groupId: state.selected,
+    memberCount: current().layers.filter((l) => l.groupId === state.selected).length,
+  }));
+  expect(beforeDup.memberCount).toBe(2);
+
+  await expect(page.locator('#ppLayerReuseBar')).toHaveCount(1);
+  await clickResilient(page, page.locator('#ppLayerReuseBar button:has-text("duplicate")'));
+  await page.waitForTimeout(300);
+
+  const afterDup = await page.evaluate((oldGroupId) => {
+    const newGroupId = state.selected;
+    return {
+      changedSelection: newGroupId !== oldGroupId,
+      newMemberCount: current().layers.filter((l) => l.groupId === newGroupId).length,
+      oldMemberCount: current().layers.filter((l) => l.groupId === oldGroupId).length,
+    };
+  }, beforeDup.groupId);
+
+  expect(afterDup.changedSelection).toBe(true);
+  expect(afterDup.newMemberCount).toBe(2);
+  expect(afterDup.oldMemberCount).toBe(2);
+
+  // The new group's members must actually render as nested rows in the panel, not just exist
+  // in the data model.
+  await expect(page.locator('#layerList .childLayerRow')).toHaveCount(4);
+});
+
 // Real request: a lock so a layer can't be accidentally moved while working around it on the
 // canvas, separate from grouping. Deliberately its own new flag (l.positionLocked) rather than
 // the existing l.locked/l.lockText - those get force-cleared to false on every render() for any

@@ -11296,10 +11296,44 @@ window.addEventListener('DOMContentLoaded',function(){
     layersOf(p).push(c);
     return c;
   }
+  // A group is a synthetic, invisible (display:none) organizational layer - its real content
+  // lives in separate member layers tagged with a matching groupId. This duplicate/copy/paste
+  // bar (a separate implementation from the main duplicateSelected()) only ever cloned whichever
+  // single layer was selected, same bug fixed there: for a group that's just the empty wrapper,
+  // so the "copy" had nothing in it and nothing visible, while the real content never got
+  // duplicated at all. Bundle the group with its members and insert both together.
+  function isGroupBundle(x){ return !!(x && x.__ppGroupBundle && x.group && Array.isArray(x.members)); }
+  function insertGroupBundle(bundle,p,opts){
+    opts=opts||{};
+    var newGroupId=uidSafe();
+    var newMembers=bundle.members.map(function(m){
+      var mc=clone(m);
+      mc.id=uidSafe();
+      mc.groupId=newGroupId;
+      mc._manualName=true;
+      if(opts.offset){ mc.x=(+mc.x||0)+3; mc.y=(+mc.y||0)+3; }
+      mc.z=nextZSafe(p);
+      return mc;
+    });
+    var gc=clone(bundle.group);
+    gc.id=newGroupId;
+    gc.name=opts.keepName ? (bundle.group.name||bundle.group.type||'group') : copyName(bundle.group.name||bundle.group.type,p);
+    gc._manualName=true;
+    gc.z=nextZSafe(p);
+    newMembers.forEach(function(mc){ layersOf(p).push(mc); });
+    layersOf(p).push(gc);
+    if(typeof updateGroupLayerBounds==='function') updateGroupLayerBounds(gc);
+    return gc;
+  }
+  function groupBundleFor(l){
+    var members=(typeof groupMembers==='function')?groupMembers(l.id):[];
+    return {__ppGroupBundle:true, group:clone(l), members:members.map(clone)};
+  }
   window.ppCopySelectedLayer=function(){
     var l=selectedLayer();
     if(!l){ alert('Select a layer first.'); return false; }
-    clipboardLayer=clone(l); window.ppLayerClipboard=clipboardLayer;
+    clipboardLayer=(typeof isGroupLayer==='function' && isGroupLayer(l)) ? groupBundleFor(l) : clone(l);
+    window.ppLayerClipboard=clipboardLayer;
     var note=document.getElementById('ppLayerClipboardNote');
     if(note) note.textContent='copied: '+(l.name||l.type||'layer')+' · ready to paste to another page';
     return false;
@@ -11308,6 +11342,12 @@ window.addEventListener('DOMContentLoaded',function(){
     var l=selectedLayer(); if(!l){ alert('Select a layer first.'); return false; }
     try{ if(typeof save==='function') save(); }catch(e){}
     var s=appState(), p=currentPage();
+    if(typeof isGroupLayer==='function' && isGroupLayer(l)){
+      var gc=insertGroupBundle(groupBundleFor(l),p,{offset:true});
+      s.selected=gc.id;
+      redraw();
+      return false;
+    }
     var c=insertLayer(l,p,{offset:true});
     s.selected=c.id;
     redraw();
@@ -11319,25 +11359,31 @@ window.addEventListener('DOMContentLoaded',function(){
     if(!src){
       var l=selectedLayer();
       if(!l){ alert('Select and copy a layer first.'); return false; }
-      src=clone(l); clipboardLayer=src; window.ppLayerClipboard=src;
+      src=(typeof isGroupLayer==='function' && isGroupLayer(l)) ? groupBundleFor(l) : clone(l);
+      clipboardLayer=src; window.ppLayerClipboard=src;
     }
     if(!all.length){ alert('No pages found. Add a page first.'); return false; }
     var currentIndex=+s.selectedPage||0;
+    var srcName=isGroupBundle(src) ? (src.group.name||src.group.type||'group') : (src.name||src.type||'layer');
     var defaultTarget=String(Math.min(currentIndex+2, all.length));
-    var answer=prompt('Paste "'+(src.name||src.type||'layer')+'" to which page?\n\nType a page number, for example 2.\nType all to paste to every other page.', defaultTarget);
+    var answer=prompt('Paste "'+srcName+'" to which page?\n\nType a page number, for example 2.\nType all to paste to every other page.', defaultTarget);
     if(answer==null) return false;
     answer=String(answer).trim().toLowerCase();
     try{ if(typeof save==='function') save(); }catch(e){}
     var pasted=[];
+    function pasteOne(p,idx,opts){
+      var layer=isGroupBundle(src) ? insertGroupBundle(src,p,opts) : insertLayer(src,p,opts);
+      pasted.push({layer:layer,index:idx});
+    }
     if(answer==='all' || answer==='all pages'){
       all.forEach(function(p,i){
-        if(i!==currentIndex) pasted.push({layer:insertLayer(src,p,{keepName:true}),index:i});
+        if(i!==currentIndex) pasteOne(p,i,{keepName:true});
       });
     }else{
       var num=parseInt(answer,10);
       if(!num || num<1 || num>all.length){ alert('Page not found. Use 1 to '+all.length+'.'); return false; }
       var idx=num-1;
-      pasted.push({layer:insertLayer(src,all[idx],{keepName:true,offset:idx===currentIndex}),index:idx});
+      pasteOne(all[idx],idx,{keepName:true,offset:idx===currentIndex});
     }
     if(pasted.length){
       var last=pasted[pasted.length-1];
