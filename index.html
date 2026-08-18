@@ -1169,6 +1169,9 @@ body.autoGroupEditing .layer.collectionGrouped{
   position:absolute!important;right:-18px!important;bottom:-18px!important;width:36px!important;height:36px!important;border-radius:12px!important;
   background:linear-gradient(90deg,#9b6bff,#ff8ed6)!important;border:4px solid #fff!important;box-shadow:0 6px 16px rgba(0,0,0,.35)!important;touch-action:none!important;
 }
+.manualGroupOverlay.ppTinyGroupOverlay .manualGroupHandle{
+  right:-7px!important;bottom:-7px!important;width:16px!important;height:16px!important;border-radius:6px!important;border-width:2px!important;
+}
 
 
 
@@ -2476,6 +2479,13 @@ function renderManualGroupOverlay(stage,pi){
  overlay.style.left=b.x+'%';overlay.style.top=b.y+'%';overlay.style.width=b.w+'%';overlay.style.height=b.h+'%';
  overlay.innerHTML='<div class="manualGroupLabel">group</div><div class="manualGroupHandle"></div>';
  stage.appendChild(overlay);
+ // A small group's overlay box can be smaller than the resize handle's own 36px footprint -
+ // the handle then covers the whole box (and beyond), so every pointerdown lands on
+ // e.target.closest('.manualGroupHandle') and gets treated as a resize, leaving no way to
+ // grab the overlay to move it. Shrink the handle for small groups so a movable area remains.
+ const stageRect=stage.getBoundingClientRect();
+ const overlayPxW=b.w/100*stageRect.width, overlayPxH=b.h/100*stageRect.height;
+ overlay.classList.toggle('ppTinyGroupOverlay', overlayPxW<44 || overlayPxH<44);
  let drag=null;
  overlay.addEventListener('pointerdown',e=>{
    if(state.handMode)return;

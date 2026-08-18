@@ -437,6 +437,58 @@ test('locking a group from its row locks every member, blocks the group-drag ove
   expect(afterUnlock.groupLocked).toBe(false);
 });
 
+// Real report, with a screen recording: duplicated a group and then couldn't move it at all.
+// The duplicate's members happened to be small and close together, so the group-drag overlay's
+// bounding box was tiny - but .manualGroupHandle is a fixed 36px square hanging off the
+// bottom-right corner (renderManualGroupOverlay's own CSS), so for a small enough group it
+// covers the whole overlay and then some. Every pointerdown then lands on
+// e.target.closest('.manualGroupHandle') and gets treated as a resize (applyGroupResize)
+// instead of a move (applyGroupMove) - there was no area left to grab for a plain drag.
+test('a tiny group still has a safe area to drag-move, not just its resize handle', async ({ page }) => {
+  const groupId = await page.evaluate(() => {
+    const stageRect = document.querySelector('.stage').getBoundingClientRect();
+    // Comfortably under the 44px-wide safe-drag threshold, in real rendered pixels.
+    const w = (20 / stageRect.width) * 100;
+    const h = (20 / stageRect.height) * 100;
+    const a = Object.assign(layer('rectangle', { name: 'tiny a', fill: '#ff69b4' }), { x: 40, y: 40, w, h, z: 1 });
+    const b = Object.assign(layer('rectangle', { name: 'tiny b', fill: '#69b4ff' }), { x: 40 + w / 2, y: 40 + h / 2, w, h, z: 2 });
+    current().layers.push(a, b);
+    const gid = uid();
+    a.groupId = gid; b.groupId = gid;
+    const g = layer('group', { id: gid, name: 'group', x: 0, y: 0, w: 10, h: 10, z: 3, src: null, fit: 'cover' });
+    current().layers.push(g);
+    updateGroupLayerBounds(g);
+    state.selected = gid;
+    render();
+    return gid;
+  });
+  await page.waitForTimeout(300);
+
+  const overlay = page.locator('.manualGroupOverlay');
+  await expect(overlay).toBeVisible();
+  await expect(overlay).toHaveClass(/ppTinyGroupOverlay/);
+  const box = await overlay.boundingBox();
+
+  const centreHit = await page.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y);
+    return el ? el.className : null;
+  }, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+  expect(centreHit).not.toMatch(/manualGroupHandle/);
+
+  const before = await page.evaluate((gid) => current().layers.filter((l) => l.groupId === gid).map((l) => ({ x: l.x, y: l.y })), groupId);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2 + 30, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  const after = await page.evaluate((gid) => current().layers.filter((l) => l.groupId === gid).map((l) => ({ x: l.x, y: l.y })), groupId);
+
+  for (let i = 0; i < before.length; i++) {
+    expect(after[i].x).toBeGreaterThan(before[i].x);
+    expect(after[i].y).toBeGreaterThan(before[i].y);
+  }
+});
+
 // Real report: a small badge became nearly impossible to just drag and move - almost any tap
 // landed on a resize handle instead, moving/resizing it unintentionally. Confirmed directly by
 // sampling elementFromPoint() across a shrunk badge's whole box: even its dead center resolved to
