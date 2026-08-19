@@ -18146,7 +18146,21 @@ else install();
       }catch(e){}
       }else if(['text','label','rectangle','square'].includes(l.type)||l.text){
         ctx.fillStyle=l.fill==='transparent'?'rgba(0,0,0,0)':(l.fill||'#ffffff'); ctx.strokeStyle=l.border||'#111111'; ctx.lineWidth=(l.borderW||0)*fontScale;
-        if(l.disclosureBadge){rounded(ctx,-w/2,-h/2,w,h,h/2);ctx.fill();if(l.borderW)ctx.stroke();}else{ctx.fillRect(-w/2,-h/2,w,h); if(l.borderW)ctx.strokeRect(-w/2,-h/2,w,h);}
+        // Real report: a badge/label shape (oval, pill, rounded, circle, ribbon - addBadge()'s
+        // badgeShape) exported as a plain rectangle instead of its actual shape. Most noticeable
+        // with an empty caption (the reported case), since there was no text to distract from it,
+        // but it was always wrong - this exporter works from layer data alone and never mirrored
+        // the badgeShape->CSS border-radius/clip-path logic renderLayer() uses live (see the
+        // l.type==='label' block a couple thousand lines up, near "const shape=l.badgeShape").
+        if(l.disclosureBadge){rounded(ctx,-w/2,-h/2,w,h,h/2);ctx.fill();if(l.borderW)ctx.stroke();}
+        else if(l.type==='label' && l.badgeShape==='circle'){ctx.beginPath();ctx.ellipse(0,0,w/2,h/2,0,0,Math.PI*2);ctx.closePath();ctx.fill();if(l.borderW)ctx.stroke();}
+        else if(l.type==='label' && l.badgeShape==='ribbon'){
+          ctx.beginPath();ctx.moveTo(-w/2,-h/2);ctx.lineTo(w/2,-h/2);ctx.lineTo(0.42*w,0);ctx.lineTo(w/2,h/2);ctx.lineTo(-w/2,h/2);ctx.lineTo(-0.42*w,0);ctx.closePath();
+          ctx.fill();if(l.borderW)ctx.stroke();
+        }
+        else if(l.type==='label' && (l.badgeShape==='oval'||l.badgeShape==='pill')){rounded(ctx,-w/2,-h/2,w,h,Math.min(w,h)/2);ctx.fill();if(l.borderW)ctx.stroke();}
+        else if(l.type==='label' && (!l.badgeShape||l.badgeShape==='rounded')){rounded(ctx,-w/2,-h/2,w,h,Math.min(22*fontScale,Math.min(w,h)/2));ctx.fill();if(l.borderW)ctx.stroke();}
+        else{ctx.fillRect(-w/2,-h/2,w,h); if(l.borderW)ctx.strokeRect(-w/2,-h/2,w,h);}
         var text=l.disclosureBadge?'AI Generated':(l.text||''); if(text){
           var fs=(l.fontSize||36)*fontScale, lh=(l.lineHeight||1.05)*fs;
           ctx.fillStyle=l.color||'#111111'; ctx.textAlign=l.textAlign||'center'; ctx.textBaseline='middle';

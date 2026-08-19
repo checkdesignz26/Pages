@@ -793,3 +793,45 @@ test.describe(() => {
     expect(result.order).toEqual(['two', 'one']);
   });
 });
+
+// Real report, with a project file: a badge used without any caption text exported as a plain
+// rectangle instead of its actual shape (a circle, in the reported project) - most visible with
+// no text to distract from it, but true of every badgeShape. The PNG/ZIP export
+// (renderPageToCanvas) draws straight from layer data and never mirrored the badgeShape->CSS
+// border-radius/clip-path mapping the live editor uses (see the l.type==='label' block in
+// renderLayer) - it just filled a plain rectangle for every label layer regardless of shape.
+test('exporting a circular badge fills a circle, not a plain rectangle, even with no caption text', async ({ page }) => {
+  const pixel = await page.evaluate(async () => {
+    save();
+    state.pages = [{
+      type: 'listing', w: 1000, h: 1000, layers: [{
+        id: 'badge1', type: 'label', badgeShape: 'circle', text: '',
+        x: 25, y: 25, w: 50, h: 50, r: 0, opacity: 1, scale: 1, z: 1,
+        fill: '#ff0000', border: '#000000', borderW: 0,
+      }],
+    }];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+
+    const p = state.pages[0];
+    const canvas = await window.renderPageToCanvas(p);
+    const ctx = canvas.getContext('2d');
+    // The badge spans px (250,250)-(750,750). A true circle inscribed in that square never
+    // reaches its corners - (260,260) sits outside the circle but inside the old buggy
+    // rectangle fill. The centre (500,500) is inside both, so it can't tell them apart.
+    return {
+      corner: Array.from(ctx.getImageData(260, 260, 1, 1).data),
+      center: Array.from(ctx.getImageData(500, 500, 1, 1).data),
+    };
+  });
+
+  // Corner stays the white page background - a rectangle fill would have painted it red.
+  expect(pixel.corner[0]).toBeGreaterThan(240);
+  expect(pixel.corner[1]).toBeGreaterThan(240);
+  expect(pixel.corner[2]).toBeGreaterThan(240);
+  // Centre is inside the circle either way - painted red.
+  expect(pixel.center[0]).toBeGreaterThan(200);
+  expect(pixel.center[1]).toBeLessThan(60);
+  expect(pixel.center[2]).toBeLessThan(60);
+});
