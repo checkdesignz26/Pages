@@ -1342,7 +1342,7 @@ body.autoGroupEditing .layer.collectionGrouped{
     <button id="stripDirHorizontalBtn" type="button" onclick="stripDirection='horizontal';chooseStripDirection('horizontal')">horizontal stash</button>
   </div>
   <p class="smallText">Horizontal stash stacks full-width fabric strips with stronger shadows.</p>
-</div><div class="frameCountRow"><label>number of slots</label><div class="frameStepper" aria-label="number of pattern slots"><button type="button" onclick="changeFrameCount(-1)">−</button><span id="cardCountDisplay">1</span><button type="button" onclick="changeFrameCount(1)">+</button><input id="cardCount" type="hidden" value="1"></div></div><button class="full primary" onclick="generateSelectedShowcaseLayout()">generate layout</button><p class="smallText">After generating: tap a strip, tile, rectangle or circle so it highlights, then choose a pattern from the tray and tap <strong>fill selected slot</strong>.</p></div></div>
+</div><div class="frameCountRow"><label>number of slots</label><div class="frameStepper" aria-label="number of pattern slots"><button type="button" onclick="changeFrameCount(-1)">−</button><span id="cardCountDisplay">1</span><button type="button" onclick="changeFrameCount(1)">+</button><input id="cardCount" type="hidden" value="1"></div></div><label class="checkRow" id="showcaseCaptionRow"><input id="showcaseAddCaptions" type="checkbox">add a caption below each shape</label><button class="full primary" onclick="generateSelectedShowcaseLayout()">generate layout</button><p class="smallText">After generating: tap a strip, tile, rectangle or circle so it highlights, then choose a pattern from the tray and tap <strong>fill selected slot</strong>.</p></div></div>
   <div class="box trayTop frameWowBox"><h2>frames</h2><div class="panelBody"><p class="smallText"><strong>Add a pattern frame.</strong> Choose a built-in shape or add your own PNG shape with transparency, then fill it from the Pattern Tray.</p><button class="full primary" onclick="toggleFramePicker()">add frame</button><div id="framePicker" class="framePicker hidden"><div class="framePickerTitle">built-in frames</div><div class="frameShapeGrid"><button onclick="addPatternFrame('flower')">✿<span>flower</span></button><button onclick="addPatternFrame('heart')">♥<span>heart</span></button><button onclick="addPatternFrame('star')">★<span>star</span></button><button onclick="addPatternFrame('circle')">●<span>circle</span></button><button onclick="addPatternFrame('arch')">⌒<span>arch</span></button><button onclick="addPatternFrame('label')">▭<span>label</span></button></div><div class="framePickerTitle">custom frame</div><input id="customFrameInput" class="hidden" type="file" accept="image/png,image/*" onchange="addCustomFrameFromPNG(event)"><button class="full" onclick="customFrameInput.click()">add your PNG</button><p class="smallText">Tip: use a PNG shape with a transparent background. Pattern Pages turns the visible shape into a fillable frame.</p></div></div></div>
 
 
@@ -12756,7 +12756,9 @@ window.addEventListener('DOMContentLoaded',function(){
     return null;
   }
   function isScalableShowcaseSlot(l){
-    return !!(l && l.generatedPatternLayout && (l.slotShape === 'circle' || l.slotShape === 'square' || l.slotShape === 'rectangle'));
+    // Captions ride along with the scale/move sliders too, so a caption stays put directly
+    // under its own tile instead of drifting once the layout is nudged or resized.
+    return !!(l && ((l.generatedPatternLayout && (l.slotShape === 'circle' || l.slotShape === 'square' || l.slotShape === 'rectangle')) || l.showcaseCaption));
   }
   function getSlots(){
     var p=getCurrentPage();
@@ -13536,6 +13538,7 @@ window.addEventListener('DOMContentLoaded',function(){
     if(h)h.classList.toggle('active',t==='strips'&&direction()==='horizontal');
     var gen=byId('showcaseGenerateBtn');if(gen)gen.textContent=hasShowcase()?'update layout':'generate layout';
     var del=byId('showcaseDeleteBtn');if(del)del.disabled=!hasShowcase();
+    var capRow=byId('showcaseCaptionRow');if(capRow)capRow.classList.toggle('showcaseHidden',t==='strips');
   }
   // NOTE(consolidation): deletePatternShowcase/changeFrameCount/generateSelectedShowcaseLayout/
   // chooseStripDirection had earlier generations here; all are superseded further down the file.
@@ -17480,7 +17483,9 @@ else install();
     return null;
   }
   function isShowcaseSlot(l){
-    return !!(l && l.generatedPatternLayout && (l.slotShape==='circle' || l.slotShape==='square' || l.slotShape==='rectangle'));
+    // Captions ride along with the scale/move sliders too, so a caption stays put directly
+    // under its own tile instead of drifting once the layout is nudged or resized.
+    return !!(l && ((l.generatedPatternLayout && (l.slotShape==='circle' || l.slotShape==='square' || l.slotShape==='rectangle')) || l.showcaseCaption));
   }
   function getSlots(){
     var p=getCurrentPage();
@@ -18100,6 +18105,7 @@ else install();
   }
   #showcaseRemoveBtn:disabled{opacity:.42!important;filter:saturate(.45)!important;}
   #stripDirectionControls.showcaseHidden{display:none!important;}
+  #showcaseCaptionRow.showcaseHidden{display:none!important;}
 </style>
 <script id="ppages-v180c-showcase-fix-js">
 (function(){
@@ -18127,11 +18133,40 @@ else install();
     return l;
   }
 
+  // Real request: an option to add a caption under each generated circle/square/rectangle, for
+  // labelling a pattern showcase (e.g. naming each swatch on an Etsy listing image). Captions are
+  // plain text layers, deliberately kept off l.generatedPatternLayout/l.patternSlot - those two
+  // flags are read by many independent, unrelated patches across this file (magic-fill's "is this
+  // an empty pattern slot" check, the fill-preservation reuse() above, the layer-panel's
+  // collapsed-showcase-row grouping) that all assume a matched layer is an image-fillable tile.
+  // Tagging captions the same way would have silently pulled them into every one of those, e.g.
+  // magic fill trying to drop a pattern image into a caption's text box. l.showcaseCaption is its
+  // own independent flag instead, and every place that wipes/removes the generated showcase is
+  // taught to also match it (see the two filter() calls below and in removePatternShowcase).
+  function reuseCaption(old,i,x,y,w,h){
+    var l=(old&&old.showcaseCaption)?old:freshLayer('text',{});
+    var id=l.id, text=(old&&typeof old.text==='string')?old.text:'caption';
+    Object.keys(l).forEach(function(k){delete l[k];});
+    Object.assign(l,{
+      id:id||('l'+Date.now()+'cap'+i),type:'text',name:'caption '+(i+1),
+      text:text,x:x,y:y,w:w,h:h,r:0,opacity:1,scale:1,
+      font:'system-ui',fontSize:15,color:'#4a4453',fill:'transparent',border:'#111111',borderW:0,
+      bold:false,italic:false,textAlign:'center',
+      z:z(i)+0.5,showcaseCaption:true
+    });
+    return l;
+  }
+
   function rebuild(n,t,preserve){
     var p=getPage();if(!p)return;
     n=Math.max(1,Math.min(25,parseInt(n,10)||1));
     var old=preserve?ordered():[];
-    p.layers=(p.layers||[]).filter(function(l){return !l.generatedPatternLayout;});
+    var oldCaptions=(p.layers||[]).filter(function(l){return l.showcaseCaption;})
+      .sort(function(a,b){return (a.y-b.y)||(a.x-b.x);});
+    var addCaptions=t!=='strips' && !!(byId('showcaseAddCaptions') && byId('showcaseAddCaptions').checked);
+    var capH=addCaptions?7:0, capGap=addCaptions?1.6:0, capExtra=capH+capGap;
+    var capMade=[];
+    p.layers=(p.layers||[]).filter(function(l){return !l.generatedPatternLayout && !l.showcaseCaption;});
     var made=[],i;
     if(t==='strips'){
       if(getDir()==='horizontal'){
@@ -18146,17 +18181,31 @@ else install();
       }
     }else if(t==='rectangles'){
       var cols=Math.min(n,Math.max(1,Math.ceil(Math.sqrt(n*1.35)))),rows=Math.ceil(n/cols),gapR=3;
-      var tw=(88-gapR*(cols-1))/cols,th=Math.min(24,(78-gapR*(rows-1))/rows);
-      var sx=(100-(cols*tw+(cols-1)*gapR))/2,sy=(100-(rows*th+(rows-1)*gapR))/2;
-      for(i=0;i<n;i++){var r=Math.floor(i/cols),c=i%cols;made.push(reuse(old[i],i,t,{x:sx+c*(tw+gapR),y:sy+r*(th+gapR),w:tw,h:th,z:z(i)}));}
+      var tw=(88-gapR*(cols-1))/cols;
+      var th=Math.max(4,Math.min(24,(78-gapR*(rows-1)-capExtra*rows)/rows));
+      var blockH=th+capExtra;
+      var sx=(100-(cols*tw+(cols-1)*gapR))/2,sy=(100-(rows*blockH+(rows-1)*gapR))/2;
+      for(i=0;i<n;i++){
+        var r=Math.floor(i/cols),c=i%cols;
+        var tx=sx+c*(tw+gapR),ty=sy+r*(blockH+gapR);
+        made.push(reuse(old[i],i,t,{x:tx,y:ty,w:tw,h:th,z:z(i)}));
+        if(addCaptions) capMade.push(reuseCaption(oldCaptions[i],i,tx,ty+th+capGap,tw,capH));
+      }
     }else{
       var cc=Math.ceil(Math.sqrt(n)),rr=Math.ceil(n/cc),g=3,aw=86,ah=78;
       var pageRatio=(p.w&&p.h)?p.w/p.h:1.333;
-      var sw=Math.min((aw-g*(cc-1))/cc,((ah-g*(rr-1))/rr)/pageRatio),sh=sw*pageRatio;
-      var x0=(100-(cc*sw+(cc-1)*g))/2,y0=(100-(rr*sh+(rr-1)*g))/2;
-      for(i=0;i<n;i++){var row=Math.floor(i/cc),col=i%cc;made.push(reuse(old[i],i,t,{x:x0+col*(sw+g),y:y0+row*(sh+g),w:sw,h:sh,z:z(i)}));}
+      var sw=Math.max(3,Math.min((aw-g*(cc-1))/cc,((ah-g*(rr-1)-capExtra*rr)/rr)/pageRatio));
+      var sh=sw*pageRatio;
+      var blockH2=sh+capExtra;
+      var x0=(100-(cc*sw+(cc-1)*g))/2,y0=(100-(rr*blockH2+(rr-1)*g))/2;
+      for(i=0;i<n;i++){
+        var row=Math.floor(i/cc),col=i%cc;
+        var tx2=x0+col*(sw+g),ty2=y0+row*(blockH2+g);
+        made.push(reuse(old[i],i,t,{x:tx2,y:ty2,w:sw,h:sh,z:z(i)}));
+        if(addCaptions) capMade.push(reuseCaption(oldCaptions[i],i,tx2,ty2+sh+capGap,sw,capH));
+      }
     }
-    p.layers=p.layers.concat(made);
+    p.layers=p.layers.concat(made).concat(capMade);
     // NOTE(bugfix): rebuild() never called ppNormalizeShowcaseZ, unlike every other showcase
     // generator (setCards, generatePatternShowcaseLayout, the vertical/horizontal strip
     // builders) - but rebuild() is what the real "generate/update layout" button actually calls
@@ -18174,7 +18223,7 @@ else install();
 
   window.removePatternShowcase=function(){
     var p=getPage();if(!p||!getSlots().length)return;
-    saveSafe();p.layers=(p.layers||[]).filter(function(l){return !l.generatedPatternLayout;});
+    saveSafe();p.layers=(p.layers||[]).filter(function(l){return !l.generatedPatternLayout && !l.showcaseCaption;});
     try{state.selected=null;}catch(e){}
     renderSafe();try{if(typeof autosaveSoon==='function')autosaveSoon();}catch(e){}setTimeout(syncUI,0);
   };
@@ -18208,6 +18257,7 @@ else install();
     var v=byId('stripDirVerticalBtn'),h=byId('stripDirHorizontalBtn');if(v)v.classList.toggle('active',t==='strips'&&dir==='vertical');if(h)h.classList.toggle('active',t==='strips'&&dir==='horizontal');
     var gen=byId('showcaseGenerateBtn');if(gen)gen.textContent=getSlots().length?'update layout':'generate layout';
     var rem=byId('showcaseRemoveBtn');if(rem)rem.disabled=!getSlots().length;
+    var capRow=byId('showcaseCaptionRow');if(capRow)capRow.classList.toggle('showcaseHidden',t==='strips');
   }
   var oldRender=window.render;
   if(typeof oldRender==='function')window.render=function(){var r=oldRender.apply(this,arguments);setTimeout(install,0);return r;};
