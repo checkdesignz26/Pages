@@ -572,3 +572,88 @@ test('creating a mock-up with no pattern selected places a plain white mask-shap
 
   await page.waitForTimeout(150);
 });
+
+// Real report, with screenshots: a downloaded page's custom mock-up pattern came out flat and
+// unrealistic, unlike how it looks live on the page. A "live" custom mock-up layer
+// (customMockupLive, built by buildPage() in the custom-mock-up feature) is only the masked/
+// cropped pattern fill - its on-screen realism comes entirely from CSS mix-blend-mode:multiply
+// compositing it against the mock-up background photo layer drawn underneath it. The PNG/ZIP
+// export (renderPageToCanvas) draws straight from the page's layer data, never touches the DOM/
+// CSS, and previously always used the canvas default composite (plain paint-over) for every
+// image layer - so the exported pattern never picked up the multiply blend at all.
+test('exporting a page with a live custom mock-up multiplies the pattern over the mock-up photo, matching how it looks live', async ({ page }) => {
+  await expandAllBoxes(page);
+
+  const bgColor = [200, 120, 40];
+  const patternColor = [80, 180, 60];
+
+  const setup = await page.evaluate(async ({ bgColor, patternColor }) => {
+    function solidPng(w, h, rgb) {
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+      ctx.fillRect(0, 0, w, h);
+      return c.toDataURL('image/png');
+    }
+    async function makeFile(dataUrl, name) {
+      const blob = await (await fetch(dataUrl)).blob();
+      return new File([blob], name, { type: blob.type });
+    }
+    function setFile(inputId, file) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const input = document.getElementById(inputId);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    const bgFile = await makeFile(solidPng(60, 60, bgColor), 'bg.png');
+    const maskFile = await makeFile(solidPng(60, 60, [255, 255, 255]), 'mask.png');
+    const patFile = await makeFile(solidPng(60, 60, patternColor), 'pat.png');
+
+    setFile('customMockupBgInput', bgFile);
+    setFile('customMockupMaskInput', maskFile);
+    setFile('patternInput', patFile);
+
+    // Rule out the separate "texture" shading step (a mild baked-in gradient meant to keep
+    // fabric/print from looking like a flat sticker) as a confound - it would otherwise nudge
+    // the exported pixel away from a clean multiply of the two flat colours above.
+    const textureEl = document.getElementById('customMockupTexture');
+    if (textureEl) textureEl.value = 0;
+
+    return true;
+  }, { bgColor, patternColor });
+  expect(setup).toBe(true);
+
+  await clickResilient(page, page.locator('#createCustomMockupBtnV163'));
+  await expect
+    .poll(() => page.evaluate(() => state.pages.flatMap((p) => p.layers || []).some((l) => l.customMockupLive && l.src)), { timeout: 5000 })
+    .toBe(true);
+
+  const pixel = await page.evaluate(async () => {
+    const p = state.pages.find((pg) => (pg.layers || []).some((l) => l.customMockupLive));
+    const canvas = await window.renderPageToCanvas(p);
+    const ctx = canvas.getContext('2d');
+    const layer = p.layers.find((l) => l.customMockupLive);
+    // Sample the centre of the mock-up layer's own bounds - the mask covered the whole 60x60
+    // source image, so its cropped bounds should comfortably cover the middle of the page.
+    const cx = Math.round(((layer.x + layer.w / 2) / 100) * p.w);
+    const cy = Math.round(((layer.y + layer.h / 2) / 100) * p.h);
+    return Array.from(ctx.getImageData(cx, cy, 1, 1).data);
+  });
+
+  const expectedMultiply = [
+    Math.round((bgColor[0] * patternColor[0]) / 255),
+    Math.round((bgColor[1] * patternColor[1]) / 255),
+    Math.round((bgColor[2] * patternColor[2]) / 255),
+  ];
+  // A plain (unblended) paint-over would land here instead - the exact symptom reported.
+  const flatPatternOnly = patternColor;
+
+  for (let i = 0; i < 3; i++) {
+    expect(Math.abs(pixel[i] - expectedMultiply[i])).toBeLessThan(6);
+  }
+  const distanceFromFlat = Math.hypot(pixel[0] - flatPatternOnly[0], pixel[1] - flatPatternOnly[1], pixel[2] - flatPatternOnly[2]);
+  expect(distanceFromFlat).toBeGreaterThan(20);
+});
