@@ -13382,11 +13382,26 @@ window.addEventListener('DOMContentLoaded',function(){
       }
       return null;
     }
-    function start(e){
-      var grip=findGripNear(e);
-      if(!grip) return;
-      var row=closestRow(grip);
-      if(!row || !row.dataset.id) return;
+    // Real report: "I can't really drag them where I want them to be." Confirmed directly: a
+    // touch-drag started anywhere on a row's body (the name, the thumbnail - the natural place
+    // to grab a list row, and the only place most people actually try) did precisely nothing -
+    // findGripNear() only recognised a touch within ~14px of the tiny "⋮⋮" icon, and every row
+    // already carries touch-action:none (below), so the gesture wasn't even falling back to a
+    // native scroll; it was just being swallowed with no effect at all. Only a pixel-perfect
+    // touch on the small grip ever worked. Fixed by also arming a drag from anywhere on the row
+    // body (outside its buttons and the grip, which already work) - but not starting it
+    // immediately, since a plain tap there must still just select the layer as before. It's
+    // deferred behind a small movement threshold in move() below: cross it and the drag begins;
+    // release before crossing it and the row's own tap-to-select handling runs untouched.
+    var pending=null;
+    var DRAG_ARM_THRESHOLD=8; // px of movement before a row-body touch commits to a drag
+    function rowBodyDragCandidate(e){
+      var row=closestRow(e.target);
+      if(!row || row.classList.contains('groupRow') || !row.dataset.id) return null;
+      if(e.target && e.target.closest && e.target.closest('button,.dragGrip')) return null;
+      return row;
+    }
+    function beginDrag(e,row){
       e.preventDefault();
       e.stopPropagation();
       var rect=row.getBoundingClientRect();
@@ -13400,6 +13415,17 @@ window.addEventListener('DOMContentLoaded',function(){
       try{row.setPointerCapture && row.setPointerCapture(e.pointerId);}catch(_){ }
       drag={id:row.dataset.id,mode:row.dataset.mode||'all',row:row,ghost:ghost,dx:e.clientX-rect.left,dy:e.clientY-rect.top,pointerId:e.pointerId,target:null};
       startAutoScroll();
+    }
+    function start(e){
+      var grip=findGripNear(e);
+      if(grip){
+        var row=closestRow(grip);
+        if(!row || !row.dataset.id) return;
+        beginDrag(e,row);
+        return;
+      }
+      var candidate=rowBodyDragCandidate(e);
+      if(candidate) pending={row:candidate,x:e.clientX,y:e.clientY,pointerId:e.pointerId};
     }
     // Auto-scroll the layer list while dragging near its top/bottom edge -
     // without this, a list longer than the visible panel makes it
@@ -13429,6 +13455,13 @@ window.addEventListener('DOMContentLoaded',function(){
       lastPointerY=null;
     }
     function move(e){
+      if(!drag && pending && e.pointerId===pending.pointerId){
+        var moved=Math.hypot(e.clientX-pending.x,e.clientY-pending.y);
+        if(moved<DRAG_ARM_THRESHOLD) return; // still just a tap/scroll attempt so far
+        var row=pending.row;
+        pending=null;
+        beginDrag(e,row);
+      }
       if(!drag) return;
       e.preventDefault();
       var x=e.clientX-drag.dx, y=e.clientY-drag.dy;
@@ -13448,6 +13481,7 @@ window.addEventListener('DOMContentLoaded',function(){
       }
     }
     function end(e){
+      if(pending && e.pointerId===pending.pointerId) pending=null;
       if(!drag) return;
       e.preventDefault();
       var d=drag;

@@ -639,3 +639,157 @@ test('the "drag corner to resize" hint no longer covers small selected layers of
     expect(display).toBe('none');
   }
 });
+
+// Real report: "I can't really drag them where I want them to be" about reordering the layer
+// list. Confirmed directly with real touch dispatch: a drag started anywhere on a row's body
+// (the name - the natural place to grab a list row, and the only place most people actually try)
+// did precisely nothing, because pp-layer-panel-touch-drag-patch's findGripNear() only recognised
+// a touch within ~14px of the tiny "⋮⋮" grip icon - and every row already carries
+// touch-action:none, so the gesture wasn't even falling back to a native scroll; it was just
+// swallowed with no effect. Only a pixel-perfect touch on the small grip ever worked. Fixed by
+// also arming a drag from anywhere on the row body (outside its buttons and the grip, which
+// already worked), deferred behind a small movement threshold so a plain tap there still just
+// selects the layer as before, instead of ever being mistaken for a drag.
+test.describe(() => {
+  // A plain page.mouse drag doesn't distinguish the fix from the bug here: rows also carry
+  // draggable="true" for native HTML5 drag-and-drop (dragstart/dragover/drop, wired further down
+  // in rowForLayerV170), and a mouse drag from anywhere on the row already invokes that native
+  // path regardless of this patch. Native drag-and-drop doesn't reliably arm from a real
+  // touchscreen swipe the way it does from a mouse, though - which is exactly why
+  // pp-layer-panel-touch-drag-patch exists, and exactly why its own grip-only hit-testing was the
+  // actual bug for the iPad user who reported this. So this needs real touch + pointer dispatch,
+  // not a mouse drag, to actually exercise (and tell apart) the code path in question.
+  test.use({ hasTouch: true });
+
+  async function installTouchDragHelpers(page) {
+    await page.evaluate(() => {
+      window.__nextPointerId = 1;
+      window.__mkTouch = (id, x, y, target) => new Touch({ identifier: id, target, clientX: x, clientY: y, pageX: x, pageY: y });
+      window.__fireTouch = (type, touches, changed, target) => {
+        target.dispatchEvent(new TouchEvent(type, { touches, targetTouches: touches, changedTouches: changed, bubbles: true, cancelable: true }));
+      };
+    });
+  }
+
+  // Dispatches a PointerEvent alongside each TouchEvent, in real device order, matching how an
+  // actual touchscreen fires both for the same physical gesture - see text-and-fonts.spec.js.
+  async function touchDrag(page, points) {
+    const id = await page.evaluate(() => window.__nextPointerId++);
+    await page.evaluate(({ x, y, id }) => {
+      const el = document.elementFromPoint(x, y);
+      const t = window.__mkTouch(id, x, y, el);
+      el.dispatchEvent(new PointerEvent('pointerdown', { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true, clientX: x, clientY: y }));
+      window.__fireTouch('touchstart', [t], [t], el);
+    }, { x: points[0].x, y: points[0].y, id });
+    await page.waitForTimeout(30);
+
+    for (let i = 1; i < points.length; i++) {
+      await page.evaluate(({ x, y, id }) => {
+        const el = document.elementFromPoint(x, y);
+        const t = window.__mkTouch(id, x, y, el);
+        el.dispatchEvent(new PointerEvent('pointermove', { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true, clientX: x, clientY: y }));
+        window.__fireTouch('touchmove', [t], [t], el);
+      }, { x: points[i].x, y: points[i].y, id });
+      await page.waitForTimeout(30);
+    }
+
+    const last = points[points.length - 1];
+    await page.evaluate(({ x, y, id }) => {
+      const el = document.elementFromPoint(x, y);
+      el.dispatchEvent(new PointerEvent('pointerup', { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true, clientX: x, clientY: y }));
+      window.__fireTouch('touchend', [], [window.__mkTouch(id, x, y, el)], el);
+    }, { x: last.x, y: last.y, id });
+    await page.waitForTimeout(30);
+  }
+
+  test('dragging a layer row by its name, not just the tiny grip icon, reorders it', async ({ page }) => {
+    await expandAllBoxes(page);
+    await installTouchDragHelpers(page);
+    const ids = await page.evaluate(() => {
+      ['one', 'two', 'three'].forEach((name) => {
+        addText(name);
+        const l = current().layers[current().layers.length - 1];
+        l.name = name; l._manualName = true;
+      });
+      return current().layers.filter((l) => l.type === 'text').map((l) => l.id);
+    });
+    await page.waitForTimeout(300);
+
+    const orderNow = () => page.evaluate(() => current().layers.filter((l) => l.type === 'text').sort((a, b) => (b.z || 0) - (a.z || 0)).map((l) => l.name));
+    expect(await orderNow()).toEqual(['three', 'two', 'one']);
+
+    // "one" is the bottom row - drag it up by its name zone (not the grip) to the top.
+    const bottomRow = page.locator(`#layerList .layerItem[data-id="${ids[0]}"]`);
+    // Re-expand/re-scroll and retry the bounding-box read until it survives a boot()/re-render
+    // timer race (matching the established pattern in responsive-layout.spec.js for the same
+    // class of flakiness in this app's scattered self-installing patch scripts), rather than a
+    // plain locator.scrollIntoViewIfNeeded(), whose own "wait for stable" can throw "not attached
+    // to the DOM" if one of those timers replaces the row out from under it.
+    let zoneBox = null;
+    await expect.poll(async () => {
+      await expandAllBoxes(page);
+      await page.evaluate((id) => {
+        const r = document.querySelector(`#layerList .layerItem[data-id="${id}"]`);
+        if (r) r.scrollIntoView({ block: 'center' });
+      }, ids[0]);
+      zoneBox = await bottomRow.locator('.ppLayerSelectZone').boundingBox();
+      return zoneBox;
+    }, { timeout: 5000 }).not.toBeNull();
+    const topRowBox = await page.locator('#layerList .layerItem[data-id]').first().boundingBox();
+    const sx = zoneBox.x + zoneBox.width / 2, sy = zoneBox.y + zoneBox.height / 2;
+    const ty = topRowBox.y + topRowBox.height / 2;
+
+    await touchDrag(page, [
+      { x: sx, y: sy },
+      { x: sx, y: sy - 20 }, // cross the drag-arm threshold first
+      { x: sx, y: sy - 60 },
+      { x: sx, y: (sy + ty) / 2 },
+      { x: sx, y: ty },
+    ]);
+    await page.waitForTimeout(200);
+
+    expect(await orderNow()).toEqual(['one', 'three', 'two']);
+  });
+
+  test('a plain touch tap on a layer row\'s name still just selects it, without the new drag-by-name behaviour mistaking it for a drag', async ({ page }) => {
+    await expandAllBoxes(page);
+    await installTouchDragHelpers(page);
+    const ids = await page.evaluate(() => {
+      ['one', 'two'].forEach((name) => {
+        addText(name);
+        const l = current().layers[current().layers.length - 1];
+        l.name = name; l._manualName = true;
+      });
+      state.selected = null;
+      return current().layers.filter((l) => l.type === 'text').map((l) => l.id);
+    });
+    await page.waitForTimeout(300);
+
+    const targetId = ids[0];
+    const row = page.locator(`#layerList .layerItem[data-id="${targetId}"]`);
+    // Re-expand/re-scroll and retry the bounding-box read until it survives a boot()/re-render
+    // timer race, matching the established pattern in responsive-layout.spec.js for the same
+    // class of flakiness in this app's scattered self-installing patch scripts.
+    let zoneBox = null;
+    await expect.poll(async () => {
+      await expandAllBoxes(page);
+      await page.evaluate((id) => {
+        const r = document.querySelector(`#layerList .layerItem[data-id="${id}"]`);
+        if (r) r.scrollIntoView({ block: 'center' });
+      }, targetId);
+      zoneBox = await row.locator('.ppLayerSelectZone').boundingBox();
+      return zoneBox;
+    }, { timeout: 5000 }).not.toBeNull();
+    const x = zoneBox.x + zoneBox.width / 2, y = zoneBox.y + zoneBox.height / 2;
+
+    await touchDrag(page, [{ x, y }]); // no movement at all - a plain tap
+    await page.waitForTimeout(150);
+
+    const result = await page.evaluate(() => ({
+      selected: state.selected,
+      order: current().layers.filter((l) => l.type === 'text').sort((a, b) => (b.z || 0) - (a.z || 0)).map((l) => l.name),
+    }));
+    expect(result.selected).toBe(targetId);
+    expect(result.order).toEqual(['two', 'one']);
+  });
+});
