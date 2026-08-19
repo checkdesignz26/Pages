@@ -707,3 +707,74 @@ test('the periodic memory trim gives a custom mock-up image its larger edge cap,
   // untouched (or at worst rounded to ~1380), not shrunk down toward LIVE_EDGE's 1250.
   expect(resultWidth).toBeGreaterThan(1340);
 });
+
+// Real report: undo/redo stopped working entirely on a real, several-page Etsy listing project
+// with a few mock-ups - normal use of this app, not an edge case. Once loaded live, a saved
+// project's deduped ppasset: references get expanded back into full, repeated data URLs on every
+// layer that uses them, so a project that's a modest size on disk can easily land past this
+// trim's 7,000,000-char "large project" threshold once live - confirmed directly against the
+// reporter's real project file (its live state.pages alone came out over 8,000,000 chars). This
+// trim reruns 1.5s after every change/pointerup, and used to unconditionally wipe BOTH
+// state.history and state.redoStack to [] every time it found the project still over that size -
+// so for a project that's simply always this size, every edit's own undo snapshot got wiped
+// again about a second later, before the user ever got a chance to press undo.
+test('undo survives the periodic memory trim on a large project, instead of being wiped every time', async ({ page }) => {
+  const dataUrl = await page.evaluate(() => {
+    const size = 480;
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    const ctx = c.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, size, size);
+    g.addColorStop(0, '#224466'); g.addColorStop(1, '#eebb33');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+    const img = ctx.getImageData(0, 0, size, size);
+    let s = 777;
+    for (let i = 0; i < img.data.length; i += 4) {
+      s = (s * 1103515245 + 12345) & 0x7fffffff;
+      img.data[i] = (img.data[i] + (s % 40) - 20) & 255;
+      img.data[i + 1] = (img.data[i + 1] + ((s >> 8) % 40) - 20) & 255;
+      img.data[i + 2] = (img.data[i + 2] + ((s >> 16) % 40) - 20) & 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    return c.toDataURL('image/png');
+  });
+  // Stay under LARGE_DATAURL (900000) so ppMemoryTrimState's slim() leaves these untouched -
+  // this test is about the undo-history behavior, not the image-capping behavior covered above.
+  expect(dataUrl.length).toBeLessThan(900000);
+
+  const setup = await page.evaluate((src) => {
+    const copies = Math.ceil(7500000 / src.length) + 1;
+    const layers = [];
+    for (let i = 0; i < copies; i++) {
+      layers.push({ id: 'img' + i, type: 'image', name: 'img' + i, src, x: 0, y: 0, w: 10, h: 10, z: i + 1, opacity: 1, r: 0, fit: 'cover' });
+    }
+    state.pages = [{ type: 'listing', w: 3000, h: 2250, layers, marker: 'before' }];
+    state.selectedPage = 0;
+    state.selected = null;
+    state.history = [];
+    state.redoStack = [];
+    render();
+
+    const roughBefore = JSON.stringify({ pages: state.pages, trays: state.trays }).length;
+    save(); // snapshots "before" onto history
+    state.pages[0].marker = 'after';
+    render();
+
+    return { roughBefore, historyBeforeTrim: state.history.length };
+  }, dataUrl);
+
+  expect(setup.roughBefore).toBeGreaterThan(7000000);
+  expect(setup.historyBeforeTrim).toBe(1);
+
+  await page.evaluate(() => window.ppMemoryTrimState(true));
+  await page.waitForTimeout(1500); // ppMemoryTrimState has no external "done" signal to await
+
+  const after = await page.evaluate(() => {
+    const historyLenAfterTrim = state.history.length;
+    undo();
+    return { historyLenAfterTrim, markerAfterUndo: state.pages[0].marker };
+  });
+
+  expect(after.historyLenAfterTrim).toBeGreaterThan(0);
+  expect(after.markerAfterUndo).toBe('before');
+});

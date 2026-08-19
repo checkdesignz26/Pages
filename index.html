@@ -9163,10 +9163,26 @@ function makeNumberedList(){
         try{ if(typeof render==='function') render(); }catch(e){}
         if(!silent) toast('Memory safe mode slimmed live images.');
       }
-      // Clear heavy undo/redo if the live project is image-heavy.
+      // Real report: undo/redo stopped working entirely on a real, several-page Etsy listing
+      // project with a few mock-ups - not an edge case, just this app's normal actual use case.
+      // Once loaded live, ppasset: references get expanded back into full, non-deduped data URLs
+      // on every layer that uses them (unlike the saved .ppages file, which keeps one deduped
+      // copy per asset) - so a project a few MB on disk can easily be several times that live in
+      // state.pages alone, past this 7,000,000-char threshold. This trim reruns 1.5s after every
+      // change/pointerup, and used to fully wipe history/redoStack to [] every single time it
+      // found the project still over that size - meaning for a project that's simply always this
+      // size, every edit's own undo snapshot got wiped again about a second later, before the
+      // user ever got a chance to press undo. The underlying iPad-memory concern (up to 35 full-
+      // state snapshots of a huge project) is real, but permanently disabling undo isn't the
+      // answer to it - trim down to a short recent tail instead of nothing, same as any other
+      // memory-safety pass in this file trims rather than deletes outright.
       try{
         var rough=JSON.stringify({pages:s.pages,trays:s.trays}).length;
-        if(rough>7000000){ s.history=[]; s.redoStack=[]; if(!silent) toast('Large project mode: undo cache cleared for iPad memory.'); }
+        if(rough>7000000){
+          var keepHistory=Math.min(s.history.length,5);
+          if(s.history.length>keepHistory){ s.history=s.history.slice(-keepHistory); if(!silent) toast('Large project mode: shortened undo history for iPad memory.'); }
+          s.redoStack=[];
+        }
       }catch(e){}
     }finally{ compressing=false; }
   };
