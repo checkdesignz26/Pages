@@ -239,6 +239,49 @@ test('a page that has never been rendered still gets a preview via background wa
   expect(leftoverHolders).toBe(0);
 });
 
+// Real report, with a screen recording and the user's actual project file: a custom mock-up's
+// parked preview came out visibly warped - the photo's proportions stretched, the pattern band
+// squeezed into the wrong place - even though the live page looked correct. warmOne()'s
+// off-screen preview holder builds a real .stage-classed element sized to 1400px via inline
+// style, so it can reuse renderLayer()'s normal .stage-scoped CSS - but that also pulls in the
+// narrow/portrait responsive layout's ".stage{width:min(92vw,680px)!important}" (this project's
+// own default viewport, like a real iPad's, is taller than wide, so that media query is active).
+// A stylesheet !important rule beats a plain inline style regardless of what width the code
+// intended, silently squashing the synthetic stage's width while its inline height stayed at
+// 1400px - badly distorting the aspect ratio of whatever got captured from it. Verify with a
+// perfectly square page (matching the real 512x512 mock-up page): the cached preview image
+// should itself come out square, not stretched.
+test('the warm-up preview for a square page comes out square, not stretched by the app\'s own responsive .stage width rule', async ({ page }) => {
+  await page.evaluate((src) => {
+    save();
+    state.pages = [
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+      { type: 'mockup', w: 1000, h: 1000, layers: [{ id: 'l1', type: 'image', src, x: 0, y: 0, w: 100, h: 100, z: 1, opacity: 1, r: 0, fit: 'cover' }] },
+    ];
+    // selectedPage stays at 0 - page 2 is outside VISIBLE_RADIUS (1) from the start, so its
+    // only preview comes from the background warm-up path (warmOne), never a live hot stage.
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+  }, PNG_1PX);
+
+  const previewImg = page.locator('.stage[data-page="2"] .pp95ParkedPreviewImg');
+  await expect(previewImg).toHaveCount(1, { timeout: 5000 });
+
+  const dims = await previewImg.evaluate((img) => new Promise((resolve) => {
+    const check = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    if (img.complete && img.naturalWidth) check();
+    else img.addEventListener('load', check, { once: true });
+  }));
+
+  expect(dims.w).toBeGreaterThan(0);
+  expect(dims.h).toBeGreaterThan(0);
+  const ratio = dims.w / dims.h;
+  expect(ratio).toBeGreaterThan(0.9);
+  expect(ratio).toBeLessThan(1.1);
+});
+
 test('the parked-page preview crops images with object-fit like the real layer, instead of stretching the whole source image into the box', async ({ page }) => {
   // Real bug: a plain ctx.drawImage(img,x,y,w,h) ignores the CSS object-fit:cover the live
   // layer actually renders with, so a wide/tall source image got squashed to fit the box

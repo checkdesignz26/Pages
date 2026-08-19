@@ -16303,10 +16303,21 @@ else install();
     const holder=document.createElement('div');
     holder.style.cssText='position:fixed;left:-99999px;top:0;pointer-events:none;overflow:hidden;';
     const w=1400, h=Math.max(1,Math.round(w*(p.h/p.w)));
-    holder.style.width=w+'px'; holder.style.height=h+'px';
+    holder.style.cssText+='width:'+w+'px!important;height:'+h+'px!important;';
     const st=document.createElement('div');
     st.className='stage';
-    st.style.cssText='position:relative;width:'+w+'px;height:'+h+'px;background:#fff;overflow:hidden;';
+    // Real report, with a screen recording and the real project file: a mock-up's parked
+    // preview came out visibly warped/stretched instead of matching the live page. This
+    // synthetic off-screen stage needs a real .stage class so renderLayer()'s own .stage-scoped
+    // styling applies to its children, but that also pulls in every OTHER .stage rule meant for
+    // a real, visible page - including an unconditional rule (pp-stage-stable-width-js) that sets
+    // BOTH width and max-width to a value it measures off whichever .stage happens to be first in
+    // the DOM and caches on <html> as --pp-stable-stage-width. Setting only width!important here
+    // (as an earlier version of this fix did) isn't enough: max-width always wins over width in
+    // CSS box sizing regardless of specificity/!important, so that stylesheet max-width silently
+    // reclamped this stage back down no matter what width resolved to. Pin max-width/min-width
+    // inline too so nothing can constrain this box smaller than the size we actually need.
+    st.style.cssText='position:relative;width:'+w+'px!important;max-width:'+w+'px!important;min-width:'+w+'px!important;height:'+h+'px!important;max-height:'+h+'px!important;min-height:'+h+'px!important;background:#fff;overflow:hidden;';
     try{
       (p.layers||[]).filter(function(l){return !l.hidden;}).slice().sort(function(a,b){return (a.z||0)-(b.z||0);}).forEach(function(l){
         st.appendChild(renderLayer(l, pi));
