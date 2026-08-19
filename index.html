@@ -6181,6 +6181,11 @@ document.addEventListener('click', function(e){
     }
     return built || '';
   }
+  function shuffled(arr){
+    const a=arr.slice();
+    for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+    return a;
+  }
   function addTagIdea(out, phrase){
     const tag=makeEtsySafeTag(phrase);
     if(tag && tag.length<=20 && !out.includes(tag)) out.push(tag);
@@ -6225,32 +6230,29 @@ document.addEventListener('click', function(e){
     const subject=styleIdeas.find(w=>!['summer','picnic','cottagecore','boho','nursery','kids','holiday','spooky'].includes(w)) || main;
     const mood=styleIdeas.find(w=>['cottagecore','boho','summer fruit','tropical fruit','picnic','halloween','christmas','nursery','kids','botanical','wildflower'].includes(w)) || subject;
 
+    // Real request, from a beta tester: hitting "generate" always produced the exact same 13
+    // tags for the same name/keywords, every time - useful once, but no way to get a second set
+    // of ideas to try, and Etsy sellers are generally advised to vary tags across relisted/
+    // duplicated listings rather than reuse one fixed set everywhere. "pattern"/"seamless" stay
+    // guaranteed on the subject (the single strongest, always-relevant pair for this app's actual
+    // product), but the rest is now drawn from a wider synonym pool and shuffled per generate, so
+    // clicking generate again on the same input yields a different, still-relevant mix.
     const tagIdeas=[];
     const push=(x)=>{ if(x) tagIdeas.push(x); };
-    push(subject+' pattern');
-    push(subject+' print');
-    push(subject+' paper');
-    push(subject+' fabric');
-    push(subject+' repeat');
-    push(subject+' seamless');
+    const subjectFormatPool=['print','paper','fabric','repeat','wallpaper','background','clipart','wall art','gift wrap','textile','backdrop','swatch'];
+    ['pattern','seamless'].concat(shuffled(subjectFormatPool).slice(0,4)).forEach(f=>push(subject+' '+f));
     if(mood && mood!==subject){
-      push(mood+' pattern');
-      push(mood+' print');
-      push(mood+' paper');
+      const moodFormatPool=['pattern','print','paper','fabric','wallpaper','clipart'];
+      shuffled(moodFormatPool).slice(0,3).forEach(f=>push(mood+' '+f));
     }
+    const styleSuffixPool=['pattern','print','digital paper','wallpaper','clipart','fabric print'];
+    const styleSuffixes=shuffled(styleSuffixPool).slice(0,3);
     styleIdeas.slice(0,8).forEach(w=>{
-      push(w+' pattern');
-      push(w+' print');
-      push(w+' digital paper');
+      styleSuffixes.forEach(sfx=>push(w+' '+sfx));
     });
-    push('seamless pattern');
-    push('repeat pattern');
-    push('digital paper');
-    push('scrapbook paper');
-    push('fabric print');
-    push('surface pattern');
-    push('pod design');
-    push('commercial use');
+    const genericAlways=['seamless pattern','digital paper','commercial use'];
+    const genericPool=['repeat pattern','scrapbook paper','fabric print','surface pattern','pod design','wallpaper design','clipart set','gift wrap paper','textile design','wall art print','craft supply','print on demand'];
+    genericAlways.concat(shuffled(genericPool).slice(0,5)).forEach(push);
     const etsyTags=uniqueTags(tagIdeas);
 
     const longTailSeeds=[];
