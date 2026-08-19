@@ -9127,7 +9127,19 @@ function makeNumberedList(){
         for(var k of keys){
           var v=obj[k];
           if((k==='src'||k==='bg'||k==='maskSrc'||k==='patternSrc') && typeof v==='string' && v.indexOf('data:image/')===0 && v.length>LARGE_DATAURL){
-            var n=await slim(v, obj.type==='mockup'||obj.type==='customMockupLayer'?MOCKUP_EDGE:LIVE_EDGE);
+            // Real report, with a screen recording: a custom mock-up looked flat/blurry after
+            // the project had been open a while. obj.type==='customMockupLayer' can never match
+            // anything - 'customMockupLayer' is only ever a CSS class name added to a rendered
+            // DOM node's className, never a value stored in obj.type on the actual layer data
+            // (a custom mock-up's background and pattern layers are both plain type:'image',
+            // flagged instead via l.customMockup/l.lockedMockupBackground). type==='mockup' only
+            // matches the older, separate plain "mock-up page" feature (createMockupPage), whose
+            // background layer really is type:'mockup'. So every custom mock-up image, on every
+            // periodic memory trim, silently fell through to the smaller LIVE_EDGE cap meant for
+            // ordinary editor images instead of the slightly larger MOCKUP_EDGE this code was
+            // actually trying to give it.
+            var isMockupImage=obj.type==='mockup'||obj.customMockup===true||obj.lockedMockupBackground===true;
+            var n=await slim(v, isMockupImage?MOCKUP_EDGE:LIVE_EDGE);
             if(n!==v){ obj[k]=n; changed++; }
           }else if(v && typeof v==='object') await walk(v);
         }

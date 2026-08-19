@@ -605,3 +605,62 @@ test('a page that parks before its image finishes decoding does not get a perman
   const src = await previewImg.getAttribute('src');
   expect(src).toMatch(/^data:image\/jpeg;base64,/);
 });
+
+// Real report, with a screen recording: a custom mock-up looked flat/blurry after the project
+// had been open a while (not the initial export-blend bug fixed separately - this is the
+// periodic memory-trim silently over-compressing it). ppMemoryTrimState's walk() meant to give
+// mock-up images a slightly larger edge cap (MOCKUP_EDGE=1400 vs the ordinary LIVE_EDGE=1250),
+// but checked obj.type==='customMockupLayer' - that string is only ever a CSS class name added
+// to a rendered DOM node's className, never a value actually stored in a layer's own .type (a
+// custom mock-up's background/pattern layers are both plain type:'image', flagged via
+// l.customMockup/l.lockedMockupBackground instead) - so the check could never match, and every
+// custom mock-up image silently fell through to the smaller cap on every trim.
+test('the periodic memory trim gives a custom mock-up image its larger edge cap, not the smaller ordinary-image one', async ({ page }) => {
+  const size = 1380; // between LIVE_EDGE (1250, would shrink it) and MOCKUP_EDGE (1400, should not)
+  const dataUrl = await page.evaluate((size) => {
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    const ctx = c.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, size, size);
+    g.addColorStop(0, '#224466'); g.addColorStop(1, '#eebb33');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+    const img = ctx.getImageData(0, 0, size, size);
+    let s = 999;
+    for (let i = 0; i < img.data.length; i += 4) {
+      s = (s * 1103515245 + 12345) & 0x7fffffff;
+      img.data[i] = (img.data[i] + (s % 40) - 20) & 255;
+      img.data[i + 1] = (img.data[i + 1] + ((s >> 8) % 40) - 20) & 255;
+      img.data[i + 2] = (img.data[i + 2] + ((s >> 16) % 40) - 20) & 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    return c.toDataURL('image/png');
+  }, size);
+  expect(dataUrl.length).toBeGreaterThan(900000); // must clear LARGE_DATAURL to even be considered
+
+  await page.evaluate((src) => {
+    save();
+    state.pages = [{
+      type: 'mockup', w: 1600, h: 1600,
+      layers: [
+        { id: 'bg', type: 'image', name: 'mock-up background', src, x: 0, y: 0, w: 100, h: 100, z: 1, opacity: 1, r: 0, fit: 'cover', lockedMockupBackground: true },
+      ],
+    }];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+  }, dataUrl);
+
+  await page.evaluate(() => window.ppMemoryTrimState(true));
+  await page.waitForTimeout(1500); // ppMemoryTrimState has no external "done" signal to await
+
+  const resultWidth = await page.evaluate(() => new Promise((resolve) => {
+    const src = state.pages[0].layers[0].src;
+    const img = new Image();
+    img.onload = () => resolve(img.naturalWidth);
+    img.src = src;
+  }));
+
+  // MOCKUP_EDGE (1400) comfortably covers the original 1380px image - it should come out
+  // untouched (or at worst rounded to ~1380), not shrunk down toward LIVE_EDGE's 1250.
+  expect(resultWidth).toBeGreaterThan(1340);
+});
