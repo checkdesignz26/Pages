@@ -20629,3 +20629,21 @@ body.leftCollapsed.rightCollapsed .stage.pattern,body.leftCollapsed.rightCollaps
   }
 </style>
 
+<!-- Real report, with a screenshot: once there were more patterns than fit in one row, reaching
+     the rest meant scrolling inside the tray's own tiny fixed-height window (several earlier
+     patches fought over its exact height and kept shrinking it, down to 102px - barely one row).
+     That's a second, nested scroll gesture inside the left panel, which is already its own
+     scroll container - on a touch device that inner scroll area is easy to miss entirely, so the
+     lower patterns were effectively unreachable, not just hidden. The tray now grows to fit every
+     uploaded pattern and scrolls as part of the panel's own scroll like everything else in it,
+     instead of needing a separate one of its own. Applies to the asset tray too - it's the exact
+     same #id.thumbGrid setup and bug. Placed last so it wins every earlier height-shrinking rule
+     regardless of that rule's own !important, without having to hunt down and edit each one. -->
+<style id="pp-pattern-tray-full-display-css">
+  #patternTray.thumbGrid,
+  #assetTray.thumbGrid{
+    max-height:none!important;
+    overflow:visible!important;
+  }
+</style>
+

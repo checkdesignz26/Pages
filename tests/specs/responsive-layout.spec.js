@@ -107,3 +107,50 @@ test('a control scrolled to the bottom of the right panel is not covered by the 
 
   expect(hitId).toBe('borderWidth');
 });
+
+// Real report, with a screenshot: with more patterns uploaded than fit in one row, the ones
+// further down were unreachable - the screenshot showed later thumbnails' number badges
+// cascading in a stack instead of a clean grid. Root cause: .thumbGrid capped itself to a fixed
+// max-height (shrunk over several older patches down to 102px - barely a single row) with its
+// own overflow:auto scroll, nested inside the left panel which is already its own scroll
+// container. That inner scroll region was tiny and easy to miss entirely on a touch device, so
+// rows beyond the first were effectively unreachable, not just visually cramped. The tray now
+// grows to fit every pattern and relies on the panel's own single scroll instead of a nested one.
+test('every uploaded pattern in the tray is fully visible and individually selectable, not clipped behind a tiny nested scroll window', async ({ page }) => {
+  await expandAllBoxes(page);
+  const count = await page.evaluate(() => {
+    const c = document.createElement('canvas'); c.width = 10; c.height = 10;
+    const ctx = c.getContext('2d');
+    const colors = ['#ff6b6b', '#4ecdc4', '#ffe66d', '#1a535c', '#f7fff7', '#ff9f1c', '#2ec4b6', '#e71d36', '#011627', '#5c4d7d'];
+    colors.forEach((color, i) => {
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 10, 10);
+      state.trays.pattern.push({ src: c.toDataURL('image/png'), name: 'p' + i });
+    });
+    renderTrays();
+    return state.trays.pattern.length;
+  });
+  await page.waitForTimeout(1800); // let the app's own boot()/re-render timers settle first
+
+  const thumbs = page.locator('#patternTray .thumb');
+  await expect(thumbs).toHaveCount(count);
+
+  // Every thumbnail must be reachable by a tap at its own centre - not covered by a sibling
+  // stacked on top of it in an overlapping or clipped layout. Scrolled via a single evaluate()
+  // rather than locator.scrollIntoViewIfNeeded(), whose actionability wait can throw if one of
+  // those re-renders detaches/replaces the element mid-check.
+  for (let i = 0; i < count; i++) {
+    await page.evaluate((idx) => {
+      const t = document.querySelectorAll('#patternTray .thumb')[idx];
+      if (t) t.scrollIntoView({ block: 'center' });
+    }, i);
+    const box = await thumbs.nth(i).boundingBox();
+    expect(box).not.toBeNull();
+    const hitIndex = await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      const hitThumb = el && el.closest ? el.closest('#patternTray .thumb') : null;
+      return hitThumb ? Array.from(hitThumb.parentNode.children).indexOf(hitThumb) : -1;
+    }, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+    expect(hitIndex).toBe(i);
+  }
+});
