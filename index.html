@@ -1365,7 +1365,12 @@ body.autoGroupEditing .layer.collectionGrouped{
   </div></div>
 
   <div class="box trayTop"><h2>images & mock-ups</h2><input id="assetInput" class="hidden" type="file" accept="image/*" multiple onchange="loadTray(event,'asset')"><input id="mockupInput" class="hidden" type="file" accept="image/*" onchange="createMockupPage(event)"><input id="imageLayerInput" class="hidden" type="file" accept="image/*" onchange="addUploadedImageLayer(event)"><button class="full" onclick="assetInput.click()">Upload Design Assets</button><div id="assetTray" class="thumbGrid"></div><div class="grid2"><button onclick="addImageLayer('image')">add selected image</button><button onclick="mockupInput.click()">mock-up page</button></div><div class="grid2"><button onclick="addImageLayer('banner')">banner</button><button onclick="addImageLayer('overlay')">overlay</button></div><div class="aiDisclosureControls"><label class="checkRow"><input id="aiDisclosureToggle" type="checkbox" checked>add movable “AI generated” badge to mock-up</label><button class="full" onclick="addAIDisclosureBadge()">add AI generated badge</button><p class="smallText">Subtle white pill with fixed soft-grey text. Resize the badge shape, but the words stay readable.</p></div><p class="smallText">One tray for images, banners and mock-ups. Images now arrive at a useful page size instead of tiny; resize them afterwards if needed.</p></div>
-  <div class="box"><h2>pages</h2><div class="launchBadge">Pattern Pages workspace</div><p class="smallText">Your pages stack here like a little design desk. Choose a format in <strong>page size & presets</strong>, then add it as a new page.</p><button class="full" onclick="deleteCurrentPage()">delete current page</button><div id="pageList"></div></div>
+  <div class="box"><h2>pages</h2><div class="launchBadge">Pattern Pages workspace</div><p class="smallText">Your pages stack here like a little design desk. Choose a format in <strong>page size & presets</strong>, then add it as a new page.</p><button class="full" onclick="deleteCurrentPage()">delete current page</button>
+  <!-- Real report: this used to live at the bottom of "extra design elements" (an unrelated,
+       add-things panel) as "blank page", where it was both easy to miss and easy to misread as
+       adding a new blank page. Moved next to its comparably-destructive sibling
+       "delete current page", where a page-management action is actually expected to be found. -->
+  <button class="full" onclick="clearCurrentPage()">clear current page</button><div id="pageList"></div></div>
   <div class="box"><h2>page size & presets</h2><p class="smallText">Choose a format first, then add it as a new page or resize the current page. Social sizes live here too.</p>
   <div class="sizePresetSections">
     <div class="presetMiniGroup"><span>etsy</span><button onclick="chooseQuickSize('Etsy listing image',3000,2250)">listing 3000×2250</button><button onclick="chooseQuickSize('Etsy square / pattern preview',3000,3000)">square 3000×3000</button><button onclick="chooseQuickSize('Etsy shop banner',3360,840)">shop banner 3360×840</button></div>
@@ -1377,7 +1382,12 @@ body.autoGroupEditing .layer.collectionGrouped{
     <div class="presetMiniGroup"><span>facebook</span><button onclick="chooseQuickSize('Facebook landscape post',1200,630)">landscape 1200×630</button><button onclick="chooseQuickSize('Facebook cover',1640,924)">cover 1640×924</button></div>
     <div class="presetMiniGroup"><span>pattern</span><button onclick="chooseQuickSize('Pattern tile square',3600,3600)">3600 square</button><button onclick="chooseQuickSize('Custom size',+$('customW').value||3000,+$('customH').value||2250)">custom</button></div>
   </div>
-  <div class="chosenSizePill" id="chosenSizePill">etsy listing image · 3000×2250</div>
+  <!-- Real report, with a screenshot: this pill sat directly above the <select> below it,
+       showing the exact same "current preset · WxH" info a second time right underneath - looked
+       like two stacked Etsy listing presets. The select already shows it and is interactive
+       (pick a preset from it directly), so the pill was purely redundant - removed rather than
+       relabeled. updateChosenSizePill(), which only ever existed to update this pill, and its
+       call sites are removed too rather than left as permanent no-ops. -->
   <select id="sizePreset" onchange="applyPresetLabel()"><option value="3000,2250">Etsy listing image — 3000×2250</option><option value="3000,3000">Etsy square / pattern preview — 3000×3000</option><option value="3360,840">Etsy shop banner — 3360×840</option><option value="1080,1080">Instagram square post — 1080×1080</option><option value="1080,1350">Instagram portrait post — 1080×1350</option><option value="1080,1920">Instagram reel / story — 1080×1920</option><option value="1000,1500">Pinterest pin — 1000×1500</option><option value="1000,2100">Long Pinterest pin — 1000×2100</option><option value="1200,630">Facebook landscape post — 1200×630</option><option value="1640,924">Facebook cover — 1640×924</option><option value="3600,3600">Pattern tile square — 3600×3600</option><option value="custom">Custom size</option></select>
   <div class="sizeInputs"><input id="customW" type="number" value="3000" aria-label="width"><span>×</span><input id="customH" type="number" value="2250" aria-label="height"></div>
   <div class="grid2"><button class="primary" onclick="addSelectedSizePage()">add new page</button><button onclick="applyPageSize()">resize current</button></div></div>
@@ -1426,11 +1436,6 @@ body.autoGroupEditing .layer.collectionGrouped{
     <button onclick="addShape('square')">+ square</button>
     <button onclick="addShape('circle')">+ circle</button>
   </div>
-  <!-- Real report: "blank page" read as adding a new blank page (matching the "add new page"
-       button up in page size & presets), when it actually wipes every layer off the CURRENT
-       page - and did so with no confirmation, unlike deletePage()'s "Delete this page?" for a
-       comparably destructive action. Renamed to say what it does, and it now asks first. -->
-  <button class="full" onclick="clearCurrentPage()">clear current page</button>
 </div>
  </aside>
  <section class="workspace" id="workspace"><div id="pageWrap" class="pageWrap"></div></section>
@@ -1593,7 +1598,7 @@ function save(){state.history.push(JSON.stringify({pages:state.pages,selectedPag
 function ppUndoRedoHint(msg){let h=document.getElementById('selectedHint');if(h)h.textContent=msg;}
 function undo(){let s=state.history.pop();if(!s){ppUndoRedoHint('Nothing to undo.');return;}state.redoStack.push(JSON.stringify({pages:state.pages,selectedPage:state.selectedPage,selected:state.selected}));let o=JSON.parse(s);state.pages=o.pages;state.selectedPage=o.selectedPage;state.selected=o.selected;render();ppUndoRedoHint('Undid last action.')}
 function redo(){let s=state.redoStack.pop();if(!s){ppUndoRedoHint('Nothing to redo.');return;}state.history.push(JSON.stringify({pages:state.pages,selectedPage:state.selectedPage,selected:state.selected}));let o=JSON.parse(s);state.pages=o.pages;state.selectedPage=o.selectedPage;state.selected=o.selected;render();ppUndoRedoHint('Redid last action.')}
-function init(){if($('cardCount')) {$('cardCount').value=1; if($('cardCountDisplay')) $('cardCountDisplay').textContent='1';}state.pages=[newPage('listing')];window.selectedFriendlyPresetLabel='Etsy listing image';render();setTimeout(()=>{updateChosenSizePill();let first=document.querySelector('.presetMiniGroup button');if(first)first.classList.add('activePreset')},0)}
+function init(){if($('cardCount')) {$('cardCount').value=1; if($('cardCountDisplay')) $('cardCountDisplay').textContent='1';}state.pages=[newPage('listing')];window.selectedFriendlyPresetLabel='Etsy listing image';render();setTimeout(()=>{let first=document.querySelector('.presetMiniGroup button');if(first)first.classList.add('activePreset')},0)}
 function addPage(t){save();state.pages.push(newPage(t));state.selectedPage=state.pages.length-1;state.selected=null;render();scrollSel()}
 function selectPage(i){state.selectedPage=i;state.selected=null;render();scrollSel()}
 function scrollSel(){setTimeout(()=>{let el=document.querySelector(`[data-page="${state.selectedPage}"]`);if(el)el.scrollIntoView({block:'center',behavior:'smooth'})},30)}
@@ -1639,9 +1644,8 @@ function applyTextStylePreset(kind){
  render();
 }
 
-function applyPresetLabel(){let v=$('sizePreset').value;if(v!=='custom'){let [w,h]=v.split(',');$('customW').value=w;$('customH').value=h;let sel=$('sizePreset');window.selectedFriendlyPresetLabel=(sel.options[sel.selectedIndex]?.textContent||'').split('—')[0].trim();updateChosenSizePill();}}
-function chooseQuickSize(label,w,h){window.selectedFriendlyPresetLabel=label;$('customW').value=w;$('customH').value=h;let sel=$('sizePreset');let match=[...sel.options].find(o=>o.textContent.toLowerCase().startsWith(label.toLowerCase()) && o.value===`${w},${h}`);sel.value=match?match.value:'custom';document.querySelectorAll('.presetMiniGroup button').forEach(b=>b.classList.remove('activePreset'));if(event&&event.currentTarget)event.currentTarget.classList.add('activePreset');updateChosenSizePill();}
-function updateChosenSizePill(){let pill=$('chosenSizePill');if(!pill)return;let w=+$('customW').value||3000,h=+$('customH').value||2250;let label=window.selectedFriendlyPresetLabel||labelForSize(w,h);pill.textContent=`${label} · ${w}×${h}`.toLowerCase();}
+function applyPresetLabel(){let v=$('sizePreset').value;if(v!=='custom'){let [w,h]=v.split(',');$('customW').value=w;$('customH').value=h;let sel=$('sizePreset');window.selectedFriendlyPresetLabel=(sel.options[sel.selectedIndex]?.textContent||'').split('—')[0].trim();}}
+function chooseQuickSize(label,w,h){window.selectedFriendlyPresetLabel=label;$('customW').value=w;$('customH').value=h;let sel=$('sizePreset');let match=[...sel.options].find(o=>o.textContent.toLowerCase().startsWith(label.toLowerCase()) && o.value===`${w},${h}`);sel.value=match?match.value:'custom';document.querySelectorAll('.presetMiniGroup button').forEach(b=>b.classList.remove('activePreset'));if(event&&event.currentTarget)event.currentTarget.classList.add('activePreset');}
 function labelForSelectedSize(){let w=+$('customW').value,h=+$('customH').value;return window.selectedFriendlyPresetLabel||labelForSize(w,h)}
 function addSelectedSizePage(){save();let w=+$('customW').value||3000;let h=+$('customH').value||2250;state.pages.push({type:labelForSelectedSize(),w,h,layers:[]});state.selectedPage=state.pages.length-1;state.selected=null;render();scrollSel()}
 function applyPageSize(){save();let p=current();p.w=+$('customW').value||3600;p.h=+$('customH').value||2700;p.type=labelForSize(p.w,p.h);render()}
@@ -3463,7 +3467,7 @@ render=function(){hydrateCreativeFlowDefaults();originalRender();};
 
 setupCollapsiblePanels();
 installCanvasGestures();
-document.addEventListener('input',e=>{if(e.target&&['customW','customH'].includes(e.target.id)){window.selectedFriendlyPresetLabel='Custom size';updateChosenSizePill();}});
+document.addEventListener('input',e=>{if(e.target&&['customW','customH'].includes(e.target.id)){window.selectedFriendlyPresetLabel='Custom size';}});
 
 
 init();
@@ -4826,7 +4830,6 @@ body.leftCollapsed.rightCollapsed .stage.listing{
 .presetMiniGroup button{font-size:11px!important;padding:7px 7px!important;min-height:32px!important;line-height:1.1!important;text-align:center!important;border-radius:10px!important;background:rgba(255,255,255,.052)!important;white-space:normal!important}
 .presetMiniGroup button.activePreset{outline:2px solid rgba(255,142,214,.75)!important;background:linear-gradient(90deg,rgba(155,107,255,.35),rgba(255,142,214,.28))!important}
 .presetMiniGroup:has(button:nth-of-type(3)){grid-template-columns:78px 1fr 1fr 1fr}
-.chosenSizePill{margin:8px 0 7px;padding:7px 9px;border-radius:999px;border:1px solid rgba(255,142,214,.26);background:rgba(255,142,214,.08);color:#ffe9fb;font-size:11px;font-weight:900;line-height:1.1;text-transform:lowercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #sizePreset{width:100%;font-size:11px!important;margin:4px 0 7px!important;max-width:100%;text-overflow:ellipsis}
 .sizeInputs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:7px;align-items:center;margin-bottom:6px}
 .sizeInputs span{color:rgba(255,232,248,.65);font-weight:900;text-align:center}
