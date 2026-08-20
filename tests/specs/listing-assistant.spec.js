@@ -41,3 +41,31 @@ test('the Etsy tag generator gives a different set of tags each time you regener
   const uniqueRuns = new Set(runs);
   expect(uniqueRuns.size).toBeGreaterThan(1);
 });
+
+// Real report: the wider word pool above pulled in decorative-surface words (wallpaper, gift
+// wrap, textile, clipart, backdrop, swatch) that make sense for a flat repeating pattern but not
+// for a product/mock-up listing - tested directly with "composition notebook cover" and got
+// "gift wrap" in the tags, which has nothing to do with a notebook cover. This app is also used
+// for mock-ups and templates, not just patterns. Product-style input should draw from a
+// product-appropriate word pool instead, and pick up real occasion tags like "back to school".
+test('a product-style listing (a notebook cover, not a decorative pattern) gets relevant tags, not decorative-surface words like "gift wrap"', async ({ page }) => {
+  await page.evaluate(() => {
+    document.getElementById('listingPatternName').value = 'Composition Notebook Cover';
+    document.getElementById('listingKeywords').value = '';
+  });
+
+  const runs = await page.evaluate(() => {
+    const out = [];
+    for (let i = 0; i < 10; i++) {
+      window.generateListingHelper();
+      out.push(document.getElementById('etsyTagsOutput').value);
+    }
+    return out;
+  });
+
+  const decorativeSurfaceWords = ['gift wrap', 'wallpaper', 'textile', 'backdrop', 'swatch', 'clipart', 'wall art'];
+  runs.forEach((tags) => {
+    decorativeSurfaceWords.forEach((word) => expect(tags).not.toContain(word));
+    expect(tags).toContain('back to school');
+  });
+});

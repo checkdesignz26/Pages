@@ -6238,8 +6238,19 @@ document.addEventListener('click', function(e){
     if(hasAny(['baby','nursery','kids','children'])) styleIdeas.push('nursery','kids');
     baseWords.forEach(w=>{ if(!styleIdeas.includes(w)) styleIdeas.push(w); });
 
-    const subject=styleIdeas.find(w=>!['summer','picnic','cottagecore','boho','nursery','kids','holiday','spooky'].includes(w)) || main;
-    const mood=styleIdeas.find(w=>['cottagecore','boho','summer fruit','tropical fruit','picnic','halloween','christmas','nursery','kids','botanical','wildflower'].includes(w)) || subject;
+    // Real report: this app isn't only for flat repeating patterns - pattern designers also list
+    // mock-ups, templates and finished product designs through it. Tested with "composition
+    // notebook cover": "gift wrap" (and similar decorative-surface words - wallpaper, textile,
+    // backdrop, swatch) came up in the tags, which has nothing to do with a notebook cover. Detect
+    // a product-style input (the subject/keywords name an actual item, not just a decorative
+    // motif) and draw from a product-appropriate word pool instead, plus surface real occasion
+    // tags like "back to school" for a notebook/planner/binder rather than only decorative ones.
+    const productWords=['notebook','journal','planner','binder','agenda','composition','sticker','label','mug','tumbler','card','invitation','template','cover','tote','mockup','calendar'];
+    const isProductContext=hasAny(productWords);
+    if(hasAny(['notebook','composition book','composition notebook','binder','planner','agenda'])) styleIdeas.push('back to school','school supplies');
+
+    const subject=styleIdeas.find(w=>!['summer','picnic','cottagecore','boho','nursery','kids','holiday','spooky','back to school','school supplies'].includes(w)) || main;
+    const mood=styleIdeas.find(w=>['cottagecore','boho','summer fruit','tropical fruit','picnic','halloween','christmas','nursery','kids','botanical','wildflower','back to school','school supplies'].includes(w)) || subject;
 
     // Real request, from a beta tester: hitting "generate" always produced the exact same 13
     // tags for the same name/keywords, every time - useful once, but no way to get a second set
@@ -6250,19 +6261,32 @@ document.addEventListener('click', function(e){
     // clicking generate again on the same input yields a different, still-relevant mix.
     const tagIdeas=[];
     const push=(x)=>{ if(x) tagIdeas.push(x); };
-    const subjectFormatPool=['print','paper','fabric','repeat','wallpaper','background','clipart','wall art','gift wrap','textile','backdrop','swatch'];
-    ['pattern','seamless'].concat(shuffled(subjectFormatPool).slice(0,4)).forEach(f=>push(subject+' '+f));
+    // "cover design" as a suffix plus "cover" as the word it's suffixing (a real possibility now
+    // that product words like "cover" can be both the styleIdea AND part of the format pool)
+    // would otherwise push a redundant "cover cover design" - skip a pairing whose suffix starts
+    // with the same word instead.
+    const pushPair=(word,suffix)=>{
+      const wl=String(word||'').toLowerCase(), sl=String(suffix||'').toLowerCase();
+      if(!wl || !sl || sl===wl || sl.startsWith(wl+' ')) return;
+      push(word+' '+suffix);
+    };
+    const decorativeExtras=['wallpaper','background','clipart','wall art','gift wrap','textile','backdrop','swatch'];
+    const productExtras=['cover design','template','printable','digital download','stationery','cover art'];
+    const subjectFormatPool=['print','paper','fabric','repeat'].concat(isProductContext?productExtras:decorativeExtras);
+    ['pattern','seamless'].concat(shuffled(subjectFormatPool).slice(0,4)).forEach(f=>pushPair(subject,f));
     if(mood && mood!==subject){
-      const moodFormatPool=['pattern','print','paper','fabric','wallpaper','clipart'];
-      shuffled(moodFormatPool).slice(0,3).forEach(f=>push(mood+' '+f));
+      const moodFormatPool=['pattern','print','paper','fabric'].concat(isProductContext?['template','printable']:['wallpaper','clipart']);
+      shuffled(moodFormatPool).slice(0,3).forEach(f=>pushPair(mood,f));
     }
-    const styleSuffixPool=['pattern','print','digital paper','wallpaper','clipart','fabric print'];
+    const styleSuffixPool=['pattern','print','digital paper'].concat(isProductContext?['template','printable','cover design']:['wallpaper','clipart','fabric print']);
     const styleSuffixes=shuffled(styleSuffixPool).slice(0,3);
     styleIdeas.slice(0,8).forEach(w=>{
-      styleSuffixes.forEach(sfx=>push(w+' '+sfx));
+      styleSuffixes.forEach(sfx=>pushPair(w,sfx));
     });
     const genericAlways=['seamless pattern','digital paper','commercial use'];
-    const genericPool=['repeat pattern','scrapbook paper','fabric print','surface pattern','pod design','wallpaper design','clipart set','gift wrap paper','textile design','wall art print','craft supply','print on demand'];
+    const genericPool=isProductContext
+      ? ['repeat pattern','scrapbook paper','fabric print','surface pattern','pod design','template design','printable download','craft supply','print on demand','digital download','cover design']
+      : ['repeat pattern','scrapbook paper','fabric print','surface pattern','pod design','wallpaper design','clipart set','gift wrap paper','textile design','wall art print','craft supply','print on demand'];
     genericAlways.concat(shuffled(genericPool).slice(0,5)).forEach(push);
     const etsyTags=uniqueTags(tagIdeas);
 
