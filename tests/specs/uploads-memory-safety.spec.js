@@ -778,3 +778,65 @@ test('undo survives the periodic memory trim on a large project, instead of bein
   expect(after.historyLenAfterTrim).toBeGreaterThan(0);
   expect(after.markerAfterUndo).toBe('before');
 });
+
+// Real report, with a screenshot and the reporter's own project file: a page full of plain
+// text/callout boxes (fill:'transparent' - meant to float directly over the page with no visible
+// box, confirmed live via getComputedStyle) came back from the parked-page preview sitting on a
+// light grey box that never actually exists on the real page. snapshotStageToDataURL used to fall
+// back to painting a faint rgba(0,0,0,.05) wash whenever a layer's real background was
+// transparent, instead of just leaving it unpainted - this preview exists to look like the real
+// page, not add a visual affordance the live page never shows.
+test('the parked-page preview leaves a transparent-fill text box unpainted, instead of a fake grey box the live page never shows', async ({ page }) => {
+  const redSrc = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 20; c.height = 20;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = 'rgb(255,0,0)';
+    ctx.fillRect(0, 0, 20, 20);
+    return c.toDataURL('image/png');
+  });
+
+  await page.evaluate((redSrc) => {
+    save();
+    const bg = { id: 'bg1', type: 'image', src: redSrc, x: 0, y: 0, w: 100, h: 100, z: 1, opacity: 1, r: 0, fit: 'cover' };
+    const label = {
+      id: 'l1', type: 'text', name: 'callout', text: 'Add name of your pattern', fill: 'transparent',
+      x: 10, y: 10, w: 60, h: 20, z: 2, opacity: 1, r: 0, fontSize: 20, color: '#111111', textAlign: 'center',
+    };
+    state.pages = [
+      { type: 'listing', w: 3000, h: 2250, layers: [bg, label] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+    ];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+  }, redSrc);
+
+  await expect(page.locator('.stage[data-page="0"] .layer.text')).toHaveCount(1);
+  await page.evaluate(() => { state.selectedPage = 2; state.selected = null; render(); });
+
+  const previewImg = page.locator('.stage[data-page="0"] .pp95ParkedPreviewImg');
+  await expect(previewImg).toHaveCount(1, { timeout: 5000 });
+  const previewSrc = await previewImg.getAttribute('src');
+
+  const pixel = await page.evaluate((src) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      // A corner of the text box's own bounding area, away from any glyph strokes.
+      resolve(Array.from(ctx.getImageData(Math.round(0.12 * c.width), Math.round(0.11 * c.height), 1, 1).data));
+    };
+    img.onerror = reject;
+    img.src = src;
+  }), previewSrc);
+
+  // The red background should show straight through - a fake grey wash would measurably darken
+  // the red channel (rgba(0,0,0,.05) over red lands around 242, not 255).
+  expect(pixel[0]).toBeGreaterThan(250);
+  expect(pixel[1]).toBeLessThan(15);
+  expect(pixel[2]).toBeLessThan(15);
+});

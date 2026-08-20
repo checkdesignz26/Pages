@@ -16272,8 +16272,19 @@ else install();
         try{ const shapeEl=node.querySelector('.shapeText'); if(shapeEl){ styleSrc=getComputedStyle(shapeEl); textEl=shapeEl; } }catch(e){}
         const bg=styleSrc.backgroundColor;
         const clipped=clipRoundedBox(ctx, x, y, w, h, styleSrc.borderRadius, k);
-        ctx.fillStyle=(bg&&bg!=='rgba(0, 0, 0, 0)'&&bg!=='transparent')?bg:'rgba(0,0,0,.05)';
-        ctx.fillRect(x,y,w,h);
+        // Real report, with a screenshot: plain text/callout boxes (fill:'transparent' - meant
+        // to float directly over the page with no visible box, confirmed live via
+        // getComputedStyle: background:rgba(0,0,0,0)) showed up in the parked/cached preview
+        // sitting on a light grey box instead. A genuinely transparent background used to fall
+        // back to painting a faint rgba(0,0,0,.05) wash here regardless - this preview exists to
+        // look like the real page, not add visual affordances the live page never shows, so a
+        // real transparent background now stays unpainted instead of getting a fake box. Empty
+        // pattern slots are unaffected - their placeholder background is opaque white
+        // (.layer.patternSlot{background:#fff!important}), not transparent.
+        if(bg&&bg!=='rgba(0, 0, 0, 0)'&&bg!=='transparent'){
+          ctx.fillStyle=bg;
+          ctx.fillRect(x,y,w,h);
+        }
         // node.textContent used to be read straight off the outer .layer wrapper - but the
         // delete "x", "drag corner to resize" hint, and rotate/resize handles all live as
         // sibling DOM nodes right alongside the real caption (.shapeText), always present
