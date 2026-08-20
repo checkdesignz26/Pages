@@ -1368,14 +1368,17 @@ body.autoGroupEditing .layer.collectionGrouped{
   <div class="box"><h2>pages</h2><div class="launchBadge">Pattern Pages workspace</div><p class="smallText">Your pages stack here like a little design desk. Choose a format in <strong>page size & presets</strong>, then add it as a new page.</p><button class="full" onclick="deleteCurrentPage()">delete current page</button><div id="pageList"></div></div>
   <div class="box"><h2>page size & presets</h2><p class="smallText">Choose a format first, then add it as a new page or resize the current page. Social sizes live here too.</p>
   <div class="sizePresetSections">
-    <div class="presetMiniGroup"><span>etsy</span><button onclick="chooseQuickSize('Etsy listing image',3000,2250)">listing 3000×2250</button><button onclick="chooseQuickSize('Etsy square / pattern preview',3000,3000)">square 3000×3000</button><button onclick="chooseQuickSize('Etsy shop banner',3360,840)">shop banner</button></div>
-    <div class="presetMiniGroup"><span>instagram</span><button onclick="chooseQuickSize('Instagram square post',1080,1080)">square post</button><button onclick="chooseQuickSize('Instagram portrait post',1080,1350)">portrait post</button><button onclick="chooseQuickSize('Instagram reel / story',1080,1920)">reel / story</button></div>
-    <div class="presetMiniGroup"><span>pinterest</span><button onclick="chooseQuickSize('Pinterest pin',1000,1500)">pin</button><button onclick="chooseQuickSize('Long Pinterest pin',1000,2100)">long pin</button></div>
-    <div class="presetMiniGroup"><span>facebook</span><button onclick="chooseQuickSize('Facebook landscape post',1200,630)">landscape</button><button onclick="chooseQuickSize('Facebook square post',1080,1080)">square</button><button onclick="chooseQuickSize('Facebook cover',1640,924)">cover</button></div>
+    <div class="presetMiniGroup"><span>etsy</span><button onclick="chooseQuickSize('Etsy listing image',3000,2250)">listing 3000×2250</button><button onclick="chooseQuickSize('Etsy square / pattern preview',3000,3000)">square 3000×3000</button><button onclick="chooseQuickSize('Etsy shop banner',3360,840)">shop banner 3360×840</button></div>
+    <div class="presetMiniGroup"><span>instagram</span><button onclick="chooseQuickSize('Instagram square post',1080,1080)">square post 1080×1080</button><button onclick="chooseQuickSize('Instagram portrait post',1080,1350)">portrait post 1080×1350</button><button onclick="chooseQuickSize('Instagram reel / story',1080,1920)">reel / story 1080×1920</button></div>
+    <div class="presetMiniGroup"><span>pinterest</span><button onclick="chooseQuickSize('Pinterest pin',1000,1500)">pin 1000×1500</button><button onclick="chooseQuickSize('Long Pinterest pin',1000,2100)">long pin 1000×2100</button></div>
+    <!-- Real report: this group used to also have its own "square" button at 1080x1080 - pixel-
+         identical to instagram's "square post" above, just relabeled. Removed rather than
+         relabeled: a genuine duplicate output is more useful gone than disambiguated. -->
+    <div class="presetMiniGroup"><span>facebook</span><button onclick="chooseQuickSize('Facebook landscape post',1200,630)">landscape 1200×630</button><button onclick="chooseQuickSize('Facebook cover',1640,924)">cover 1640×924</button></div>
     <div class="presetMiniGroup"><span>pattern</span><button onclick="chooseQuickSize('Pattern tile square',3600,3600)">3600 square</button><button onclick="chooseQuickSize('Custom size',+$('customW').value||3000,+$('customH').value||2250)">custom</button></div>
   </div>
   <div class="chosenSizePill" id="chosenSizePill">etsy listing image · 3000×2250</div>
-  <select id="sizePreset" onchange="applyPresetLabel()"><option value="3000,2250">Etsy listing image — 3000×2250</option><option value="3000,3000">Etsy square / pattern preview — 3000×3000</option><option value="3360,840">Etsy shop banner — 3360×840</option><option value="1080,1080">Instagram square post — 1080×1080</option><option value="1080,1350">Instagram portrait post — 1080×1350</option><option value="1080,1920">Instagram reel / story — 1080×1920</option><option value="1000,1500">Pinterest pin — 1000×1500</option><option value="1000,2100">Long Pinterest pin — 1000×2100</option><option value="1200,630">Facebook landscape post — 1200×630</option><option value="1080,1080">Facebook square post — 1080×1080</option><option value="1640,924">Facebook cover — 1640×924</option><option value="3600,3600">Pattern tile square — 3600×3600</option><option value="custom">Custom size</option></select>
+  <select id="sizePreset" onchange="applyPresetLabel()"><option value="3000,2250">Etsy listing image — 3000×2250</option><option value="3000,3000">Etsy square / pattern preview — 3000×3000</option><option value="3360,840">Etsy shop banner — 3360×840</option><option value="1080,1080">Instagram square post — 1080×1080</option><option value="1080,1350">Instagram portrait post — 1080×1350</option><option value="1080,1920">Instagram reel / story — 1080×1920</option><option value="1000,1500">Pinterest pin — 1000×1500</option><option value="1000,2100">Long Pinterest pin — 1000×2100</option><option value="1200,630">Facebook landscape post — 1200×630</option><option value="1640,924">Facebook cover — 1640×924</option><option value="3600,3600">Pattern tile square — 3600×3600</option><option value="custom">Custom size</option></select>
   <div class="sizeInputs"><input id="customW" type="number" value="3000" aria-label="width"><span>×</span><input id="customH" type="number" value="2250" aria-label="height"></div>
   <div class="grid2"><button class="primary" onclick="addSelectedSizePage()">add new page</button><button onclick="applyPageSize()">resize current</button></div></div>
   <div class="box texturePanelBox"><h2>background textures</h2>
@@ -1418,11 +1421,16 @@ body.autoGroupEditing .layer.collectionGrouped{
   <div class="installNote"><strong>gentle note:</strong> These are writing and keyword ideas for pattern listings — not ranking or sales guarantees.</div>
 </div>
 <div class="box"><h2>extra design elements</h2>
-  <div class="grid2">
+  <div class="grid3">
     <button onclick="addShape('rectangle')">+ rectangle</button>
     <button onclick="addShape('square')">+ square</button>
+    <button onclick="addShape('circle')">+ circle</button>
   </div>
-  <button class="full" onclick="blankPage()">blank page</button>
+  <!-- Real report: "blank page" read as adding a new blank page (matching the "add new page"
+       button up in page size & presets), when it actually wipes every layer off the CURRENT
+       page - and did so with no confirmation, unlike deletePage()'s "Delete this page?" for a
+       comparably destructive action. Renamed to say what it does, and it now asks first. -->
+  <button class="full" onclick="clearCurrentPage()">clear current page</button>
 </div>
  </aside>
  <section class="workspace" id="workspace"><div id="pageWrap" class="pageWrap"></div></section>
@@ -1637,7 +1645,7 @@ function updateChosenSizePill(){let pill=$('chosenSizePill');if(!pill)return;let
 function labelForSelectedSize(){let w=+$('customW').value,h=+$('customH').value;return window.selectedFriendlyPresetLabel||labelForSize(w,h)}
 function addSelectedSizePage(){save();let w=+$('customW').value||3000;let h=+$('customH').value||2250;state.pages.push({type:labelForSelectedSize(),w,h,layers:[]});state.selectedPage=state.pages.length-1;state.selected=null;render();scrollSel()}
 function applyPageSize(){save();let p=current();p.w=+$('customW').value||3600;p.h=+$('customH').value||2700;p.type=labelForSize(p.w,p.h);render()}
-function blankPage(){save();current().layers=[];state.selected=null;render()}
+function clearCurrentPage(){if(!confirm('Clear every layer on the current page?'))return;save();current().layers=[];state.selected=null;render()}
 
 function getFrameCount(){
   return Math.max(1,Math.min(25,+$('cardCount').value||1));
@@ -2069,7 +2077,7 @@ function addAIDisclosureBadge(){
 
 function addText(kind='text'){save();current().layers.push(layer('text',{name:'plain text',text:'Text',x:18,y:35,w:45,h:12,fill:'transparent',fontSize:42,z:nextZ()}));state.selected=current().layers.at(-1).id;render()}
 function addBadge(shape){save();const dims={oval:[50,16],pill:[52,12],rounded:[46,16],square:[26,20],circle:[24,24],ribbon:[54,15]};const [w,h]=dims[shape]||dims.oval;let l=layer('label',{name:shape+' badge',text:'New label',x:24,y:32,w,h,fill:'rgba(255,255,255,.92)',border:'#111111',borderW:0,fontSize:38,bold:false,badgeShape:shape,z:nextZ()});current().layers.push(l);state.selected=l.id;render()}
-function addShape(kind){save();let sq=kind==='square';current().layers.push(layer(kind,{name:kind,x:25,y:25,w:sq?25:40,h:sq?25:18,fill:'rgba(255,255,255,.92)',border:'#111111',borderW:0,z:nextZ()}));state.selected=current().layers.at(-1).id;render()}
+function addShape(kind){save();let sq=kind==='square'||kind==='circle';current().layers.push(layer(kind,{name:kind,x:25,y:25,w:sq?25:40,h:sq?25:18,fill:'rgba(255,255,255,.92)',border:'#111111',borderW:0,z:nextZ()}));state.selected=current().layers.at(-1).id;render()}
 function nextZ(){return Math.max(0,...current().layers.map(l=>l.z||0))+1}
 function getLayer(){updateAllGroupBounds();return current().layers.find(l=>l.id===state.selected)}
 function render(){renderPages();renderPageList();renderLayers();renderFrameList();syncControls();renderTrays()}
@@ -5939,7 +5947,7 @@ aside:last-of-type .shadowSliderBox{
       const g=document.createElement('div');
       g.className='presetMiniGroup';
       g.id='a4PresetMiniGroup';
-      g.innerHTML='<span>pdf</span><button onclick="chooseQuickSize(\'A4 PDF portrait\',2480,3508)">a4 portrait</button><button onclick="chooseQuickSize(\'A4 PDF landscape\',3508,2480)">a4 landscape</button>';
+      g.innerHTML='<span>pdf</span><button onclick="chooseQuickSize(\'A4 PDF portrait\',2480,3508)">a4 portrait 2480×3508</button><button onclick="chooseQuickSize(\'A4 PDF landscape\',3508,2480)">a4 landscape 3508×2480</button>';
       presetSections.insertBefore(g, presetSections.firstChild);
     }
     const sel=safe$('sizePreset');
@@ -18162,7 +18170,7 @@ else install();
         if(l.fit==='contain'){var sc=Math.min(w/img.width,h/img.height),dw=img.width*sc,dh=img.height*sc; ctx.drawImage(img,-dw/2,-dh/2,dw,dh);}else{var sc2=Math.max(w/img.width,h/img.height),dw2=img.width*sc2,dh2=img.height*sc2; ctx.save();ctx.beginPath();ctx.rect(-w/2,-h/2,w,h);ctx.clip();ctx.drawImage(img,-dw2/2,-dh2/2,dw2,dh2);ctx.restore();}
         if(mockBlend) ctx.globalCompositeOperation='source-over';
       }catch(e){}
-      }else if(['text','label','rectangle','square'].includes(l.type)||l.text){
+      }else if(['text','label','rectangle','square','circle'].includes(l.type)||l.text){
         ctx.fillStyle=l.fill==='transparent'?'rgba(0,0,0,0)':(l.fill||'#ffffff'); ctx.strokeStyle=l.border||'#111111'; ctx.lineWidth=(l.borderW||0)*fontScale;
         // Real report: a badge/label shape (oval, pill, rounded, circle, ribbon - addBadge()'s
         // badgeShape) exported as a plain rectangle instead of its actual shape. Most noticeable
@@ -18178,6 +18186,12 @@ else install();
         }
         else if(l.type==='label' && (l.badgeShape==='oval'||l.badgeShape==='pill')){rounded(ctx,-w/2,-h/2,w,h,Math.min(w,h)/2);ctx.fill();if(l.borderW)ctx.stroke();}
         else if(l.type==='label' && (!l.badgeShape||l.badgeShape==='rounded')){rounded(ctx,-w/2,-h/2,w,h,Math.min(22*fontScale,Math.min(w,h)/2));ctx.fill();if(l.borderW)ctx.stroke();}
+        // Plain "circle" shape (extra design elements' + circle, addShape('circle')) is its own
+        // layer type, not a label/badgeShape - same rectangle-instead-of-real-shape gap as the
+        // badges above, just for this type instead. l.type==='circle' already gets a true
+        // border-radius:50% circle live (renderLayer, a couple thousand lines up), so this
+        // exporter needs the matching ellipse draw or a fresh circle would export as a square.
+        else if(l.type==='circle'){ctx.beginPath();ctx.ellipse(0,0,w/2,h/2,0,0,Math.PI*2);ctx.closePath();ctx.fill();if(l.borderW)ctx.stroke();}
         else{ctx.fillRect(-w/2,-h/2,w,h); if(l.borderW)ctx.strokeRect(-w/2,-h/2,w,h);}
         var text=l.disclosureBadge?'AI Generated':(l.text||''); if(text){
           var fs=(l.fontSize||36)*fontScale, lh=(l.lineHeight||1.05)*fs;

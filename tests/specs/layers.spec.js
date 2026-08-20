@@ -835,3 +835,72 @@ test('exporting a circular badge fills a circle, not a plain rectangle, even wit
   expect(pixel.center[1]).toBeLessThan(60);
   expect(pixel.center[2]).toBeLessThan(60);
 });
+
+// Real request, from a user: "extra design elements" had + rectangle and + square, but no plain
+// circle - so getting a plain circle meant adding a circle badge and deleting its text every
+// time. l.type==='circle' was already a fully supported shape (renderLayer already draws it with
+// border-radius:50%, the layer panel already names it "Circle"), just never reachable from any
+// button. Added addShape('circle') as a third button; addShape() itself needed to also treat
+// 'circle' like 'square' (equal width/height) instead of the rectangle's 40x18 default, or a
+// fresh circle would start out squashed into an oval.
+test('the + circle button in extra design elements adds a true circle, sized like a square not a rectangle', async ({ page }) => {
+  await page.evaluate(() => window.addShape('circle'));
+  const layer = await page.evaluate(() => current().layers.at(-1));
+  expect(layer.type).toBe('circle');
+  expect(layer.w).toBe(layer.h);
+});
+
+// Same rectangle-instead-of-real-shape gap as the badge fix above, but for the plain circle
+// shape type instead of a badgeShape - renderPageToCanvas didn't know about l.type==='circle'
+// at all, so a freshly-added circle would have exported as a square.
+test('exporting a plain circle shape fills a circle, not a square', async ({ page }) => {
+  const pixel = await page.evaluate(async () => {
+    save();
+    state.pages = [{
+      type: 'listing', w: 1000, h: 1000, layers: [{
+        id: 'circle1', type: 'circle', text: '',
+        x: 25, y: 25, w: 50, h: 50, r: 0, opacity: 1, scale: 1, z: 1,
+        fill: '#ff0000', border: '#000000', borderW: 0,
+      }],
+    }];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+
+    const p = state.pages[0];
+    const canvas = await window.renderPageToCanvas(p);
+    const ctx = canvas.getContext('2d');
+    return {
+      corner: Array.from(ctx.getImageData(260, 260, 1, 1).data),
+      center: Array.from(ctx.getImageData(500, 500, 1, 1).data),
+    };
+  });
+
+  // Corner stays the white page background - a square fill would have painted it red.
+  expect(pixel.corner[0]).toBeGreaterThan(240);
+  expect(pixel.corner[1]).toBeGreaterThan(240);
+  expect(pixel.corner[2]).toBeGreaterThan(240);
+  expect(pixel.center[0]).toBeGreaterThan(200);
+  expect(pixel.center[1]).toBeLessThan(60);
+  expect(pixel.center[2]).toBeLessThan(60);
+});
+
+// Real report: "blank page", sitting in "extra design elements" right next to buttons that ADD
+// things, read as adding a new blank page - it actually wipes every layer off the CURRENT page,
+// and did so with no confirmation at all, unlike the comparably destructive deletePage()'s
+// "Delete this page?" prompt. Renamed to clearCurrentPage()/"clear current page" and it now asks
+// first, matching that existing convention.
+test('clear current page asks for confirmation, and only clears layers if confirmed', async ({ page }) => {
+  await page.evaluate(() => { window.addText('one'); window.addShape('square'); });
+  await expect.poll(() => page.evaluate(() => current().layers.length)).toBe(2);
+
+  let promptSeen = '';
+  page.once('dialog', (d) => { promptSeen = d.message(); d.dismiss(); });
+  await page.evaluate(() => window.clearCurrentPage());
+  expect(promptSeen).toContain('Clear');
+  expect(await page.evaluate(() => current().layers.length)).toBe(2);
+
+  page.once('dialog', (d) => d.accept());
+  await page.evaluate(() => window.clearCurrentPage());
+  expect(await page.evaluate(() => current().layers.length)).toBe(0);
+});
