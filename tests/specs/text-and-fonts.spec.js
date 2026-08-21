@@ -60,6 +60,30 @@ test('applyGeneratedFontPair applies the heading font through the normal text co
   expect(result.bold).toBe(true);
 });
 
+// Real report: "it always duplicates the text layer" - applying a font pair with only one text
+// box on the page silently adds a second "subtitle text" layer (ensurePair(), by design, so the
+// pairing has somewhere to put the second font) with zero indication that anything beyond a font
+// change had happened. The extra layer is intentional, but the silence made it read as a bug.
+test('applying a font pair to a lone text layer explains the new subtitle it adds, instead of silently duplicating', async ({ page }) => {
+  const result = await page.evaluate(() => {
+    save();
+    addText('text');
+    const l = current().layers[current().layers.length - 1];
+    state.selected = l.id;
+    render();
+    const before = current().layers.length;
+    applyGeneratedFontPair('Playfair Display', 'Avenir Next');
+    return {
+      before,
+      after: current().layers.length,
+      hint: document.getElementById('selectedHint').textContent,
+    };
+  });
+
+  expect(result.after).toBe(result.before + 1);
+  expect(result.hint.toLowerCase()).toContain('subtitle');
+});
+
 test('double-tapping text opens the floating editor, hides resize handles, and Done cleans up fully', async ({ page }) => {
   // Three real bugs here, all from CSS/JS added in later patches without accounting for what
   // pp-text-v176-js ("GOLDEN CAGE TEXT SURGERY") already relied on:
@@ -527,4 +551,30 @@ test('the floating text editor stays open - an unrelated pointerup listener does
   }, layerId);
   expect(state.hasTextarea).toBe(true);
   expect(state.layerIsEditing).toBe(true);
+});
+
+// Real report, with a screenshot: on Windows Chrome, opening the font dropdown showed almost
+// every option blank/invisible - only the one row under the mouse/keyboard highlight (native
+// blue background) was readable. <option> has no colour of its own, so it inherited the
+// near-white color:var(--text) meant for the <select>'s own dark, app-themed CLOSED box - but
+// the OPEN dropdown list is the browser's native, plain-white popup, which this app can't
+// restyle. Near-white text on that native white background is invisible everywhere except the
+// one row Chrome fills with its own blue highlight. macOS/iOS mostly ignore page CSS for the
+// open list (system colouring instead), which is why this never surfaced there. Playwright can't
+// screenshot the native popup itself (it paints outside the page), so this checks the actual
+// mechanism: <option>'s own computed colour, which is what the popup renders it with.
+test('the font dropdown\'s options have their own readable dark-on-light colour, not inherited near-white text', async ({ page }) => {
+  const colors = await page.evaluate(() => {
+    const opt = document.querySelector('#fontFamily option');
+    const cs = getComputedStyle(opt);
+    function toRgb(str) {
+      const m = str.match(/\d+/g).map(Number);
+      return m;
+    }
+    return { color: toRgb(cs.color), background: toRgb(cs.backgroundColor) };
+  });
+  // Dark text (low channel values) on a light background (high channel values) - the opposite of
+  // the inherited near-white-on-transparent that made every row but one unreadable.
+  expect(colors.color[0]).toBeLessThan(100);
+  expect(colors.background[0]).toBeGreaterThan(200);
 });

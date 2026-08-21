@@ -19,6 +19,19 @@
 html,body{margin:0;height:100%;overflow:hidden;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(circle at top left,#17224a,#060a16 70%);color:var(--text)}
 button,input,select{font:inherit}
 button,select,input[type=number],input[type=text],input[type=color]{border:1px solid var(--line);background:linear-gradient(180deg,#303851,#20263d);color:var(--text);border-radius:15px;padding:10px 13px;font-weight:850;box-shadow:0 5px 14px rgba(0,0,0,.18)}
+/* Real report, with a screenshot: on Windows Chrome, opening a <select> (e.g. the font dropdown)
+   showed almost every option blank/invisible - only the one row under the mouse/keyboard focus
+   (with its native blue highlight) was readable. Cause: <option> has no colour of its own, so it
+   inherits the near-white `color:var(--text)` set on <select> above (meant for the select's own
+   dark, app-themed CLOSED box) - but the OPEN dropdown list itself is the browser's native,
+   plain-white popup, not something this app can restyle. Near-white text on that native white
+   background is invisible everywhere except the one row Chrome fills with a blue highlight,
+   where light text still reads. macOS/iOS Safari and Chrome mostly ignore page CSS for the open
+   list and use their own system colouring instead, which is why this never showed up there.
+   Giving <option>/<optgroup> their own explicit dark-on-light colour fixes the native list on
+   Windows without touching the select's own closed-box styling above (a separate rendering
+   path), and is harmless everywhere else since it's simply correct either way. */
+option,optgroup{color:#161320;background:#fff;font-weight:600}
 button{cursor:pointer;touch-action:manipulation} button:disabled{opacity:.45;cursor:not-allowed} button.primary{border:0;background:linear-gradient(90deg,var(--purple),var(--pink))} button.small{padding:7px 10px;border-radius:12px;font-size:13px} button.active{outline:3px solid rgba(255,142,214,.75)}
 /* Real bug: on a narrower iPad, the whole layout ran off the edge of the screen with no way to
    scroll back and see the rest - confirmed from a screenshot, reproduced at that iPad's actual
@@ -19301,7 +19314,9 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     return !!(l && (l.type==='text' || l.type==='label') && !l.disclosureBadge);
   }
 
+  var pairAddedSubtitle=false;
   function ensurePair(){
+    pairAddedSubtitle=false;
     var texts=[];
     try{ texts=selectedTextLayers().filter(isEditableText); }catch(_){ }
 
@@ -19331,6 +19346,7 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
         });
         current().layers.push(subtitle);
         texts=selectedTextLayers().filter(isEditableText);
+        pairAddedSubtitle=true;
       }catch(_){ }
     }
     return texts;
@@ -19394,6 +19410,14 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
       if(typeof syncControls==='function') syncControls();
     }
     try{ if(typeof autosaveSoon==='function') autosaveSoon(); }catch(_){ }
+    // Real report: "it always duplicates the text layer" - applying a font pair with only one
+    // text box silently added a second "subtitle text" layer (ensurePair(), by design, so the
+    // pairing has somewhere to put the second font) with zero indication anything beyond a font
+    // change had happened. Set after render()/syncControls() above, which would otherwise
+    // overwrite this with the plain "<name> selected" status text.
+    if(pairAddedSubtitle){
+      try{ var hint=$('selectedHint'); if(hint) hint.textContent='Added a subtitle text box to pair with your heading font.'; }catch(_){ }
+    }
     return true;
   };
   try{ applyGeneratedFontPair=window.applyGeneratedFontPair; }catch(_){ }
