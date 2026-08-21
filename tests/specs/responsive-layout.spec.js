@@ -173,6 +173,25 @@ test.describe('desktop mouse layout', () => {
     // clearly up near the header instead, nowhere close to viewport centre.
     expect(box.y).toBeLessThan(200);
   });
+
+  // Real report: recording with a screen-capture tool (Tango) whose sidebar docks alongside the
+  // browser tab squished multi-line canvas text into an overlapping mess. Confirmed directly:
+  // the "stable stage width" CSS variable re-measures on every window resize and, until now,
+  // always accepted a narrower reading once anything ate into the browser's own viewport width
+  // (not just the app's own side panels, which is all it was ever meant to react to) - and layer
+  // font sizes are fixed px, so a shrinking stage with the same fixed text broke exactly like
+  // this. Confirmed the failure directly: narrowing from 1920 down through ~1100px dropped the
+  // stable width from 760px to 499px before this fix.
+  test('the canvas does not shrink (and squash fixed-px text) just because the browser window narrows, e.g. a docked recording-tool sidebar', async ({ page }) => {
+    await page.waitForTimeout(300); // let the initial measure() settle at the wide viewport
+    const wide = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--pp-stable-stage-width'));
+
+    await page.setViewportSize({ width: 1100, height: 1080 }); // roughly what's left after a ~450px docked sidebar
+    await page.waitForTimeout(500);
+    const narrowed = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--pp-stable-stage-width'));
+
+    expect(narrowed).toBe(wide);
+  });
 });
 
 test.describe('iPad (touch) layout stays exactly as before', () => {
@@ -183,5 +202,20 @@ test.describe('iPad (touch) layout stays exactly as before', () => {
     expect(box).not.toBeNull();
     const viewportCentre = 1400 / 2;
     expect(Math.abs((box.y + box.height / 2) - viewportCentre)).toBeLessThan(5);
+  });
+
+  // The "never shrink" protection above is deliberately scoped to pointer:fine/hover:hover (a
+  // real mouse) only - a real iPad rotating from landscape to portrait is a genuine orientation
+  // change the canvas should still be free to resize for, not an external panel stealing space.
+  test('rotating a touch device (landscape to portrait) still freely re-measures the stage width, unaffected by the desktop never-shrink fix', async ({ page }) => {
+    await page.setViewportSize({ width: 1180, height: 820 }); // landscape
+    await page.waitForTimeout(500);
+    const landscape = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--pp-stable-stage-width'));
+
+    await page.setViewportSize({ width: 820, height: 1180 }); // rotated to portrait
+    await page.waitForTimeout(500);
+    const portrait = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--pp-stable-stage-width'));
+
+    expect(portrait).not.toBe(landscape);
   });
 });

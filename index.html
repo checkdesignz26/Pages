@@ -20850,7 +20850,27 @@ body.leftCollapsed.rightCollapsed .stage.pattern,body.leftCollapsed.rightCollaps
       main.getBoundingClientRect();
       main.style.transition=prevMainTransition||'';
     }
-    if(w>50) document.documentElement.style.setProperty('--pp-stable-stage-width',Math.round(w)+'px');
+    // Real report: on a real desktop monitor, opening a screen-recording tool's docked sidebar
+    // (Tango) - or any other browser panel/extension that eats into the window - squashed
+    // multi-line text into an overlapping mess. This measurement re-runs on every window
+    // resize, and until now always accepted whatever it found - including a NARROWER width
+    // once something ate into the browser's own viewport, on top of the already-narrower
+    // reading it's designed to take with both panels forced open. Layer font sizes are fixed
+    // px (by design, not scaled to the canvas), so a stage that's allowed to keep shrinking
+    // any time the outer window narrows is exactly what breaks that text. On a real mouse/
+    // desktop (not touch - an iPad genuinely rotating to portrait SHOULD still be free to
+    // measure smaller, that's a real orientation change, not an external panel stealing
+    // space), only ever grow this value, never shrink it - worst case the canvas needs the
+    // workspace's own horizontal scroll to see it all, which is a far smaller loss than
+    // unreadable overlapping text.
+    var isDesktopPointer=false;
+    try{ isDesktopPointer=window.matchMedia('(hover:hover) and (pointer:fine)').matches; }catch(e){}
+    if(w>50){
+      var prevPx=parseFloat(document.documentElement.style.getPropertyValue('--pp-stable-stage-width'))||0;
+      if(!isDesktopPointer || !prevPx || w>prevPx){
+        document.documentElement.style.setProperty('--pp-stable-stage-width',Math.round(w)+'px');
+      }
+    }
   }
   window.addEventListener('resize',measure);
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',measure);
