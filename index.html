@@ -10876,6 +10876,26 @@ window.addEventListener('DOMContentLoaded',function(){
 
 </style>
 
+<!-- Real report: on a maximized Windows Chrome window (1920x1080), the panel-collapse arrows
+     "were always in the way" and kept collapsing the right panel by accident, making it very
+     hard to scroll to or use the text controls. Confirmed the cause: these buttons are pinned to
+     the exact vertical centre of the viewport (top:50%) at the panel's own right/left edge -
+     harmless on a physically short iPad screen where that's naturally near a thumb's resting
+     position, but on a tall desktop window it sits directly on top of that side panel's own
+     scrollbar and the area a mouse naturally passes through while scrolling or reading down the
+     panel, so it keeps getting clicked/grabbed instead of the content underneath it. Only move it
+     for pointer:fine/hover:hover environments (real mouse, not a touchscreen) so the iPad
+     experience - already tuned around this exact positioning - is untouched. -->
+<style id="pp-panel-toggle-desktop-position-fix">
+@media (hover:hover) and (pointer:fine){
+  #toggleLeftPanel,#toggleRightPanel{
+    top:96px!important;
+    transform:none!important;
+    height:44px!important;
+  }
+}
+</style>
+
 <script id="pp-real-tray-state-fix-script-106">
 (function(){
   'use strict';

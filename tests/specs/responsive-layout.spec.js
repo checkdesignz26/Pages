@@ -154,3 +154,34 @@ test('every uploaded pattern in the tray is fully visible and individually selec
     expect(hitIndex).toBe(i);
   }
 });
+
+// Real report: on a maximized Windows Chrome window (1920x1080), the panel-collapse arrow was
+// "always in the way" and kept collapsing the right panel by accident. Confirmed the cause:
+// #toggleRightPanel/#toggleLeftPanel are pinned to the exact vertical centre of the viewport
+// (top:50%) at the panel's own edge - harmless on a physically short iPad screen, but on a tall
+// desktop window that sits directly on top of the panel's own scrollbar and the area a mouse
+// naturally passes through while scrolling or reading down the panel. Moved it near the top
+// instead, but only for pointer:fine/hover:hover environments (a real mouse), so the iPad
+// experience - already tuned around the centred position - is untouched.
+test.describe('desktop mouse layout', () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
+
+  test('the panel-collapse arrow sits near the top on a wide desktop window, not pinned to the vertical centre where it blocks scrolling', async ({ page }) => {
+    const box = await page.locator('#toggleRightPanel').boundingBox();
+    expect(box).not.toBeNull();
+    // The old, buggy position centred it at viewport height/2 (~540 here) - assert it's now
+    // clearly up near the header instead, nowhere close to viewport centre.
+    expect(box.y).toBeLessThan(200);
+  });
+});
+
+test.describe('iPad (touch) layout stays exactly as before', () => {
+  test.use({ viewport: { width: 1200, height: 1400 }, hasTouch: true });
+
+  test('the panel-collapse arrow stays vertically centred on a touch device, unaffected by the desktop repositioning fix', async ({ page }) => {
+    const box = await page.locator('#toggleRightPanel').boundingBox();
+    expect(box).not.toBeNull();
+    const viewportCentre = 1400 / 2;
+    expect(Math.abs((box.y + box.height / 2) - viewportCentre)).toBeLessThan(5);
+  });
+});
