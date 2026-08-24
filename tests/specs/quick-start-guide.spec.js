@@ -49,11 +49,46 @@ test('the Quick Start Guide auto-shows once for a first-time visitor, then stays
   await context.close();
 });
 
-test('the help button sits stacked above the feedback button, not overlapping it', async ({ page }) => {
-  const helpBox = await page.locator('.helpBtn').boundingBox();
-  const feedbackBox = await page.locator('.feedbackBtn').boundingBox();
-  expect(helpBox).not.toBeNull();
-  expect(feedbackBox).not.toBeNull();
-  // help sits above feedback (smaller y), and their boxes don't vertically overlap.
-  expect(helpBox.y + helpBox.height).toBeLessThanOrEqual(feedbackBox.y + 1);
+// On iPad (touch, no fine pointer) feedback/help stay exactly as before: fixed pills stacked in
+// a screen corner, tuned around a thumb's resting position.
+test.describe('iPad (touch): feedback/help stay as fixed corner pills', () => {
+  test.use({ hasTouch: true });
+
+  test('the help button sits stacked above the feedback button, not overlapping it', async ({ page }) => {
+    const helpBox = await page.locator('.helpBtn').boundingBox();
+    const feedbackBox = await page.locator('.feedbackBtn').boundingBox();
+    expect(helpBox).not.toBeNull();
+    expect(feedbackBox).not.toBeNull();
+    // help sits above feedback (smaller y), and their boxes don't vertically overlap.
+    expect(helpBox.y + helpBox.height).toBeLessThanOrEqual(feedbackBox.y + 1);
+  });
+});
+
+// Real report from a beta tester: on a desktop window the fixed feedback/help pills in the
+// bottom-right corner interfered with the right-panel's collapse arrow. Moved them into the
+// header's toolbar for real mouse users, next to the left-handed-layout control, instead of
+// floating over the canvas/panel edge. Only for pointer:fine/hover:hover (a real mouse) - this
+// project's default config (Desktop Chrome, no touch emulation) already matches that.
+test.describe('desktop mouse: feedback/help move into the top toolbar', () => {
+  test('the feedback and help buttons sit in the same toolbar row as the left-handed-layout control, not floating in a screen corner', async ({ page }) => {
+    const group = page.locator('.compactTools');
+    const handMode = page.locator('#handModeBtn');
+    const feedback = page.locator('#feedbackBtn');
+    const help = page.locator('#helpBtn');
+
+    await expect(feedback).toBeVisible();
+    await expect(help).toBeVisible();
+
+    // Both now live inside the same toolbar group as the left-handed-layout toggle.
+    expect(await group.locator('#feedbackBtn').count()).toBe(1);
+    expect(await group.locator('#helpBtn').count()).toBe(1);
+
+    const handBox = await handMode.boundingBox();
+    const feedbackBox = await feedback.boundingBox();
+    const helpBox = await help.boundingBox();
+    // Roughly the same row - vertical centres within a few px of each other, not a stacked
+    // corner pill sitting far down the page.
+    expect(Math.abs((feedbackBox.y + feedbackBox.height / 2) - (handBox.y + handBox.height / 2))).toBeLessThan(20);
+    expect(Math.abs((helpBox.y + helpBox.height / 2) - (handBox.y + handBox.height / 2))).toBeLessThan(20);
+  });
 });

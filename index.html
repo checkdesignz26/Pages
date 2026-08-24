@@ -1334,9 +1334,9 @@ body.autoGroupEditing .layer.collectionGrouped{
       <button onclick="ppShowDebugReport()">debug report</button>
     </div>
     <div class="actionGroup softGroup compactTools">
-      <button onclick="zoomPage(-0.05)">−</button>
-      <button onclick="zoomPage(0.05)">+</button>
-      <button onclick="toggleHandedMode()" id="handModeBtn">left mode</button>
+      <button onclick="zoomPage(-0.05)" title="Zoom out">−</button>
+      <button onclick="zoomPage(0.05)" title="Zoom in">+</button>
+      <button onclick="toggleHandedMode()" id="handModeBtn" title="Switch which side the panels are on">left-handed layout</button>
     </div>
   </div>
  </div>
@@ -1355,7 +1355,7 @@ body.autoGroupEditing .layer.collectionGrouped{
     <button id="stripDirHorizontalBtn" type="button" onclick="stripDirection='horizontal';chooseStripDirection('horizontal')">horizontal stash</button>
   </div>
   <p class="smallText">Horizontal stash stacks full-width fabric strips with stronger shadows.</p>
-</div><div class="frameCountRow"><label>number of slots</label><div class="frameStepper" aria-label="number of pattern slots"><button type="button" onclick="changeFrameCount(-1)">−</button><span id="cardCountDisplay">1</span><button type="button" onclick="changeFrameCount(1)">+</button><input id="cardCount" type="hidden" value="1"></div></div><label class="checkRow" id="showcaseCaptionRow"><input id="showcaseAddCaptions" type="checkbox">add a caption below each shape</label><button class="full primary" onclick="generateSelectedShowcaseLayout()">generate layout</button><p class="smallText">After generating: tap a strip, tile, rectangle or circle so it highlights, then choose a pattern from the tray and tap <strong>fill selected slot</strong>.</p></div></div>
+</div><div class="frameCountRow"><label>number of slots</label><div class="frameStepper" aria-label="number of pattern slots"><button type="button" onclick="changeFrameCount(-1)" title="Remove a pattern slot">−</button><span id="cardCountDisplay">1</span><button type="button" onclick="changeFrameCount(1)" title="Add a pattern slot">+</button><input id="cardCount" type="hidden" value="1"></div></div><label class="checkRow" id="showcaseCaptionRow"><input id="showcaseAddCaptions" type="checkbox">add a caption below each shape</label><button class="full primary" onclick="generateSelectedShowcaseLayout()">generate layout</button><p class="smallText">After generating: tap a strip, tile, rectangle or circle so it highlights, then choose a pattern from the tray and tap <strong>fill selected slot</strong>.</p></div></div>
   <div class="box trayTop frameWowBox"><h2>frames</h2><div class="panelBody"><p class="smallText"><strong>Add a pattern frame.</strong> Choose a built-in shape or add your own PNG shape with transparency, then fill it from the Pattern Tray.</p><button class="full primary" onclick="toggleFramePicker()">add frame</button><div id="framePicker" class="framePicker hidden"><div class="framePickerTitle">built-in frames</div><div class="frameShapeGrid"><button onclick="addPatternFrame('flower')">✿<span>flower</span></button><button onclick="addPatternFrame('heart')">♥<span>heart</span></button><button onclick="addPatternFrame('star')">★<span>star</span></button><button onclick="addPatternFrame('circle')">●<span>circle</span></button><button onclick="addPatternFrame('arch')">⌒<span>arch</span></button><button onclick="addPatternFrame('label')">▭<span>label</span></button></div><div class="framePickerTitle">custom frame</div><input id="customFrameInput" class="hidden" type="file" accept="image/png,image/*" onchange="addCustomFrameFromPNG(event)"><button class="full" onclick="customFrameInput.click()">add your PNG</button><p class="smallText">Tip: use a PNG shape with a transparent background. Pattern Pages turns the visible shape into a fillable frame.</p></div></div></div>
 
 
@@ -1545,8 +1545,8 @@ body.autoGroupEditing .layer.collectionGrouped{
   <div class="box"><h2>shape colours</h2><div class="colorRow"><label class="smallText">fill colour</label><input id="fillColor" type="color" value="#ffffff" oninput="applyColorControls()"></div><div class="colorRow"><label class="smallText">border colour</label><input id="borderColor" type="color" value="#111111" oninput="applyColorControls()"></div><div class="rangeRow"><label>border</label><input id="borderWidth" type="range" min="0" max="16" value="0" oninput="applyColorControls()"></div></div>
  </aside>
 </main>
-<button id="toggleLeftPanel" class="panelToggle" onclick="toggleSidePanel('left')" aria-label="collapse left panel"></button>
-<button id="toggleRightPanel" class="panelToggle" onclick="toggleSidePanel('right')" aria-label="collapse right panel"></button>
+<button id="toggleLeftPanel" class="panelToggle" onclick="toggleSidePanel('left')" aria-label="collapse left panel" title="Collapse or expand this panel"></button>
+<button id="toggleRightPanel" class="panelToggle" onclick="toggleSidePanel('right')" aria-label="collapse right panel" title="Collapse or expand this panel"></button>
 </div>
 <script>
 const state={pages:[],selectedPage:0,selected:null,lastDeselected:null,trays:{pattern:[],asset:[]},selectedTray:{pattern:null,asset:null},history:[],redoStack:[],zoom:1,leftHanded:false,leftCollapsed:false,rightCollapsed:false};
@@ -2619,7 +2619,7 @@ if(l.type==='frame'){
   ">${escapeHtml(l.disclosureBadge?'AI Generated':(l.text||''))}</div>`;
 }
 
-d.innerHTML+=`<button type="button" class="deleteMini" aria-label="delete element">×</button><div class="resizeHint">drag corner to resize</div><div class="rotateHandle"></div><div class="handle"></div>`;
+d.innerHTML+=`<button type="button" class="deleteMini" aria-label="delete element" title="Delete this element">×</button><div class="resizeHint">drag corner to resize</div><div class="rotateHandle"></div><div class="handle"></div>`;
 const mini=d.querySelector('.deleteMini');
 if(mini){
   const doDelete = ev => {
@@ -4231,9 +4231,50 @@ button,select,input[type=number],input[type=text],input[type=color]{
 
 </style>
 
-<button class="feedbackBtn" onclick="openFeedbackForm()" title="Open feedback form">feedback 💌</button>
-<button class="helpBtn" onclick="openQuickStartGuide()" title="Open quick start guide">? help</button>
+<button id="feedbackBtn" class="feedbackBtn" onclick="openFeedbackForm()" title="Open feedback form">feedback 💌</button>
+<button id="helpBtn" class="helpBtn" onclick="openQuickStartGuide()" title="Open quick start guide">? help</button>
 
+<!-- Real report from a beta tester: on a desktop window the fixed feedback/help pills in the
+     bottom-right corner "interfere with the arrows on the right panel" and should live up in the
+     toolbar instead, next to the left-handed-layout control. Move them into the same toolbar
+     group as the zoom/left-handed-layout buttons (.compactTools) for real mouse users only, so
+     they stop floating over the canvas/panel edge entirely; on iPad (no fine pointer/hover) they
+     stay exactly where they were - untouched, still the fixed corner pills the touch experience
+     was tuned around. -->
+<style id="pp-desktop-top-actions-css">
+@media (hover:hover) and (pointer:fine){
+  .compactTools #feedbackBtn,.compactTools #helpBtn{
+    position:static!important;
+    left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;
+    transform:none!important;
+    padding:8px 10px!important;
+    font-size:12px!important;
+    box-shadow:none!important;
+  }
+}
+</style>
+<script id="pp-desktop-top-actions-js">
+(function(){
+  if(window.__PP_DESKTOP_TOP_ACTIONS__) return;
+  window.__PP_DESKTOP_TOP_ACTIONS__=true;
+  function run(){
+    var isDesktopPointer=false;
+    try{ isDesktopPointer=window.matchMedia('(hover:hover) and (pointer:fine)').matches; }catch(e){}
+    if(!isDesktopPointer) return;
+    var group=document.querySelector('.compactTools');
+    var feedback=document.getElementById('feedbackBtn');
+    var help=document.getElementById('helpBtn');
+    if(!group) return;
+    if(feedback) group.appendChild(feedback);
+    if(help) group.appendChild(help);
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',run);
+  }else{
+    run();
+  }
+})();
+</script>
 
 <script>
 /* Page Studio helper: keep panels visible but calm/collapsible. */
@@ -10898,16 +10939,42 @@ window.addEventListener('DOMContentLoaded',function(){
      scrollbar and the area a mouse naturally passes through while scrolling or reading down the
      panel, so it keeps getting clicked/grabbed instead of the content underneath it. Only move it
      for pointer:fine/hover:hover environments (real mouse, not a touchscreen) so the iPad
-     experience - already tuned around this exact positioning - is untouched. -->
+     experience - already tuned around this exact positioning - is untouched.
+
+     Follow-up beta report: a fixed top:96px landed the arrow half inside the header itself
+     (measured: header ~129px tall at 1920x1080, so 96-140px straddled the header/canvas
+     boundary) - "close to the title where it is lost", not actually next to the canvas it
+     controls. --pp-header-height is measured live off the real header (see
+     pp-panel-toggle-desktop-position-js below) so the arrow always lands just below it,
+     comfortably inside the workspace, regardless of how tall the header wraps to. -->
 <style id="pp-panel-toggle-desktop-position-fix">
 @media (hover:hover) and (pointer:fine){
   #toggleLeftPanel,#toggleRightPanel{
-    top:96px!important;
+    top:var(--pp-header-height,145px)!important;
     transform:none!important;
     height:44px!important;
   }
 }
 </style>
+
+<script id="pp-panel-toggle-desktop-position-js">
+(function(){
+  if(window.__PP_HEADER_HEIGHT_MEASURE__) return;
+  window.__PP_HEADER_HEIGHT_MEASURE__=true;
+  function measure(){
+    try{
+      var header=document.querySelector('header.studioHeader, header');
+      if(!header) return;
+      var h=header.getBoundingClientRect().height;
+      if(h>10) document.documentElement.style.setProperty('--pp-header-height',Math.round(h+16)+'px');
+    }catch(e){}
+  }
+  measure();
+  window.addEventListener('resize',measure);
+  setTimeout(measure,150);
+  setTimeout(measure,800);
+})();
+</script>
 
 <script id="pp-real-tray-state-fix-script-106">
 (function(){
@@ -18848,7 +18915,7 @@ function makeTextureRow(){
   var p=P();if(!p)return null;var hidden=(p.backgroundTexture==='none'||!p.backgroundTexture)&&p._hiddenBackgroundTexture;
   var id=hidden?p._hiddenBackgroundTexture:(p.backgroundTexture||'none');if(id==='none'||id==='pure white'||id==='pure-white')return null;
   var t=textureInfo(id),r=document.createElement('div');r.className='layerItem ppBackgroundTextureRow'+(S()&&S().ppSelectedBackgroundTexture?' active':'');
-  r.innerHTML='<span class="ppTextureLock">▾</span><span class="ppTextureThumb"></span><button type="button" class="ppTexEye">'+(hidden?'🚫':'👁')+'</button><span class="ppTextureName"><strong>'+esc(t.name||id)+'</strong><small>background texture · fixed</small></span><button type="button" class="ppTexRemove">×</button>';
+  r.innerHTML='<span class="ppTextureLock">▾</span><span class="ppTextureThumb"></span><button type="button" class="ppTexEye" title="'+(hidden?'Show this texture':'Hide this texture')+'">'+(hidden?'🚫':'👁')+'</button><span class="ppTextureName"><strong>'+esc(t.name||id)+'</strong><small>background texture · fixed</small></span><button type="button" class="ppTexRemove" title="Remove this background texture">×</button>';
   var thumb=r.querySelector('.ppTextureThumb');thumb.style.background=t.css||t.color||'#fff';if(t.size)thumb.style.backgroundSize=t.size;
   r.addEventListener('click',function(e){if(e.target.closest('button'))return;var s=S();if(!s)return;s.selected=null;s.ppSelectedBackgroundTexture=true;sync();var box=document.querySelector('.texturePanelBox');if(box){box.classList.remove('collapsed');box.scrollIntoView({block:'nearest',behavior:'smooth'})}});
   r.querySelector('.ppTexEye').addEventListener('click',function(e){e.stopPropagation();var p=P();if(!p)return;try{if(typeof save==='function')save()}catch(_){}if((p.backgroundTexture||'none')!=='none'){p._hiddenBackgroundTexture=p.backgroundTexture;p.backgroundTexture='none'}else if(p._hiddenBackgroundTexture){p.backgroundTexture=p._hiddenBackgroundTexture;delete p._hiddenBackgroundTexture}try{if(typeof render==='function')render()}catch(_){}setTimeout(sync,0)});
@@ -20234,7 +20301,7 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     ov=document.createElement('div');
     ov.id='ppDocImgOverlay';
     ov.className='selected';
-    ov.innerHTML='<div class="rotateHandle"></div><div class="handle"></div><div class="resizeHint">drag to resize · top handle rotates</div><button type="button" class="deleteMini" aria-label="delete image">×</button>';
+    ov.innerHTML='<div class="rotateHandle"></div><div class="handle"></div><div class="resizeHint">drag to resize · top handle rotates</div><button type="button" class="deleteMini" aria-label="delete image" title="Delete this image">×</button>';
     document.body.appendChild(ov);
     var handle=ov.querySelector('.handle'),rotateHandle=ov.querySelector('.rotateHandle');
     ov.querySelector('.deleteMini').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();deleteSelectedImage();});

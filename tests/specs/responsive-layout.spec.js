@@ -174,6 +174,18 @@ test.describe('desktop mouse layout', () => {
     expect(box.y).toBeLessThan(200);
   });
 
+  // Real beta-tester report: an earlier fix moved the arrow to a fixed top:96px, which actually
+  // landed it half inside the header itself ("close to the title where it is lost") rather than
+  // next to the canvas it controls. The arrow's top is now measured live off the header's own
+  // rendered height, so it always lands just below it, clearly inside the workspace.
+  test('the panel-collapse arrow sits below the header, inside the canvas area, not overlapping the title', async ({ page }) => {
+    await page.waitForTimeout(300); // let the header-height measure() settle
+    const headerBottom = await page.evaluate(() => document.querySelector('header.studioHeader, header').getBoundingClientRect().bottom);
+    const box = await page.locator('#toggleRightPanel').boundingBox();
+    expect(box).not.toBeNull();
+    expect(box.y).toBeGreaterThanOrEqual(headerBottom - 1);
+  });
+
   // Real report: recording with a screen-capture tool (Tango) whose sidebar docks alongside the
   // browser tab squished multi-line canvas text into an overlapping mess. Confirmed directly:
   // the "stable stage width" CSS variable re-measures on every window resize and, until now,
@@ -218,4 +230,25 @@ test.describe('iPad (touch) layout stays exactly as before', () => {
 
     expect(portrait).not.toBe(landscape);
   });
+});
+
+// Real beta-tester feedback: the button's default label was the generic "left mode", but every
+// place the app actually sets this text dynamically already uses "left-handed layout" /
+// "right-handed layout" - the static HTML default just never matched. Renamed so the default
+// state reads the same as the toggled states, and so it's clear what the button switches.
+test('the handedness toggle button reads "left-handed layout" by default, matching what toggling it sets', async ({ page }) => {
+  await expect(page.locator('#handModeBtn')).toHaveText('left-handed layout');
+});
+
+// Real beta-tester feedback: several icon-only controls (a bare +/-, a bare arrow) had no way for
+// a desktop user to tell what they do without clicking them - a hover tooltip (the native title=
+// attribute) was requested so the button's purpose is clear on hover, on the ones that don't
+// already say so via their own visible label.
+test('icon-only controls (zoom, panel-collapse arrows, frame count stepper) have a hover tooltip explaining what they do', async ({ page }) => {
+  await expect(page.locator('button[onclick="zoomPage(-0.05)"]')).toHaveAttribute('title', /./);
+  await expect(page.locator('button[onclick="zoomPage(0.05)"]')).toHaveAttribute('title', /./);
+  await expect(page.locator('#toggleLeftPanel')).toHaveAttribute('title', /./);
+  await expect(page.locator('#toggleRightPanel')).toHaveAttribute('title', /./);
+  await expect(page.locator('button[onclick="changeFrameCount(-1)"]')).toHaveAttribute('title', /./);
+  await expect(page.locator('button[onclick="changeFrameCount(1)"]')).toHaveAttribute('title', /./);
 });

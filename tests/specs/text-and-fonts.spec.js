@@ -578,3 +578,12 @@ test('the font dropdown\'s options have their own readable dark-on-light colour,
   expect(colors.color[0]).toBeLessThan(100);
   expect(colors.background[0]).toBeGreaterThan(200);
 });
+
+// Real beta-tester feedback: bare-icon buttons (like a text layer's "x" delete button) should
+// explain themselves on hover.
+test('a text layer\'s delete "x" button has a hover tooltip', async ({ page }) => {
+  await page.evaluate(() => { addText('text'); });
+  await page.waitForTimeout(200);
+  const layerId = await page.evaluate(() => state.pages[0].layers[0].id);
+  await expect(page.locator(`.layer[data-id="${layerId}"] .deleteMini`)).toHaveAttribute('title', /./);
+});

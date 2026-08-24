@@ -697,6 +697,8 @@ test('a selected document image shows a delete "x" directly on its selection box
   await page.click('.documentEditor img');
   await page.waitForSelector('#ppDocImgOverlay .deleteMini');
   await expect(page.locator('#ppDocImgOverlay .deleteMini')).toBeVisible();
+  // Real beta-tester feedback: icon-only buttons like this bare "x" should explain themselves on hover.
+  await expect(page.locator('#ppDocImgOverlay .deleteMini')).toHaveAttribute('title', /./);
 
   await page.click('#ppDocImgOverlay .deleteMini');
   await page.waitForTimeout(150);
