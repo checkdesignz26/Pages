@@ -88,13 +88,16 @@ test('toggling wide panel mode actually grows the layer list', async ({ page }) 
 // Read together, "wide panel" looked like it was describing what's on screen right now, when
 // the panel was actually narrow. The button now names whichever mode is actually active,
 // matching the hint's own convention.
-test('the wide/normal panel button names the mode that is actually active, not the other one', async ({ page }) => {
+//
+// Follow-up beta-tester feedback: "normal" was renamed to "default" throughout (button text,
+// title, hint), since that's clearer for the panel's un-widened starting state.
+test('the wide/default panel button names the mode that is actually active, not the other one', async ({ page }) => {
   const initial = await page.evaluate(() => ({
     isWide: document.body.classList.contains('ppLayersWide'),
     btnText: document.getElementById('ppLayerPanelWideToggle')?.textContent,
   }));
   expect(initial.isWide).toBe(false);
-  expect(initial.btnText).toBe('normal panel');
+  expect(initial.btnText).toBe('default panel');
 
   await page.evaluate(() => window.ppToggleLayersPanelWide());
   const afterToggle = await page.evaluate(() => ({

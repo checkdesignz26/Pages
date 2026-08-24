@@ -312,3 +312,24 @@ test.describe('very wide monitor layout', () => {
     expect(info.left).toBeLessThan(300);
   });
 });
+
+// Real report: the browser tab showed "Pattern Pages v179 Templates" - an internal build/version
+// label that leaked into the public-facing page title instead of just the product name.
+test('the browser tab title is just the product name, with no internal version/build label', async ({ page }) => {
+  await expect(page).toHaveTitle('Pattern Pages');
+});
+
+// Real report: several more toolbar buttons (save/load .ppages, restore autosave, quick
+// save/load, debug report, and the pattern-tray fill/replace actions) had no hover explanation -
+// several of these are easy to confuse with each other (three separate save/load mechanisms).
+test('more toolbar and pattern-tray buttons have a hover tooltip explaining what they do', async ({ page }) => {
+  await expect(page.locator('button[onclick="downloadPstudio()"]')).toHaveAttribute('title', /./);
+  await expect(page.locator('button[onclick="restoreAutoSave()"]')).toHaveAttribute('title', /./);
+  await expect(page.locator('button[onclick="quickSaveProject()"]')).toHaveAttribute('title', /./);
+  await expect(page.locator('button[onclick="quickLoadProject()"]')).toHaveAttribute('title', /./);
+  await expect(page.locator('button[onclick="ppShowDebugReport()"]')).toHaveAttribute('title', /./);
+  await expect(page.locator('button[onclick="placePatternOnPage()"]')).toHaveAttribute('title', /./);
+  await expect(page.locator('button[onclick="fillSelectedFrame()"]')).toHaveAttribute('title', /./);
+  await expect(page.locator('button[onclick="magicFillEmptySlots()"]')).toHaveAttribute('title', /./);
+  await expect(page.locator('button[onclick="replaceAllShowcaseSlots()"]')).toHaveAttribute('title', /./);
+});

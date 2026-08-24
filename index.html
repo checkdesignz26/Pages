@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-<title>Pattern Pages v179 Templates</title>
+<title>Pattern Pages</title>
 <meta name="theme-color" content="#1a1024">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Pattern Pages">
@@ -1325,13 +1325,13 @@ body.autoGroupEditing .layer.collectionGrouped{
       <button onclick="downloadAllPagesZip()">download ZIP</button>
     </div>
     <div class="actionGroup projectGroup">
-      <button onclick="downloadPstudio()">save .ppages</button>
+      <button onclick="downloadPstudio()" title="Download your whole project as a .ppages file you can reopen later">save .ppages</button>
       <input id="pstudioLoader" type="file" accept=".ppages,.pstudio,.json" style="display:none" onchange="loadPstudioFile(event)">
-      <button onclick="document.getElementById('pstudioLoader').click()">load .ppages</button>
-      <button onclick="restoreAutoSave()">restore autosave</button>
-      <button onclick="quickSaveProject()">quick save</button>
-      <button onclick="quickLoadProject()">quick load</button>
-      <button onclick="ppShowDebugReport()">debug report</button>
+      <button onclick="document.getElementById('pstudioLoader').click()" title="Open a previously saved .ppages project file">load .ppages</button>
+      <button onclick="restoreAutoSave()" title="Restore the most recent automatic backup of your project">restore autosave</button>
+      <button onclick="quickSaveProject()" title="Save a snapshot in this browser for a fast reload - not a downloaded file">quick save</button>
+      <button onclick="quickLoadProject()" title="Reload the last quick save made in this browser">quick load</button>
+      <button onclick="ppShowDebugReport()" title="Show technical details for troubleshooting or support">debug report</button>
     </div>
     <div class="actionGroup softGroup compactTools">
       <button onclick="zoomPage(-0.05)" title="Zoom out">−</button>
@@ -1347,7 +1347,7 @@ body.autoGroupEditing .layer.collectionGrouped{
     <strong>Assets & pages</strong>
     <span>Upload patterns, choose a page size, then build your layout with frames, strips and labels.</span>
   </div>
-  <div class="box trayTop"><h2>pattern tray</h2><div class="panelBody"><input id="patternInput" class="hidden" type="file" accept="image/*" multiple onchange="loadTray(event,'pattern')"><button class="full primary" onclick="patternInput.click()">upload patterns</button><p class="smallText">Patterns live here. Choose a pattern, select a layout slot on the canvas, then fill that exact slot.</p><div id="patternTray" class="thumbGrid"></div><div class="grid2"><button onclick="placePatternOnPage()">place pattern</button><button onclick="fillSelectedFrame()">fill selected slot</button></div><div class="grid2"><button class="primary" onclick="magicFillEmptySlots()">✨ fill all empty</button><button onclick="replaceAllShowcaseSlots()">replace all</button></div></div></div>
+  <div class="box trayTop"><h2>pattern tray</h2><div class="panelBody"><input id="patternInput" class="hidden" type="file" accept="image/*" multiple onchange="loadTray(event,'pattern')"><button class="full primary" onclick="patternInput.click()" title="Add your own pattern images to the tray below">upload patterns</button><p class="smallText">Patterns live here. Choose a pattern, select a layout slot on the canvas, then fill that exact slot.</p><div id="patternTray" class="thumbGrid"></div><div class="grid2"><button onclick="placePatternOnPage()" title="Add the selected pattern as a new layer on the page">place pattern</button><button onclick="fillSelectedFrame()" title="Fill the currently selected frame or slot with the selected pattern">fill selected slot</button></div><div class="grid2"><button class="primary" onclick="magicFillEmptySlots()" title="Fill every empty slot at once with patterns from the tray">✨ fill all empty</button><button onclick="replaceAllShowcaseSlots()" title="Replace every filled slot with the selected pattern">replace all</button></div></div></div>
   <div class="box trayTop"><h2>pattern showcase</h2><div class="panelBody"><p class="smallText"><strong>Generate a clean layout.</strong> Your patterns stay in the Pattern Tray until you choose where they go.</p><div class="showcaseTypeGrid" role="radiogroup" aria-label="layout type"><button id="showcaseStripsBtn" class="active" onclick="chooseShowcaseLayout('strips')">strips</button><button id="showcaseSquaresBtn" onclick="chooseShowcaseLayout('squares')">squares</button><button id="showcaseRectanglesBtn" onclick="chooseShowcaseLayout('rectangles')">rectangles</button><button id="showcaseCirclesBtn" onclick="chooseShowcaseLayout('circles')">circles</button></div><div id="stripDirectionControls" class="stripDirectionBox">
   <div class="stripDirectionTitle">strip direction</div>
   <div class="stripDirectionGrid" role="radiogroup" aria-label="strip direction">
@@ -10493,18 +10493,18 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
     // compact layer list." + a button reading "wide panel") - reading them together, "wide
     // panel" looked like it was describing what's on screen right now, when it was actually
     // narrow. Match the hint's convention: the button now names whichever mode is active.
-    btn.textContent=isWide()?'wide panel':'normal panel';
-    btn.title=isWide()?'Return Layers panel to normal width':'Expand Layers panel for bigger thumbnails and longer names';
+    btn.textContent=isWide()?'wide panel':'default panel';
+    btn.title=isWide()?'Return Layers panel to default width':'Expand Layers panel for bigger thumbnails and longer names';
     btn.setAttribute('aria-pressed', isWide()?'true':'false');
     var hint=document.getElementById('ppLayerPanelWideHint');
-    if(hint)hint.textContent=isWide()?'Wide mode: bigger previews and longer layer names.':'Normal mode: compact layer list.';
+    if(hint)hint.textContent=isWide()?'Wide mode: bigger previews and longer layer names.':'Default mode: compact layer list.';
   }
   function installToggle(){
     var box=layerBox(); if(!box || document.getElementById('ppLayerPanelWideToggle')){updateButton();return;}
     var list=document.getElementById('layerList'); if(!list)return;
     var row=document.createElement('div');
     row.className='layerPanelModeRow';
-    row.innerHTML='<span id="ppLayerPanelWideHint">Normal mode: compact layer list.</span><button id="ppLayerPanelWideToggle" class="layerPanelModeBtn" type="button" onclick="event.stopPropagation();window.ppToggleLayersPanelWide();">wide panel</button>';
+    row.innerHTML='<span id="ppLayerPanelWideHint">Default mode: compact layer list.</span><button id="ppLayerPanelWideToggle" class="layerPanelModeBtn" type="button" onclick="event.stopPropagation();window.ppToggleLayersPanelWide();">default panel</button>';
     var intro=box.querySelector('p.smallText');
     if(intro && intro.parentNode) intro.parentNode.insertBefore(row, intro.nextSibling);
     else box.insertBefore(row, list);
@@ -17999,8 +17999,8 @@ else install();
   function addTemplateButtons(){
     const projectGroup=document.querySelector('.projectGroup');
     if(projectGroup && !byId('ppTemplateToolbarSave')){
-      const saveBtn=document.createElement('button');saveBtn.id='ppTemplateToolbarSave';saveBtn.type='button';saveBtn.textContent='save template';saveBtn.onclick=downloadPatternPagesTemplate;
-      const loadBtn=document.createElement('button');loadBtn.id='ppTemplateToolbarLoad';loadBtn.type='button';loadBtn.textContent='load template';loadBtn.onclick=window.openPatternPagesTemplateLoader;
+      const saveBtn=document.createElement('button');saveBtn.id='ppTemplateToolbarSave';saveBtn.type='button';saveBtn.textContent='save template';saveBtn.title='Save this layout as a reusable template - placeholder artwork is removed, banners and text are kept';saveBtn.onclick=downloadPatternPagesTemplate;
+      const loadBtn=document.createElement('button');loadBtn.id='ppTemplateToolbarLoad';loadBtn.type='button';loadBtn.textContent='load template';loadBtn.title='Load a previously saved template';loadBtn.onclick=window.openPatternPagesTemplateLoader;
       projectGroup.appendChild(saveBtn);projectGroup.appendChild(loadBtn);
     }
     ensureTemplateLoader();
@@ -18014,10 +18014,10 @@ else install();
     box.id='templateToolsBox';
     box.innerHTML='<h2>templates</h2><div class="panelBody">\
       <p class="templateNote">Build a layout once with pattern placeholders and custom mock-ups mixed in, save it as a <strong>.ptemplate</strong>, then reuse it for every new pattern - load the template, pick a pattern, and fill everything at once.</p>\
-      <button type="button" class="full primary" onclick="addLkmPlaceholder(\'main pattern\')">add placeholder</button>\
-      <div class="templateGrid"><button type="button" class="primary" onclick="fillLinkedPlaceholdersFromTray()">fill all with selected pattern</button><button type="button" onclick="clearLinkedPlaceholders()">clear slots</button></div>\
+      <button type="button" class="full primary" onclick="addLkmPlaceholder(\'main pattern\')" title="Mark a spot on the page that gets filled automatically from the tray">add placeholder</button>\
+      <div class="templateGrid"><button type="button" class="primary" onclick="fillLinkedPlaceholdersFromTray()" title="Fill every placeholder at once with the selected pattern">fill all with selected pattern</button><button type="button" onclick="clearLinkedPlaceholders()" title="Empty every placeholder slot">clear slots</button></div>\
       <div class="lkmTagRow"><span class="lkmTag">source: main pattern</span><span class="lkmTag">includes mock-ups</span></div>\
-      <div class="templateGrid"><button type="button" onclick="downloadPatternPagesTemplate()">save template</button><button type="button" onclick="openPatternPagesTemplateLoader()">load template</button></div>\
+      <div class="templateGrid"><button type="button" onclick="downloadPatternPagesTemplate()" title="Save this layout as a reusable template - placeholder artwork is removed, banners and text are kept">save template</button><button type="button" onclick="openPatternPagesTemplateLoader()" title="Load a previously saved template">load template</button></div>\
       <div class="templateAdvancedLabel">advanced: mark other layers as placeholders</div>\
       <p class="smallText">Banners, frames or other image layers can be marked as placeholders too. Custom mock-ups are always included automatically - no marking needed for those.</p>\
       <div class="templateGrid"><button type="button" onclick="markSelectedAsPlaceholder()">mark placeholder</button><button type="button" onclick="clearSelectedPlaceholder()">clear mark</button></div>\
