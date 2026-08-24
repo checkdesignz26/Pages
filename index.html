@@ -4227,8 +4227,6 @@ button,select,input[type=number],input[type=text],input[type=color]{
 
 
 
-
-
 </style>
 
 <button id="feedbackBtn" class="feedbackBtn" onclick="openFeedbackForm()" title="Open feedback form">feedback 💌</button>
@@ -4769,6 +4767,27 @@ body.leftCollapsed.rightCollapsed .stage.listing{
   .tagline{font-size:12px!important;}
   .actionGroup{padding:5px!important;gap:5px!important;}
   .actionGroup button,.toolbarRow button{font-size:11px!important;padding:7px 8px!important;}
+}
+
+/* Real report from a 2K/wide-monitor user: side panels (270/288px) plus a canvas capped at
+   760/805/840px (670px for pattern/social, 760px for mockup) left a huge dead strip of empty
+   workspace on a genuinely wide screen. Kicks in above 1600px - a moderate bump, not filling
+   the space edge-to-edge, since layer text/labels are fixed-px (not scaled to the canvas) and
+   blowing the canvas up too far would make existing designs look proportionally sparser rather
+   than just "more zoomed in". Typical 1366-1440px laptops are untouched; this covers a plain
+   1920px-wide desktop monitor and up. Must come after this block's own
+   :root/.stage.pattern/.stage.social/.stage.mockup declarations above (same selectors, same
+   !important) so it wins the tie on source order. */
+@media(min-width:1600px){
+  :root{
+    --pp-leftW:360px !important;
+    --pp-rightW:400px !important;
+    --stageOpenMax:950px !important;
+    --stageOneClosedMax:1010px !important;
+    --stageBothClosedMax:1060px !important;
+  }
+  .stage.pattern,.stage.social{width:min(calc(100% - 22px), 860px)!important;}
+  .stage.mockup{width:min(calc(100% - 22px), 960px)!important;}
 }
 
 
@@ -13187,6 +13206,18 @@ window.addEventListener('DOMContentLoaded',function(){
   }
   .panelToggle:active{opacity:1!important;transform:translateY(-50%) scale(.96)!important;}
   body.ppagesDragging .panelToggle{pointer-events:none!important;opacity:.22!important;}
+
+  /* Real report, with a screenshot: on iPad these arrows were so faint against the dark theme
+     they were essentially invisible - a real usability regression from the .72 opacity/dark
+     colour this same block set above to calm down accidental taps. Raised visibility (opacity,
+     a lighter accent border, a stronger glow) without touching size/position, so the
+     accidental-tap fix above is untouched - it's purely easier to spot now, not a bigger or
+     more sensitive target. */
+  .panelToggle{
+    opacity:.94!important;
+    border:1px solid rgba(255,205,235,.45)!important;
+    box-shadow:0 0 0 1px rgba(255,142,214,.20),0 10px 22px rgba(0,0,0,.4)!important;
+  }
 
   /* Make every visual canvas object participate in hit-testing, including later uploads and placeholders. */
   .stage .layer{pointer-events:auto!important;}

@@ -230,6 +230,21 @@ test.describe('iPad (touch) layout stays exactly as before', () => {
 
     expect(portrait).not.toBe(landscape);
   });
+
+  // Real report, with a screenshot: on a real iPad the panel-collapse arrows were nearly
+  // invisible against the dark theme - an earlier patch (goldenV162, "calmer panel toggles")
+  // had dropped their opacity to .72 specifically to cut down on accidental taps, which also
+  // made them very hard to notice at all. Raised visibility (opacity, a light accent border, a
+  // glow) without touching size or position, so the accidental-tap mitigation - a small,
+  // deliberately unchanged touch target - stays intact; it's just easier to see.
+  test('the panel-collapse arrow is clearly visible against the dark theme on iPad, not nearly-invisible low-opacity', async ({ page }) => {
+    const style = await page.locator('#toggleRightPanel').evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { opacity: parseFloat(cs.opacity), border: cs.borderTopWidth };
+    });
+    expect(style.opacity).toBeGreaterThan(0.85);
+    expect(style.border).not.toBe('0px');
+  });
 });
 
 // Real beta-tester feedback: the button's default label was the generic "left mode", but every
@@ -251,4 +266,49 @@ test('icon-only controls (zoom, panel-collapse arrows, frame count stepper) have
   await expect(page.locator('#toggleRightPanel')).toHaveAttribute('title', /./);
   await expect(page.locator('button[onclick="changeFrameCount(-1)"]')).toHaveAttribute('title', /./);
   await expect(page.locator('button[onclick="changeFrameCount(1)"]')).toHaveAttribute('title', /./);
+});
+
+// Real report, with a screenshot: on a genuinely wide monitor (2K+), the side panels (270/288px)
+// and canvas (capped at 760px) left a huge dead strip of empty workspace either side of a
+// comparatively tiny page. Widened both above 1600px - a moderate bump, not edge-to-edge, since
+// layer text/labels are fixed-px and don't scale with the canvas box. Below that (typical
+// 1366-1440px laptops) nothing changes.
+test.describe('very wide monitor layout', () => {
+  test('the canvas and side panels are noticeably bigger on a 2K+ monitor than on a standard desktop width', async ({ page, browser }) => {
+    await page.setViewportSize({ width: 2560, height: 1440 });
+    await page.waitForTimeout(400);
+    const wide = await page.evaluate(() => ({
+      stage: document.querySelector('.stage').getBoundingClientRect().width,
+      left: document.querySelector('.side.left').getBoundingClientRect().width,
+      right: document.querySelector('.side.right').getBoundingClientRect().width,
+    }));
+
+    const context2 = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+    const page2 = await context2.newPage();
+    await page2.goto('/index.html');
+    await page2.waitForFunction(() => typeof state !== 'undefined' && state && typeof window.render === 'function');
+    await page2.waitForTimeout(400);
+    const standard = await page2.evaluate(() => ({
+      stage: document.querySelector('.stage').getBoundingClientRect().width,
+    }));
+    await context2.close();
+
+    expect(wide.stage).toBeGreaterThan(900);
+    expect(wide.left).toBeGreaterThan(340);
+    expect(wide.right).toBeGreaterThan(380);
+    // Even a plain 1920-wide desktop monitor is above the 1600px threshold and should also get
+    // the bump, same as the 2K case - both clearly bigger than the pre-fix 760px baseline.
+    expect(standard.stage).toBeGreaterThan(900);
+  });
+
+  test('a laptop-width screen (below the 1600px threshold) keeps the original, unwidened layout', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.waitForTimeout(400);
+    const info = await page.evaluate(() => ({
+      stage: document.querySelector('.stage').getBoundingClientRect().width,
+      left: document.querySelector('.side.left').getBoundingClientRect().width,
+    }));
+    expect(info.stage).toBeLessThan(800);
+    expect(info.left).toBeLessThan(300);
+  });
 });
