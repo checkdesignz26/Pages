@@ -13198,7 +13198,17 @@ window.addEventListener('DOMContentLoaded',function(){
      sibling Creative Pages app. Reuses the same lkmPlaceholder image-slot primitive as the
      "templates" box above, so a single "fill all with selected pattern" (or the normal tap
      slot -> tap pattern -> fill selected slot flow) fills every placeholder across all 5 new
-     pages at once - no separate fill mechanism needed. -->
+     pages at once - no separate fill mechanism needed.
+
+     Follow-up beta-tester feedback: the main shot and collection grid pages are now built by
+     actually calling window.generateSelectedShowcaseLayout() (the exact function the "pattern
+     showcase" panel's own Generate button calls) instead of a hand-placed single image slot -
+     so those two pages come out as real, tagged generatedPatternLayout slots the designer can
+     immediately reshape/re-slot from that panel's own "showcase control room" (strips/squares/
+     rectangles/circles, number of slots, layout size/position). Also: if the page the user was
+     on when they tapped the button is still completely empty (the app's own untouched starting
+     page, or any other blank page), it's replaced rather than left behind as a 6th orphaned
+     page alongside the 5 new ones - Etsy asks for 5 photos, so the set should read as 5. -->
 <script id="ppages-etsy-batch-listing-set-js">
 (function(){
   'use strict';
@@ -13218,12 +13228,39 @@ window.addEventListener('DOMContentLoaded',function(){
       color:'#2a2330', fill:'transparent', textAlign:bold?'left':'center'
     }));
   }
+  // Drives the real pattern-showcase generator (rebuild(), reached only through
+  // window.generateSelectedShowcaseLayout) against a specific page, instead of whichever page
+  // happens to be selected/whatever the showcase panel's own inputs currently hold - swaps in
+  // the page/type/count it needs, calls the real generator, then restores what was there before
+  // so the rest of the showcase panel isn't left in a surprising state for the user.
+  function generateShowcaseOnPage(pageIndex,type,count){
+    if(typeof window.generateSelectedShowcaseLayout!=='function') return;
+    const prevSelected=state.selectedPage;
+    const input=document.getElementById('cardCount');
+    const prevCount=input?input.value:null;
+    const prevType=window.showcaseLayoutType;
+    state.selectedPage=pageIndex;
+    try{ showcaseLayoutType=type; }catch(e){}
+    window.showcaseLayoutType=type;
+    if(input) input.value=String(count);
+    try{ window.generateSelectedShowcaseLayout(); }catch(e){}
+    if(input && prevCount!=null) input.value=prevCount;
+    try{ showcaseLayoutType=prevType; }catch(e){}
+    window.showcaseLayoutType=prevType;
+    state.selectedPage=prevSelected;
+  }
 
   window.createEtsyListingSet=function(){
     save();
 
+    // Etsy asks for 5 photos - don't leave the app's still-untouched starting page (or any
+    // other blank page the seller happened to be on) sitting around as an unwanted 6th page.
+    const activeIdx=state.selectedPage;
+    const activePage=state.pages[activeIdx];
+    const replacingEmpty=!!(activePage && Array.isArray(activePage.layers) && activePage.layers.length===0);
+    if(replacingEmpty) state.pages.splice(activeIdx,1);
+
     const mainShot=presetPage('etsy-listing');
-    addSlot(mainShot,'main shot',8,8,84,84);
 
     const detail=presetPage('etsy-listing');
     addSlot(detail,'detail close-up',18,12,64,64);
@@ -13241,19 +13278,25 @@ window.addEventListener('DOMContentLoaded',function(){
     addSlot(infoCard,'accent swatch',66,68,26,26);
 
     const grid=presetPage('etsy-listing');
-    const cols=3, rows=2, gap=3;
-    const cellW=(100-gap*(cols+1))/cols, cellH=(100-gap*(rows+1))/rows;
-    let n=1;
-    for(let r=0;r<rows;r++){
-      for(let c=0;c<cols;c++){
-        addSlot(grid,'swatch '+n, gap+c*(cellW+gap), gap+r*(cellH+gap), cellW, cellH);
-        n++;
-      }
-    }
 
     const newPages=[mainShot,detail,lifestyle,infoCard,grid];
+    const insertAt=state.pages.length;
     state.pages.push(...newPages);
-    state.selectedPage=state.pages.length-newPages.length;
+    state.selectedPage=insertAt;
+    state.selected=null;
+    render();
+
+    // Main shot: a real 1-slot "strips" showcase layout, so it's immediately editable from the
+    // pattern showcase panel, plus a banner placeholder over the middle for a title/promo graphic.
+    generateShowcaseOnPage(insertAt,'strips',1);
+    addSlot(mainShot,'banner',15,42,70,16);
+
+    // Collection grid: a real 6-slot "rectangles" showcase layout, same reasoning, plus a
+    // placeholder title above it.
+    generateShowcaseOnPage(insertAt+4,'rectangles',6);
+    addLabel(grid,'Your Collection',8,2,84,7,40,true);
+
+    state.selectedPage=insertAt;
     state.selected=null;
     render();
     try{scrollSel();}catch(e){}
