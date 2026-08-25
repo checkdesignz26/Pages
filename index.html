@@ -1459,7 +1459,7 @@ body.autoGroupEditing .layer.collectionGrouped{
     <span>Select something on the page, then adjust layers, size, fonts, alignment and colours here.</span>
   </div>
   <div class="box layerPanelV2"><h2>layers</h2><div class="panelBody"><p class="smallText">Layer Panel 2.0: select layers, group them, then move or resize the group as one.</p><div class="layerV2Toolbar"><button id="multiSelectBtn" onclick="toggleLayerMultiSelect()">select</button><button id="groupSelectedBtn" onclick="groupSelectedLayers()" disabled>group</button><button id="ungroupBtn" onclick="ungroupSelected()" disabled>ungroup</button></div><div id="layerList" class="layerList"></div><div class="grid2"><button onclick="bringForward()">to front</button><button onclick="sendBack()">to back</button></div><div class="grid2"><button onclick="selectedForwardOne()">↑ one step</button><button onclick="selectedBackOne()">↓ one step</button></div><button class="full" onclick="duplicateSelected()">duplicate selected</button><button class="full" onclick="deleteSelected()">delete selected</button></div></div>
-  <div class="box"><h2>edit & adjust</h2><div class="rangeRow"><label>scale</label><input id="scale" type="range" min="20" max="250" value="100" oninput="applyControls()"></div><div class="rangeRow"><label>opacity</label><input id="opacity" type="range" min="0" max="100" value="100" oninput="applyControls()"></div><div class="rangeRow"><label>x move</label><input id="xpos" type="range" min="-30" max="120" value="10" oninput="applyControls()"></div><div class="rangeRow"><label>y move</label><input id="ypos" type="range" min="-30" max="120" value="10" oninput="applyControls()"></div><div class="rangeRow"><label>width</label><input id="width" type="range" min="3" max="130" value="40" oninput="applyControls()"></div><div class="rangeRow"><label>height</label><input id="height" type="range" min="3" max="130" value="20" oninput="applyControls()"></div><div class="rangeRow"><label>rotate</label><input id="rotate" type="range" min="-180" max="180" value="0" oninput="applyControls()"></div><div class="grid2"><button onclick="fitSelected('width')">fit width</button><button onclick="fitSelected('canvas')">fit canvas</button></div><div class="editMiniGroup"><button onclick="setSelectedFit('contain')">fit</button><button onclick="setSelectedFit('cover')">fill</button><button onclick="setSelectedFit('cover');fitSelected('canvas')">cover page</button><button onclick="deselect()">done</button></div><div class="gestureHint">Tap empty canvas to deselect. Pinch with two fingers to zoom the page. Two-finger double tap = undo.</div><div class="status" id="selectedHint">Nothing selected</div></div>
+  <div class="box"><h2>edit & adjust</h2><div class="rangeRow"><label>scale</label><input id="scale" type="range" min="20" max="250" value="100" oninput="applyControls()"></div><div class="rangeRow"><label>opacity</label><input id="opacity" type="range" min="0" max="100" value="100" oninput="applyControls()"></div><div class="rangeRow"><label>x move</label><input id="xpos" type="range" min="-30" max="120" value="10" oninput="applyControls()"></div><div class="rangeRow"><label>y move</label><input id="ypos" type="range" min="-30" max="120" value="10" oninput="applyControls()"></div><div class="rangeRow"><label>width</label><input id="width" type="range" min="3" max="130" value="40" oninput="applyControls()"></div><div class="rangeRow"><label>height</label><input id="height" type="range" min="3" max="130" value="20" oninput="applyControls()"></div><div class="rangeRow"><label>rotate</label><input id="rotate" type="range" min="-180" max="180" value="0" oninput="applyControls()"></div><div class="grid2"><button onclick="fitSelected('width')">fit width</button><button onclick="fitSelected('canvas')">fit canvas</button></div><div class="editMiniGroup"><button onclick="setSelectedFit('contain')">fit</button><button onclick="setSelectedFit('cover')">fill</button><button onclick="setSelectedFit('cover');fitSelected('canvas')">cover page</button><button onclick="deselect()">done</button></div><div class="gestureHint">Tap empty canvas to deselect. Pinch with two fingers to zoom the page. Two-finger double tap = undo.</div><div class="status" id="selectedHint">Nothing selected</div><button id="fillThisSlotBtn" class="full primary hidden" onclick="window.fillSelectedFrame&&window.fillSelectedFrame()" title="Fill just this placeholder with the pattern selected in the tray">✨ fill this placeholder from tray</button></div>
   <div class="box" id="alignPanel"><h2>alignment</h2><p class="smallText">Align the selected text, banner, image, label or frame to the page.</p><div class="grid3"><button onclick="alignSelected('left')">left</button><button onclick="alignSelected('hcenter')">centre</button><button onclick="alignSelected('right')">right</button></div><div class="grid3"><button onclick="alignSelected('top')">top</button><button onclick="alignSelected('vcenter')">middle</button><button onclick="alignSelected('bottom')">bottom</button></div><div class="grid2"><button onclick="alignSelected('centerBoth')">centre page</button><button onclick="alignSelected('safeMiddle')">safe middle</button></div></div>
   <div class="box matchmakerBox"><h2>font matchmaker</h2>
   <p class="smallText">Choose the main font you like, then let Pattern Pages suggest matching fonts. This is separate from quick presets.</p>
@@ -13302,9 +13302,47 @@ window.addEventListener('DOMContentLoaded',function(){
     try{scrollSel();}catch(e){}
 
     const hint=document.getElementById('etsyBatchSetHint');
-    if(hint) hint.textContent='Created a 5-page listing set. Pick a pattern in the tray, then use "fill all with selected pattern" (in templates) to fill every placeholder at once.';
+    if(hint) hint.textContent='Created a 5-page listing set. Pick a pattern in the tray, then either fill one placeholder at a time (tap it, then "fill this placeholder from tray" in edit & adjust) or use "fill all with selected pattern" (in templates) for the detail/lifestyle/info card pages at once.';
     try{ if(typeof autosaveSoon==='function') autosaveSoon(); }catch(e){}
   };
+})();
+</script>
+
+<!-- Real beta-tester request: after wiring the batch listing set's placeholders into the real
+     pattern-showcase/lkm-placeholder systems, there was no visible way to fill just ONE
+     placeholder (e.g. the banner) without either filling every placeholder on the page (magic
+     fill) or every placeholder across all 5 pages (fill all with selected pattern) - both too
+     broad for touching up a single spot. window.fillSelectedFrame already does exactly a
+     single-slot fill (it's what the Pattern Tray panel's own "fill selected slot" button calls),
+     but that button lives in a different panel section than wherever the user actually selected
+     the slot. Surface the same action right in "edit & adjust", next to whatever's selected, and
+     only when the current selection is actually a fillable slot (a showcase slot or a
+     placeholder), so it's not clutter for ordinary text/image layers. -->
+<script id="pp-fill-this-slot-button-js">
+(function(){
+  if(window.__PP_FILL_THIS_SLOT_BTN__) return;
+  window.__PP_FILL_THIS_SLOT_BTN__=true;
+  function isFillableSlot(l){
+    return !!(l && (l.patternSlot || l.generatedPatternLayout || l.showcaseSlot || l.lkmPlaceholder));
+  }
+  function selectedLayer(){
+    try{
+      var id=state.selected; if(!id) return null;
+      var p=current(); if(!p || !p.layers) return null;
+      return p.layers.find(function(l){ return String(l.id)===String(id); }) || null;
+    }catch(e){ return null; }
+  }
+  function sync(){
+    var btn=document.getElementById('fillThisSlotBtn'); if(!btn) return;
+    var show=isFillableSlot(selectedLayer());
+    btn.classList.toggle('hidden', !show);
+  }
+  var oldRender=window.render;
+  if(typeof oldRender==='function'){
+    window.render=function(){ var r=oldRender.apply(this,arguments); sync(); return r; };
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',sync);
+  else sync();
 })();
 </script>
 

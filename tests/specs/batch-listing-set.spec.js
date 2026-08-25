@@ -175,3 +175,61 @@ test('creating a listing set does not throw and is fully undoable', async ({ pag
   const afterUndo = await page.evaluate(() => state.pages.length);
   expect(afterUndo).toBe(before);
 });
+
+// Real report: once the placeholders were wired into the real showcase/lkm systems, there was
+// no visible way to fill just ONE placeholder (e.g. the banner) - only every slot on the page
+// (magic fill) or every placeholder across all 5 pages (fill all with selected pattern), both
+// too broad for touching up a single spot. Surfaced the existing single-slot fill
+// (window.fillSelectedFrame, what the Pattern Tray panel's own "fill selected slot" already
+// calls) as a button right in "edit & adjust", next to whatever's selected.
+test('a "fill this placeholder from tray" button appears only when a fillable slot is selected, and fills just that one', async ({ page }) => {
+  await page.evaluate(() => window.createEtsyListingSet());
+  const btn = page.locator('#fillThisSlotBtn');
+
+  await expect(btn).toHaveClass(/hidden/); // nothing selected yet
+
+  await page.evaluate(() => {
+    const p = state.pages[0]; // main shot
+    const banner = p.layers.find((l) => l.name === 'banner');
+    state.selected = banner.id;
+    render();
+  });
+  await expect(btn).not.toHaveClass(/hidden/);
+
+  // Selecting a plain text layer (not a fillable slot) hides it again.
+  await page.evaluate(() => {
+    const p = state.pages[3]; // info card
+    const text = p.layers.find((l) => l.type === 'text');
+    state.selected = text.id;
+    render();
+  });
+  await expect(btn).toHaveClass(/hidden/);
+
+  // Re-select the banner and fill just it - the strip slot on the same page must stay empty.
+  await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 10;
+    c.height = 10;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#00ff00';
+    ctx.fillRect(0, 0, 10, 10);
+    state.trays.pattern.push({ src: c.toDataURL('image/png'), name: 'green' });
+    state.selectedTray = { pattern: state.trays.pattern.length - 1 };
+    const p = state.pages[0];
+    const banner = p.layers.find((l) => l.name === 'banner');
+    state.selected = banner.id;
+    render();
+  });
+  await page.evaluate(() => document.getElementById('fillThisSlotBtn').click());
+  await page.waitForTimeout(200);
+
+  const result = await page.evaluate(() => {
+    const p = state.pages[0];
+    return {
+      bannerFilled: !!p.layers.find((l) => l.name === 'banner').src,
+      stripFilled: !!p.layers.find((l) => l.slotShape === 'strip').src,
+    };
+  });
+  expect(result.bannerFilled).toBe(true);
+  expect(result.stripFilled).toBe(false);
+});
