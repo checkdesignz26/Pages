@@ -1378,6 +1378,7 @@ body.autoGroupEditing .layer.collectionGrouped{
   </div></div>
 
   <div class="box trayTop"><h2>images & mock-ups</h2><input id="assetInput" class="hidden" type="file" accept="image/*" multiple onchange="loadTray(event,'asset')"><input id="mockupInput" class="hidden" type="file" accept="image/*" onchange="createMockupPage(event)"><input id="imageLayerInput" class="hidden" type="file" accept="image/*" onchange="addUploadedImageLayer(event)"><button class="full" onclick="assetInput.click()">Upload Design Assets</button><div id="assetTray" class="thumbGrid"></div><div class="grid2"><button onclick="addImageLayer('image')">add selected image</button><button onclick="mockupInput.click()">mock-up page</button></div><div class="grid2"><button onclick="addImageLayer('banner')">banner</button><button onclick="addImageLayer('overlay')">overlay</button></div><div class="aiDisclosureControls"><label class="checkRow"><input id="aiDisclosureToggle" type="checkbox" checked>add movable “AI generated” badge to mock-up</label><button class="full" onclick="addAIDisclosureBadge()">add AI generated badge</button><p class="smallText">Subtle white pill with fixed soft-grey text. Resize the badge shape, but the words stay readable.</p></div><p class="smallText">One tray for images, banners and mock-ups. Images now arrive at a useful page size instead of tiny; resize them afterwards if needed.</p></div>
+  <div class="box"><h2>batch listing set</h2><div class="panelBody"><p class="smallText">Etsy wants several photos per listing. One tap builds a coordinated 5-page set - main shot, detail, lifestyle/mock-up, an info card and a collection grid - all placeholders, ready to fill from the Pattern Tray.</p><button class="full primary" onclick="window.createEtsyListingSet()" title="Add 5 new pages pre-built for a coordinated Etsy listing set">✨ create listing set</button><div class="status" id="etsyBatchSetHint">Nothing created yet.</div></div></div>
   <div class="box"><h2>pages</h2><div class="launchBadge">Pattern Pages workspace</div><p class="smallText">Your pages stack here like a little design desk. Choose a format in <strong>page size & presets</strong>, then add it as a new page.</p><button class="full" onclick="deleteCurrentPage()">delete current page</button>
   <!-- Real report: this used to live at the bottom of "extra design elements" (an unrelated,
        add-things panel) as "blank page", where it was both easy to miss and easy to misread as
@@ -13191,7 +13192,78 @@ window.addEventListener('DOMContentLoaded',function(){
 })();
 </script>
 
+<!-- Real beta-tester request: build a coordinated 5-page Etsy listing set (main shot, detail,
+     lifestyle/mock-up, info card, collection grid) in one tap, all as placeholders the seller
+     fills afterwards from the Pattern Tray - the same "batch listing set" feature from the
+     sibling Creative Pages app. Reuses the same lkmPlaceholder image-slot primitive as the
+     "templates" box above, so a single "fill all with selected pattern" (or the normal tap
+     slot -> tap pattern -> fill selected slot flow) fills every placeholder across all 5 new
+     pages at once - no separate fill mechanism needed. -->
+<script id="ppages-etsy-batch-listing-set-js">
+(function(){
+  'use strict';
+  if(window.__PP_ETSY_BATCH_LISTING_SET__) return;
+  window.__PP_ETSY_BATCH_LISTING_SET__=true;
 
+  function nextZFor(p){ return (p.layers||[]).reduce((m,l)=>Math.max(m,l.z||0),0)+1; }
+  function addSlot(p,label,x,y,w,h){
+    p.layers.push({
+      id:uid(), type:'image', name:label, x:x, y:y, w:w, h:h, r:0, opacity:1, scale:1, z:nextZFor(p),
+      src:null, fit:'cover', patternSlot:true, lkmPlaceholder:true, lkmSource:'mainPattern', lkmLabel:label
+    });
+  }
+  function addLabel(p,text,x,y,w,h,fontSize,bold){
+    p.layers.push(layer('text',{
+      text:text, x:x, y:y, w:w, h:h, fontSize:fontSize, bold:!!bold,
+      color:'#2a2330', fill:'transparent', textAlign:bold?'left':'center'
+    }));
+  }
+
+  window.createEtsyListingSet=function(){
+    save();
+
+    const mainShot=presetPage('etsy-listing');
+    addSlot(mainShot,'main shot',8,8,84,84);
+
+    const detail=presetPage('etsy-listing');
+    addSlot(detail,'detail close-up',18,12,64,64);
+    addLabel(detail,'Detail / close-up',10,80,80,10,34,false);
+
+    const lifestyle=presetPage('etsy-listing');
+    addSlot(lifestyle,'lifestyle mock-up',14,10,72,72);
+    addLabel(lifestyle,'Lifestyle / mock-up',10,84,80,10,34,false);
+
+    const infoCard=presetPage('etsy-listing');
+    addLabel(infoCard,'Your Product Name',8,10,84,14,64,true);
+    addLabel(infoCard,'Material: ',8,32,84,9,34,true);
+    addLabel(infoCard,'Size: ',8,44,84,9,34,true);
+    addLabel(infoCard,'Care instructions: ',8,56,84,9,34,true);
+    addSlot(infoCard,'accent swatch',66,68,26,26);
+
+    const grid=presetPage('etsy-listing');
+    const cols=3, rows=2, gap=3;
+    const cellW=(100-gap*(cols+1))/cols, cellH=(100-gap*(rows+1))/rows;
+    let n=1;
+    for(let r=0;r<rows;r++){
+      for(let c=0;c<cols;c++){
+        addSlot(grid,'swatch '+n, gap+c*(cellW+gap), gap+r*(cellH+gap), cellW, cellH);
+        n++;
+      }
+    }
+
+    const newPages=[mainShot,detail,lifestyle,infoCard,grid];
+    state.pages.push(...newPages);
+    state.selectedPage=state.pages.length-newPages.length;
+    state.selected=null;
+    render();
+    try{scrollSel();}catch(e){}
+
+    const hint=document.getElementById('etsyBatchSetHint');
+    if(hint) hint.textContent='Created a 5-page listing set. Pick a pattern in the tray, then use "fill all with selected pattern" (in templates) to fill every placeholder at once.';
+    try{ if(typeof autosaveSoon==='function') autosaveSoon(); }catch(e){}
+  };
+})();
+</script>
 
 <!-- GOLDEN v162 — safer iPad selection + calmer panel toggles -->
 <style id="goldenV162TouchSelectionCss">
