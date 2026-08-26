@@ -92,3 +92,15 @@ test.describe('desktop mouse: feedback/help move into the top toolbar', () => {
     expect(Math.abs((helpBox.y + helpBox.height / 2) - (handBox.y + handBox.height / 2))).toBeLessThan(20);
   });
 });
+
+// Real request: a link to the separately-published "Swatch Book" (a searchable reference for
+// every button, meant to sit alongside the app - e.g. iPad Split View) so it's reachable from
+// inside the app itself, not just something the user has to remember the URL for.
+test('a "swatch book" link in the toolbar opens the button reference in a new tab', async ({ page }) => {
+  const btn = page.locator('button', { hasText: 'swatch book' });
+  await expect(btn).toBeVisible();
+  await expect(btn).toHaveAttribute('title', /./);
+  const onclick = await btn.getAttribute('onclick');
+  expect(onclick).toContain("window.open('https://claude.ai/code/artifact/");
+  expect(onclick).toContain("'_blank'");
+});
