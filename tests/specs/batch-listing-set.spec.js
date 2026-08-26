@@ -13,7 +13,12 @@
 // than left behind as an unwanted 6th page - Etsy asks for 5 photos, so the set reads as 5.
 const { test, expect, clickResilient } = require('../support/fixtures');
 
-test('the "create listing set" button in the panel is reachable and works via a real click', async ({ page }) => {
+// Hidden ahead of launch at the maker's request (see #batchListingSetBox in index.html) - the
+// feature isn't behaving quite as intended yet. The underlying function is untouched and every
+// other test below still exercises it directly; only the real-click-on-the-panel-button test is
+// skipped, since that button is intentionally not in the DOM right now. Un-skip this once the
+// panel comes back.
+test.skip('the "create listing set" button in the panel is reachable and works via a real click', async ({ page }) => {
   const btn = page.locator('button', { hasText: 'create listing set' });
   await expect(btn).toHaveAttribute('title', /./);
 
