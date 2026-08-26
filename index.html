@@ -1337,7 +1337,7 @@ body.autoGroupEditing .layer.collectionGrouped{
       <button onclick="zoomPage(-0.05)" title="Zoom out">−</button>
       <button onclick="zoomPage(0.05)" title="Zoom in">+</button>
       <button onclick="toggleHandedMode()" id="handModeBtn" title="Switch which side the panels are on">left-handed layout</button>
-      <button onclick="window.open('https://claude.ai/code/artifact/4bb84a2f-6235-456c-a839-340f3e8f0bd8','_blank')" title="Open the Swatch Book - a searchable reference for what every button does">🧵 swatch book</button>
+      <button onclick="openSwatchBook()" title="Open the Swatch Book - a searchable reference for what every button does">🧵 swatch book</button>
     </div>
   </div>
  </div>
@@ -3924,6 +3924,336 @@ window.openQuickStartGuide = openQuickStartGuide;
 }
 @media (max-width:480px){
   .qsScroll{ padding:24px 18px 26px; }
+}
+</style>
+
+<!-- Real request: a searchable "what does every button do" reference, kept inside the app
+     itself (not a separately-hosted link, which beta testers couldn't reach) - built the same
+     way as the Quick Start Guide above: a plain JS-built overlay, no external dependency. Content
+     is sourced from the same title= tooltips already on the real buttons, grouped to match the
+     app's own panel layout. -->
+<script>
+const SWATCHBOOK_DATA = [
+  { section: "Top toolbar", note: "Always visible at the top of the screen.", entries: [
+    ["↶ undo", "Undo the last change."],
+    ["↷ redo", "Redo the last undone change."],
+    ["deselect", "Deselect the current layer."],
+    ["duplicate", "Duplicate the selected layer."],
+    ["delete", "Delete the selected layer."],
+    ["download page", "Download the current page as a PNG image."],
+    ["download ZIP", "Download every page as PNG files in one ZIP."],
+    ["save .ppages", "Download your whole project as a .ppages file you can reopen later."],
+    ["load .ppages", "Open a previously saved .ppages project file."],
+    ["restore autosave", "Restore the most recent automatic backup of your project."],
+    ["quick save", "Save a snapshot in this browser for a fast reload &mdash; not a downloaded file."],
+    ["quick load", "Reload the last quick save made in this browser."],
+    ["debug report", "Show technical details for troubleshooting or support."],
+    ["&minus;", "Zoom out."],
+    ["+", "Zoom in."],
+    ["left-handed layout", "Switch which side the panels are on."],
+    ["🧵 swatch book", "Open this reference."],
+    ["feedback 💌", "Open the feedback form."],
+    ["? help", "Open the Quick Start Guide."]
+  ]},
+  { section: "Templates", note: "Build a reusable layout with fillable placeholders.", entries: [
+    ["add placeholder", "Mark a spot on the page that gets filled automatically from the tray."],
+    ["fill all with selected pattern", "Fill every placeholder at once with the selected pattern."],
+    ["clear slots", "Empty every placeholder slot."],
+    ["save template", "Save this layout as a reusable template &mdash; placeholder artwork is removed, banners and text are kept."],
+    ["load template", "Load a previously saved template."],
+    ["mark placeholder", "Mark the selected layer as a fillable placeholder."],
+    ["clear mark", "Remove the placeholder mark from the selected layer."],
+    ["rename placeholder", "Rename this placeholder&rsquo;s label."]
+  ]},
+  { section: "Pattern tray", note: "Where your uploaded patterns live.", entries: [
+    ["upload patterns", "Add your own pattern images to the tray."],
+    ["tap patterns to select several / clear selection", "Multi-select mode for the tray, so one action can use more than one pattern.", true],
+    ["place pattern", "Add the selected pattern as a new layer on the page."],
+    ["fill selected slot", "Fill the currently selected frame or slot with the selected pattern."],
+    ["✨ fill all empty", "Fill every empty slot at once with patterns from the tray."],
+    ["replace all", "Replace every filled slot with the selected pattern."]
+  ]},
+  { section: "Pattern showcase", note: "Auto-generated grids of pattern slots.", entries: [
+    ["strips", "Arrange the showcase as full-width strips."],
+    ["squares", "Arrange the showcase as an even grid of squares."],
+    ["rectangles", "Arrange the showcase as a grid of rectangles."],
+    ["circles", "Arrange the showcase as a grid of circles."],
+    ["vertical", "Stack strips side by side."],
+    ["horizontal stash", "Stack strips edge to edge, like a folded fabric stash."],
+    ["&minus; / + (number of slots)", "Remove or add a pattern slot."],
+    ["generate layout", "Build or rebuild the showcase with the chosen layout and slot count."],
+    ["fill selected slot / clear slot", "Inside the showcase itself: fill or empty just the highlighted slot."]
+  ]},
+  { section: "Frames", note: "Shaped containers you drop a pattern into.", entries: [
+    ["add frame", "Choose a built-in shape, or upload your own PNG frame."],
+    ["add your PNG", "Upload a PNG shape with a transparent background to use as a custom frame."]
+  ]},
+  { section: "Custom mock-up", note: "Turn a real product photo into a fillable mock-up.", entries: [
+    ["create live custom mock-up ✨", "Generate a live, fillable mock-up from your uploaded background and mask."]
+  ]},
+  { section: "Images & mock-ups", note: "", entries: [
+    ["Upload Design Assets", "Add your own images, banners or mock-up backgrounds to the tray."],
+    ["add selected image", "Add the selected asset as an image layer on the page."],
+    ["mock-up page", "Create a new page from an uploaded mock-up photo."],
+    ["banner", "Add a wide banner image layer."],
+    ["overlay", "Add a full-page overlay image layer."],
+    ["add AI generated badge", "Add a movable &ldquo;AI generated&rdquo; disclosure badge."]
+  ]},
+  { section: "Batch listing set", note: "One tap, five coordinated Etsy listing photos.", entries: [
+    ["✨ create listing set", "Add 5 new pages pre-built for a coordinated Etsy listing set (main shot, detail, lifestyle, info card, collection grid)."],
+    ["✨ fill this placeholder from tray", "Appears in edit &amp; adjust whenever a fillable slot is selected &mdash; fills just that one spot, not the whole page.", true]
+  ]},
+  { section: "Pages", note: "", entries: [
+    ["delete current page", "Delete the page you&rsquo;re currently viewing."],
+    ["clear current page", "Remove every layer from the current page, keeping the page itself."]
+  ]},
+  { section: "Document mode", note: "Multi-page text documents, like a manual or PDF.", entries: [
+    ["add document page", "Add a new multi-page text document page."],
+    ["heading 1 / heading 2 / body", "Make the current line a large heading, a smaller heading, or regular body text."],
+    ["set heading 1 / heading 2 / body style", "Apply the selected text&rsquo;s formatting to every heading or paragraph of that level in the document."],
+    ["add link", "Wrap the selected text in a clickable link."],
+    ["add image", "Insert an image into the document page."],
+    ["align left / centre / right", "Align an inserted image, with body text wrapping beside it (left/right) or on its own line (centre).", true],
+    ["create / update TOC", "Build or refresh the table of contents from your headings."],
+    ["rename contents title", "Rename the &ldquo;Contents&rdquo; heading."],
+    ["print / save PDF", "Print the document, or save it as a PDF."]
+  ]},
+  { section: "Page size & presets", note: "", entries: [
+    ["listing 3000×2250", "Set the page to Etsy&rsquo;s recommended listing image size."],
+    ["square 3000×3000", "Set the page to a square Etsy pattern preview size."],
+    ["shop banner 3360×840", "Set the page to Etsy&rsquo;s shop banner size."],
+    ["square post 1080×1080", "Set the page to an Instagram square post size."],
+    ["portrait post 1080×1350", "Set the page to an Instagram portrait post size."],
+    ["reel / story 1080×1920", "Set the page to an Instagram Reel/Story size."],
+    ["pin 1000×1500", "Set the page to a standard Pinterest pin size."],
+    ["long pin 1000×2100", "Set the page to a long Pinterest pin size."],
+    ["landscape 1200×630", "Set the page to a Facebook landscape post size."],
+    ["cover 1640×924", "Set the page to a Facebook cover photo size."],
+    ["3600 square", "Set the page to a 3600×3600 seamless pattern tile size."],
+    ["a4 portrait 2480×3508 / a4 landscape 3508×2480", "Set the page to A4 size, portrait or landscape."],
+    ["custom", "Set the page to the custom width/height entered above."],
+    ["add new page", "Add a new page using the size chosen above."],
+    ["resize current", "Resize the current page to the size chosen above."]
+  ]},
+  { section: "Background textures", note: "", entries: [
+    ["clear background", "Remove the page&rsquo;s background texture."],
+    ["👁 / 🚫 (eye icon)", "Show or hide the applied background texture."],
+    ["× (on a texture row)", "Remove this background texture."]
+  ]},
+  { section: "Badges & labels", note: "", entries: [
+    ["oval / pill", "Add an oval/pill-shaped label."],
+    ["rounded rectangle", "Add a rounded-rectangle label."],
+    ["square label", "Add a square label."],
+    ["circle badge", "Add a circular badge."],
+    ["ribbon badge", "Add a ribbon-shaped badge."]
+  ]},
+  { section: "Etsy Assistant", note: "Generates tags, keywords and titles from your pattern name.", entries: [
+    ["generate Etsy ideas", "Generate tags, keywords and title ideas from your pattern name."],
+    ["clear", "Clear all generated Etsy listing suggestions."],
+    ["save EtsyAssistant.txt", "Download all the generated suggestions as a text file."],
+    ["copy", "Copy one generated field (tags, keywords, title or hashtags) to your clipboard."]
+  ]},
+  { section: "Extra design elements", note: "", entries: [
+    ["+ rectangle / + square / + circle", "Add a plain shape layer."],
+    ["plain text", "Add a plain text layer."]
+  ]},
+  { section: "Layers panel", note: "Select, reorder and group the layers on the page.", entries: [
+    ["select (multi-select toggle)", "Turn on multi-select so you can pick several layers at once."],
+    ["group", "Group the selected layers so they move and resize together."],
+    ["ungroup", "Split the selected group back into separate layers."],
+    ["to front / to back", "Bring the selected layer to the very front, or send it to the very back."],
+    ["↑ one step / ↓ one step", "Move the selected layer forward or back one step in the stack."],
+    ["duplicate selected / delete selected", "Duplicate or delete the selected layer."],
+    ["☑ / ☐ (a layer row)", "Include or exclude this layer from a group you&rsquo;re building."],
+    ["open / hide (a group row)", "Expand or collapse this group in the list."],
+    ["select (a layer row)", "Select this layer."],
+    ["default panel / wide panel", "Switch the Layers panel between its normal width and a wider one with bigger thumbnails and longer names."]
+  ]},
+  { section: "Edit & adjust", note: "Appears whenever something is selected on the page.", entries: [
+    ["fit width", "Resize the selected layer to the page&rsquo;s full width."],
+    ["fit canvas", "Resize the selected layer to fill the whole page."],
+    ["fit", "Scale the selected image to fit fully inside its box, keeping its own proportions."],
+    ["fill", "Scale the selected image to fill its box completely, cropping if needed."],
+    ["cover page", "Scale the selected image to fill the entire page."],
+    ["done", "Finish editing and deselect this layer."]
+  ]},
+  { section: "Alignment", note: "", entries: [
+    ["left / right", "Align the selected layer to the left or right edge of the page."],
+    ["centre", "Centre the selected layer horizontally."],
+    ["top / bottom", "Align the selected layer to the top or bottom of the page."],
+    ["middle", "Centre the selected layer vertically."],
+    ["centre page", "Centre the selected layer on the page, both ways."],
+    ["safe middle", "Centre the selected layer within the safe printable area."]
+  ]},
+  { section: "Font matchmaker", note: "", entries: [
+    ["generate matches", "Suggest font pairings based on your chosen style."]
+  ]},
+  { section: "Text", note: "", entries: [
+    ["+ plain text", "Add a plain text layer."],
+    ["+ title & subtitle", "Add a matching title and subtitle text pair."],
+    ["Pinterest title", "Add a bold text block styled for a Pinterest pin title."],
+    ["link note", "Add a small text note for a link or URL."],
+    ["bullet list / numbered list", "Add a bulleted or numbered list text block."],
+    ["add link", "Wrap the selected text in a clickable link."],
+    ["add pasted text", "Add a text layer prefilled from your clipboard."],
+    ["paste clipboard", "Paste an image or text from your clipboard onto the page."],
+    ["import own font", "Upload your own font file (.ttf/.otf/.woff) to use in the app."],
+    ["Pinterest headline / small subtitle / sale badge / soft label", "Apply one of these ready-made text styles to the selected text."],
+    ["bold / italic", "Toggle bold or italic for the selected text."],
+    ["text left / text centre / text right", "Align the selected text block."]
+  ]},
+  { section: "Recolor PNG", note: "Swap one flat colour in an uploaded image for another.", entries: [
+    ["use selected image", "Load the selected layer&rsquo;s image into the recolour tool."],
+    ["auto detect colour", "Automatically detect the image&rsquo;s main colour."],
+    ["swap", "Swap the &ldquo;from&rdquo; and &ldquo;to&rdquo; colours."],
+    ["add to assets", "Save the recoloured image to your asset tray."],
+    ["keep on canvas", "Replace the selected layer with the recoloured image."],
+    ["download recoloured png", "Download the recoloured image as a PNG file."]
+  ]},
+  { section: "On the canvas", note: "Controls that live on the page itself, not in a side panel.", entries: [
+    ["× (on a selected layer)", "Delete this element."],
+    ["‹ / › (screen edge arrows)", "Collapse or expand the left/right panel.", true],
+    ["duplicate / copy / paste to page&hellip;", "Right-click-style layer actions: duplicate here, copy, or paste a previously copied layer onto another page."]
+  ]},
+  { section: "Dialogs & pop-ups", note: "", entries: [
+    ["× (Quick Start Guide)", "Close the Quick Start Guide."],
+    ["Cancel / Save (Save As)", "Cancel without saving, or save with the file name entered."],
+    ["Close / Open in new tab / Download PDF (PDF ready)", "Close the dialog, open the finished PDF in a new tab, or download it."],
+    ["Close / Copy / Download .txt (debug report)", "Close the report, copy it to your clipboard, or download it as a text file."]
+  ]}
+];
+
+function ppSwatchBookSlug(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''); }
+
+function ppBuildSwatchBookHTML(){
+  var total = 0;
+  var sectionsHtml = SWATCHBOOK_DATA.map(function(group){
+    var entriesHtml = group.entries.map(function(e){
+      total++;
+      var label = e[0], desc = e[1], touch = e[2];
+      var search = (label + ' ' + desc).replace(/<[^>]*>/g,'').toLowerCase().replace(/"/g,'&quot;');
+      return '<div class="swbEntry" data-search="'+search+'">'+
+        '<span class="swbLabel">'+label+(touch?' <span class="swbTouch">touch</span>':'')+'</span>'+
+        '<span class="swbDesc">'+desc+'</span>'+
+        '</div>';
+    }).join('');
+    var note = group.note ? '<p class="swbNote">'+group.note+'</p>' : '';
+    return '<section class="swbGroup" id="swb-'+ppSwatchBookSlug(group.section)+'">'+
+      '<h3>'+group.section+' <span class="swbCount">'+group.entries.length+'</span></h3>'+
+      note+
+      '<div class="swbEntries">'+entriesHtml+'</div>'+
+      '</section>';
+  }).join('');
+
+  return ''+
+    '<div class="qsHeader">'+
+      '<span class="qsBadge">PATTERN PAGES</span>'+
+      '<h2>Swatch Book</h2>'+
+      '<p>What every button does &mdash; '+total+' in total. Search, or scroll through by panel.</p>'+
+    '</div>'+
+    '<div class="swbSearchRow">'+
+      '<input type="text" id="swbSearch" class="swbSearchInput" placeholder="Search a button or word&hellip;" autocomplete="off">'+
+      '<span class="swbResultCount" id="swbResultCount">'+total+' buttons</span>'+
+    '</div>'+
+    sectionsHtml;
+}
+
+function openSwatchBook(){
+  var old = document.getElementById('ppSwatchBookOverlay');
+  if(old) old.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'ppSwatchBookOverlay';
+  overlay.className = 'qsOverlay';
+
+  var box = document.createElement('div');
+  box.className = 'qsBox swbBox';
+  box.innerHTML = '<button type="button" class="qsClose" aria-label="Close swatch book" title="Close the Swatch Book">&times;</button>'+
+    '<div class="qsScroll">'+ppBuildSwatchBookHTML()+'</div>';
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  function close(){ overlay.remove(); }
+  box.querySelector('.qsClose').addEventListener('click', close);
+  overlay.addEventListener('click', function(e){ if(e.target === overlay) close(); });
+  document.addEventListener('keydown', function escHandler(e){
+    if(e.key === 'Escape'){ close(); document.removeEventListener('keydown', escHandler); }
+  });
+
+  var totalEntries = SWATCHBOOK_DATA.reduce(function(n,g){return n+g.entries.length;},0);
+  var searchInput = box.querySelector('#swbSearch');
+  var resultCount = box.querySelector('#swbResultCount');
+  searchInput.addEventListener('input', function(){
+    var q = searchInput.value.trim().toLowerCase();
+    var visible = 0;
+    box.querySelectorAll('.swbGroup').forEach(function(section){
+      var sectionVisible = 0;
+      section.querySelectorAll('.swbEntry').forEach(function(entry){
+        var match = !q || entry.dataset.search.indexOf(q) !== -1;
+        entry.style.display = match ? '' : 'none';
+        if(match){ sectionVisible++; visible++; }
+      });
+      section.style.display = sectionVisible ? '' : 'none';
+    });
+    resultCount.textContent = q ? (visible+' of '+totalEntries+' buttons') : (totalEntries+' buttons');
+  });
+}
+window.openSwatchBook = openSwatchBook;
+</script>
+
+<style>
+.swbBox{ max-width:760px; }
+.swbSearchRow{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  position:sticky; top:0; z-index:2;
+  background:#1c1626;
+  padding:4px 0 14px;
+  margin-bottom:6px;
+}
+.swbSearchInput{
+  flex:1 1 220px;
+  font:inherit; font-size:14px;
+  padding:10px 14px;
+  border-radius:999px;
+  border:1px solid rgba(255,232,248,.18);
+  background:rgba(255,255,255,.06);
+  color:#fff8fb;
+  outline:none;
+}
+.swbSearchInput:focus{ border-color:#ff8ed6; }
+.swbResultCount{ font-size:11.5px; color:#cfc7dd; white-space:nowrap; }
+.swbGroup{ margin-bottom:22px; }
+.swbGroup h3{
+  color:#ff8ed6; font-size:14.5px; margin:0 0 4px;
+  display:flex; align-items:baseline; gap:8px;
+}
+.swbCount{
+  font-size:10.5px; font-weight:700; color:#cfc7dd;
+  background:rgba(255,255,255,.08); border-radius:999px; padding:2px 8px;
+}
+.swbNote{ margin:0 0 8px; font-size:12px; color:#cfc7dd; }
+.swbEntries{ display:flex; flex-direction:column; gap:1px; }
+.swbEntry{
+  display:grid; grid-template-columns:minmax(140px,180px) 1fr; gap:12px;
+  padding:8px 10px;
+  background:rgba(255,255,255,.035);
+  border-bottom:1px solid rgba(255,232,248,.06);
+}
+.swbEntry:first-child{ border-radius:10px 10px 0 0; }
+.swbEntry:last-child{ border-radius:0 0 10px 10px; border-bottom:0; }
+.swbLabel{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-weight:700; font-size:12px; color:#fff8fb;
+}
+.swbTouch{
+  font-family:system-ui,-apple-system,sans-serif;
+  font-size:9px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+  color:#ffd899; background:rgba(255,216,153,.14); border-radius:5px; padding:1px 5px;
+}
+.swbDesc{ font-size:12.5px; color:#cfc7dd; line-height:1.45; }
+@media (max-width:560px){
+  .swbEntry{ grid-template-columns:1fr; gap:3px; }
 }
 </style>
 

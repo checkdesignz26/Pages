@@ -93,14 +93,44 @@ test.describe('desktop mouse: feedback/help move into the top toolbar', () => {
   });
 });
 
-// Real request: a link to the separately-published "Swatch Book" (a searchable reference for
-// every button, meant to sit alongside the app - e.g. iPad Split View) so it's reachable from
-// inside the app itself, not just something the user has to remember the URL for.
-test('a "swatch book" link in the toolbar opens the button reference in a new tab', async ({ page }) => {
+// Real report: a separately-published "Swatch Book" (a searchable reference for every button)
+// worked fine for the person who built it, but the link was unreachable for beta testers - the
+// artifact was private. Rebuilt entirely inside the app instead, the same way as the Quick Start
+// Guide above: a plain JS-built overlay with no external dependency, so there's nothing to share
+// or for a link to fail to reach.
+test('the "swatch book" button in the toolbar opens the in-app button reference', async ({ page }) => {
   const btn = page.locator('button', { hasText: 'swatch book' });
   await expect(btn).toBeVisible();
   await expect(btn).toHaveAttribute('title', /./);
-  const onclick = await btn.getAttribute('onclick');
-  expect(onclick).toContain("window.open('https://claude.ai/code/artifact/");
-  expect(onclick).toContain("'_blank'");
+  await btn.click();
+
+  const overlay = page.locator('#ppSwatchBookOverlay');
+  await expect(overlay).toBeVisible();
+  await expect(page.locator('.qsHeader h2')).toHaveText('Swatch Book');
+
+  // A real cross-section of buttons from different panels, not just the top toolbar.
+  const text = (await overlay.textContent()).toLowerCase();
+  expect(text).toContain('quick save');
+  expect(text).toContain('fill selected slot');
+  expect(text).toContain('recolor');
+  expect(text).toContain('etsy assistant');
+
+  await page.locator('.qsClose').click();
+  await expect(overlay).toHaveCount(0);
+});
+
+test('the swatch book search box filters entries live, down to just the matching ones', async ({ page }) => {
+  await page.evaluate(() => window.openSwatchBook());
+  const totalText = await page.locator('#swbResultCount').textContent();
+  expect(totalText).toMatch(/^\d+ buttons$/);
+
+  await page.fill('#swbSearch', 'quick save');
+  await expect(page.locator('#swbResultCount')).toHaveText(/^\d+ of \d+ buttons$/);
+
+  const visibleEntries = page.locator('.swbEntry:visible');
+  const count = await visibleEntries.count();
+  expect(count).toBeGreaterThan(0);
+  for (let i = 0; i < count; i++) {
+    expect((await visibleEntries.nth(i).textContent()).toLowerCase()).toContain('quick save');
+  }
 });
