@@ -1357,7 +1357,7 @@ body.autoGroupEditing .layer.collectionGrouped{
   </div>
   <p class="smallText">Horizontal stash stacks full-width fabric strips with stronger shadows.</p>
 </div><div class="frameCountRow"><label>number of slots</label><div class="frameStepper" aria-label="number of pattern slots"><button type="button" onclick="changeFrameCount(-1)" title="Remove a pattern slot">−</button><span id="cardCountDisplay">1</span><button type="button" onclick="changeFrameCount(1)" title="Add a pattern slot">+</button><input id="cardCount" type="hidden" value="1"></div></div><label class="checkRow" id="showcaseCaptionRow"><input id="showcaseAddCaptions" type="checkbox">add a caption below each shape</label><button class="full primary" onclick="generateSelectedShowcaseLayout()" title="Build or rebuild the showcase with the chosen layout and slot count">generate layout</button><p class="smallText">After generating: tap a strip, tile, rectangle or circle so it highlights, then choose a pattern from the tray and tap <strong>fill selected slot</strong>.</p></div></div>
-  <div class="box trayTop frameWowBox"><h2>frames</h2><div class="panelBody"><p class="smallText"><strong>Add a pattern frame.</strong> Choose a built-in shape or add your own PNG shape with transparency, then fill it from the Pattern Tray.</p><button class="full primary" onclick="toggleFramePicker()" title="Choose a built-in shape or upload your own PNG frame">add frame</button><div id="framePicker" class="framePicker hidden"><div class="framePickerTitle">built-in frames</div><div class="frameShapeGrid"><button onclick="addPatternFrame('flower')">✿<span>flower</span></button><button onclick="addPatternFrame('heart')">♥<span>heart</span></button><button onclick="addPatternFrame('star')">★<span>star</span></button><button onclick="addPatternFrame('circle')">●<span>circle</span></button><button onclick="addPatternFrame('arch')">⌒<span>arch</span></button><button onclick="addPatternFrame('label')">▭<span>label</span></button></div><div class="framePickerTitle">custom frame</div><input id="customFrameInput" class="hidden" type="file" accept="image/png,image/*" onchange="addCustomFrameFromPNG(event)"><button class="full" onclick="customFrameInput.click()" title="Upload a PNG shape with a transparent background to use as a custom frame">add your PNG</button><p class="smallText">Tip: use a PNG shape with a transparent background. Pattern Pages turns the visible shape into a fillable frame.</p></div></div></div>
+  <div class="box trayTop frameWowBox"><h2>frames</h2><div class="panelBody"><p class="smallText"><strong>Add a pattern frame.</strong> Choose a built-in shape or add your own PNG shape with transparency, then fill it from the Pattern Tray.</p><button class="full primary" onclick="toggleFramePicker()" title="Choose a built-in shape or upload your own PNG frame">add frame</button><div id="framePicker" class="framePicker hidden"><div class="framePickerTitle">built-in frames</div><div class="frameShapeGrid"><button onclick="addPatternFrame('flower')" title="Add a flower-shaped pattern frame">✿<span>flower</span></button><button onclick="addPatternFrame('heart')" title="Add a heart-shaped pattern frame">♥<span>heart</span></button><button onclick="addPatternFrame('star')" title="Add a star-shaped pattern frame">★<span>star</span></button><button onclick="addPatternFrame('circle')" title="Add a circle-shaped pattern frame">●<span>circle</span></button><button onclick="addPatternFrame('arch')" title="Add an arch-shaped pattern frame">⌒<span>arch</span></button><button onclick="addPatternFrame('label')" title="Add a rectangular label-shaped pattern frame">▭<span>label</span></button></div><div class="framePickerTitle">custom frame</div><input id="customFrameInput" class="hidden" type="file" accept="image/png,image/*" onchange="addCustomFrameFromPNG(event)"><button class="full" onclick="customFrameInput.click()" title="Upload a PNG shape with a transparent background to use as a custom frame">add your PNG</button><p class="smallText">Tip: use a PNG shape with a transparent background. Pattern Pages turns the visible shape into a fillable frame.</p></div></div></div>
 
 
   <div class="box trayTop customMockupBox"><h2>custom mock-up</h2><div class="panelBody">
@@ -3786,7 +3786,7 @@ const QUICKSTART_STEPS = [
 ];
 
 const QUICKSTART_SHORTCUTS = [
-  ['Add a realistic mock-up', '<strong>custom mock-up</strong> &rarr; upload background + white mask &rarr; <strong>create live custom mock-up &#10024;</strong>'],
+  ['Add a realistic mock-up', '<strong>custom mock-up</strong> &rarr; upload background + white mask &rarr; <strong>create mock-up &#10024;</strong>'],
   ['Add a decorative shaped frame', '<strong>frames</strong> &rarr; <strong>add frame</strong> &rarr; pick a shape &rarr; fill it like a slot'],
   ['Add text or a label', 'the <strong>badges &amp; labels</strong> or <strong>text</strong> panel'],
   ['Generate Etsy tags &amp; titles', '<strong>Etsy Assistant</strong> &rarr; enter pattern name + theme &rarr; <strong>generate Etsy ideas</strong>'],
@@ -3995,10 +3995,11 @@ const SWATCHBOOK_DATA = [
   ]},
   { section: "Frames", note: "Shaped containers you drop a pattern into.", entries: [
     ["add frame", "Choose a built-in shape, or upload your own PNG frame."],
+    ["✿ flower / ♥ heart / ★ star / ● circle / ⌒ arch / ▭ label", "Add a pattern frame in that built-in shape."],
     ["add your PNG", "Upload a PNG shape with a transparent background to use as a custom frame."]
   ]},
   { section: "Custom mock-up", note: "Turn a real product photo into a fillable mock-up.", entries: [
-    ["create live custom mock-up ✨", "Generate a live, fillable mock-up from your uploaded background and mask."]
+    ["create mock-up ✨", "Generate a live, fillable mock-up from your uploaded background and mask."]
   ]},
   { section: "Images & mock-ups", note: "", entries: [
     ["Upload Design Assets", "Add your own images, banners or mock-up backgrounds to the tray."],
@@ -4016,7 +4017,8 @@ const SWATCHBOOK_DATA = [
   // ]},
   { section: "Pages", note: "", entries: [
     ["delete current page", "Delete the page you&rsquo;re currently viewing."],
-    ["clear current page", "Remove every layer from the current page, keeping the page itself."]
+    ["clear current page", "Remove every layer from the current page, keeping the page itself."],
+    ["⧉ duplicate page / × delete page", "Duplicate or delete this page from the page list."]
   ]},
   { section: "Document mode", note: "Multi-page text documents, like a manual or PDF.", entries: [
     ["add document page", "Add a new multi-page text document page."],
@@ -4048,6 +4050,7 @@ const SWATCHBOOK_DATA = [
     ["resize current", "Resize the current page to the size chosen above."]
   ]},
   { section: "Background textures", note: "", entries: [
+    ["Pure White / Warm Ivory / Soft Beige / Linen / Cotton Canvas / Handmade Paper / Watercolour Paper / Kraft Paper / Light Wood / Soft Stone", "Tap a swatch to apply that background texture to the current page."],
     ["clear background", "Remove the page&rsquo;s background texture."],
     ["👁 / 🚫 (eye icon)", "Show or hide the applied background texture."],
     ["× (on a texture row)", "Remove this background texture."]
@@ -4076,6 +4079,10 @@ const SWATCHBOOK_DATA = [
     ["to front / to back", "Bring the selected layer to the very front, or send it to the very back."],
     ["↑ one step / ↓ one step", "Move the selected layer forward or back one step in the stack."],
     ["duplicate selected / delete selected", "Duplicate or delete the selected layer."],
+    ["👁 hide layer / show layer", "Hide or show this layer."],
+    ["🔓 lock layer in place / unlock layer", "Lock this layer in place, or unlock it."],
+    ["× delete layer", "Delete this layer."],
+    ["👁 hide complete showcase / × remove complete showcase", "Hide or delete the whole generated pattern showcase group at once."],
     ["☑ / ☐ (a layer row)", "Include or exclude this layer from a group you&rsquo;re building."],
     ["open / hide (a group row)", "Expand or collapse this group in the list."],
     ["select (a layer row)", "Select this layer."],
@@ -4100,7 +4107,8 @@ const SWATCHBOOK_DATA = [
   ]},
   { section: "Font matchmaker", note: "", entries: [
     ["generate matches", "Suggest font pairings based on your chosen style."],
-    ["use selected text font", "Use the selected text's own font as the starting point for new matches."]
+    ["use selected text font", "Use the selected text's own font as the starting point for new matches."],
+    ["apply to text", "Apply this suggested font pairing to the selected text."]
   ]},
   { section: "Text", note: "", entries: [
     ["+ plain text", "Add a plain text layer."],
@@ -5602,7 +5610,7 @@ function generateFontMatches(){
   const results=document.getElementById('fontMatchResults');
   if(!results)return;
   const matches=MATCHMAKER_LIBRARY[base]||MATCHMAKER_LIBRARY.Georgia;
-  results.innerHTML=matches.map((m,i)=>`<button class="fontPairBtn" onclick="applyGeneratedFontPair('${m.heading.replace(/'/g,"\'")}','${m.body.replace(/'/g,"\'" )}')"><span class="pairFonts"><strong style="font-family:${m.heading}">${m.heading}</strong><small style="font-family:${m.body}">${m.body} · ${m.note}</small></span><span class="applyTiny">apply</span></button>`).join('');
+  results.innerHTML=matches.map((m,i)=>`<button class="fontPairBtn" title="Apply this ${m.heading} + ${m.body} font pairing to the selected text" onclick="applyGeneratedFontPair('${m.heading.replace(/'/g,"\'")}','${m.body.replace(/'/g,"\'" )}')"><span class="pairFonts"><strong style="font-family:${m.heading}">${m.heading}</strong><small style="font-family:${m.body}">${m.body} · ${m.note}</small></span><span class="applyTiny">apply</span></button>`).join('');
 }
 // NOTE(consolidation): a base applyGeneratedFontPair(headingFont,bodyFont) used to be defined
 // here - confirmed dead, hard-overwritten with no fallback by pp-font-matchmaker-pair-restore
@@ -14894,6 +14902,7 @@ window.addEventListener('DOMContentLoaded',function(){
       card.className="textureVisualCard";
       card.dataset.textureId=texture.id;
       card.setAttribute("aria-label","Apply "+texture.name+" background");
+      card.title="Apply "+texture.name+" background";
 
       const swatch=document.createElement("span");
       swatch.className="textureSwatch";

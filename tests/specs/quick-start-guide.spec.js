@@ -251,3 +251,31 @@ test('the button guide can be found by the names buttons actually show, includin
   expect(await search('crop selected to layer')).toBeGreaterThan(0);
   expect(await search('use selected text font')).toBeGreaterThan(0);
 });
+
+// Real report (with an iPad screenshot of the custom mock-up panel): searching "create mock-up"
+// found nothing, "0 of 148 buttons". The panel's real button is cloned-and-relabelled at runtime
+// from "create live custom mock-up" (the guide's old entry) down to "create mock-up ✨" (what's
+// actually shown), so the old label was permanently unfindable. The same live-DOM audit that
+// caught this also turned up several other real, live buttons never covered by the guide at
+// all: page-list duplicate/delete icons, per-layer-row hide/lock/delete icons, the showcase
+// group's own hide/remove icons, the font-matchmaker "apply to text" suggestion action, the
+// built-in frame shape buttons, and the individual background texture swatches.
+test('the button guide can be found by every real button the newest live-audit round surfaced', async ({ page }) => {
+  await page.evaluate(() => window.openSwatchBook());
+  const search = async (q) => {
+    await page.fill('#swbSearch', '');
+    await page.fill('#swbSearch', q);
+    await page.waitForTimeout(120);
+    return page.locator('.swbEntry:visible').count();
+  };
+  expect(await search('create mock-up')).toBeGreaterThan(0);
+  expect(await search('duplicate page')).toBeGreaterThan(0);
+  expect(await search('delete page')).toBeGreaterThan(0);
+  expect(await search('hide layer')).toBeGreaterThan(0);
+  expect(await search('lock layer')).toBeGreaterThan(0);
+  expect(await search('delete layer')).toBeGreaterThan(0);
+  expect(await search('remove complete showcase')).toBeGreaterThan(0);
+  expect(await search('apply to text')).toBeGreaterThan(0);
+  expect(await search('flower')).toBeGreaterThan(0);
+  expect(await search('Linen')).toBeGreaterThan(0);
+});
