@@ -93,20 +93,20 @@ test.describe('desktop mouse: feedback/help move into the top toolbar', () => {
   });
 });
 
-// Real report: a separately-published "Swatch Book" (a searchable reference for every button)
+// Real report: a separately-published "Button Guide" (a searchable reference for every button)
 // worked fine for the person who built it, but the link was unreachable for beta testers - the
 // artifact was private. Rebuilt entirely inside the app instead, the same way as the Quick Start
 // Guide above: a plain JS-built overlay with no external dependency, so there's nothing to share
 // or for a link to fail to reach.
-test('the "swatch book" button in the toolbar opens the in-app button reference', async ({ page }) => {
-  const btn = page.locator('button', { hasText: 'swatch book' });
+test('the "button guide" button in the toolbar opens the in-app button reference', async ({ page }) => {
+  const btn = page.locator('button', { hasText: 'button guide' });
   await expect(btn).toBeVisible();
   await expect(btn).toHaveAttribute('title', /./);
   await btn.click();
 
   const overlay = page.locator('#ppSwatchBookOverlay');
   await expect(overlay).toBeVisible();
-  await expect(page.locator('.qsHeader h2')).toHaveText('Swatch Book');
+  await expect(page.locator('.qsHeader h2')).toHaveText('Button Guide');
 
   // A real cross-section of buttons from different panels, not just the top toolbar.
   const text = (await overlay.textContent()).toLowerCase();
@@ -119,7 +119,7 @@ test('the "swatch book" button in the toolbar opens the in-app button reference'
   await expect(overlay).toHaveCount(0);
 });
 
-test('the swatch book search box filters entries live, down to just the matching ones', async ({ page }) => {
+test('the button guide search box filters entries live, down to just the matching ones', async ({ page }) => {
   await page.evaluate(() => window.openSwatchBook());
   const totalText = await page.locator('#swbResultCount').textContent();
   expect(totalText).toMatch(/^\d+ buttons$/);
@@ -139,7 +139,7 @@ test('the swatch book search box filters entries live, down to just the matching
 // beside while the user is working" - rebuilt as a floating panel instead of a full-screen modal:
 // no dimmed backdrop, drag by its header, resize from its bottom-right corner, and the canvas
 // underneath stays fully usable while it's open.
-test('the swatch book floats without blocking the app underneath - it can be dragged and resized, and remembers where you left it', async ({ page }) => {
+test('the button guide floats without blocking the app underneath - it can be dragged and resized, and remembers where you left it', async ({ page }) => {
   await page.evaluate(() => window.openSwatchBook());
   await page.waitForTimeout(150);
 
@@ -185,4 +185,69 @@ test('the swatch book floats without blocking the app underneath - it can be dra
   expect(reopened.y).toBeCloseTo(afterDrag.y, 0);
   expect(reopened.width).toBeCloseTo(afterResize.width, 0);
   expect(reopened.height).toBeCloseTo(afterResize.height, 0);
+});
+
+// Real report: dragging the panel down the page (e.g. to sit beside a document-mode page, like
+// the beta tester's screenshot) could push the bottom-right resize handle below the visible
+// viewport entirely - the old clamp only accounted for an arbitrary constant, not the panel's
+// own current width/height, so a tall panel dragged low enough made its own resize handle
+// physically unreachable by any pointer. Confirmed directly: elementFromPoint at the handle's
+// own coordinates returned null once it went off-screen.
+test('dragging the button guide low on a tall page still keeps its resize handle reachable', async ({ page }) => {
+  await page.evaluate(() => { if (typeof addDocumentLitePage === 'function') addDocumentLitePage(); });
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.openSwatchBook());
+  await page.waitForTimeout(150);
+
+  const header = page.locator('.swbHeader');
+  const hb = await header.boundingBox();
+  const viewport = page.viewportSize();
+  // Drag it as far down as the header itself allows - the old bug was in how the BODY's
+  // height was (not) accounted for below that point.
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hb.x, viewport.height - 20, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+
+  const box = await page.locator('.swbBox').boundingBox();
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
+
+  const hitId = await page.evaluate(() => {
+    const handle = document.querySelector('.swbResizeHandle').getBoundingClientRect();
+    const el = document.elementFromPoint(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    return el ? el.className : null;
+  });
+  expect(hitId).toContain('swbResizeHandle');
+
+  // And it must actually still resize from there.
+  const handle = page.locator('.swbResizeHandle');
+  const hb2 = await handle.boundingBox();
+  await page.mouse.move(hb2.x + hb2.width / 2, hb2.y + hb2.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hb2.x + 60, hb2.y - 40, { steps: 5 });
+  await page.mouse.up();
+  const after = await page.locator('.swbBox').boundingBox();
+  expect(after.width).not.toBeCloseTo(box.width, 0);
+});
+
+// Real report: the button guide's "fill all empty" entry couldn't be found by searching "magic
+// fill" - the app renames that exact button to "magic fill" immediately on load (and the Quick
+// Start Guide's own copy already called it that too), but the button guide's entry was still
+// written with the button's original, pre-rename label. Also covers several dynamically-created
+// buttons (built via document.createElement, never in the static HTML) that a source-only sweep
+// had missed entirely, like "clear selected slot" and "remove showcase".
+test('the button guide can be found by the names buttons actually show, including renamed and dynamically-created ones', async ({ page }) => {
+  await page.evaluate(() => window.openSwatchBook());
+  const search = async (q) => {
+    await page.fill('#swbSearch', '');
+    await page.fill('#swbSearch', q);
+    await page.waitForTimeout(120);
+    return page.locator('.swbEntry:visible').count();
+  };
+  expect(await search('magic fill')).toBeGreaterThan(0);
+  expect(await search('clear selected slot')).toBeGreaterThan(0);
+  expect(await search('remove showcase')).toBeGreaterThan(0);
+  expect(await search('crop selected to layer')).toBeGreaterThan(0);
+  expect(await search('use selected text font')).toBeGreaterThan(0);
 });

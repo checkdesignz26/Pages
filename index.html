@@ -1337,7 +1337,7 @@ body.autoGroupEditing .layer.collectionGrouped{
       <button onclick="zoomPage(-0.05)" title="Zoom out">−</button>
       <button onclick="zoomPage(0.05)" title="Zoom in">+</button>
       <button onclick="toggleHandedMode()" id="handModeBtn" title="Switch which side the panels are on">left-handed layout</button>
-      <button onclick="openSwatchBook()" title="Open the Swatch Book - a searchable reference for what every button does">🧵 swatch book</button>
+      <button onclick="openSwatchBook()" title="Open the Button Guide - a searchable reference for what every button does">📖 button guide</button>
     </div>
   </div>
  </div>
@@ -1936,6 +1936,7 @@ function ensureTrayDeleteButton(type){
  btn.type='button';
  btn.className='full trayDeleteBtn';
  btn.textContent=type==='pattern'?'Delete Selected Pattern':'Delete Selected Asset';
+ btn.title='Remove the selected item from the '+(type==='pattern'?'pattern':'asset')+' tray';
  btn.onclick=()=>deleteSelectedTrayItem(type);
  tray.parentElement.appendChild(btn);
 }
@@ -3772,7 +3773,7 @@ const QUICKSTART_STEPS = [
   },
   {
     title: '4. Fill it',
-    body: 'Tap a slot on the canvas, select your pattern in the tray, then tap <strong>fill selected slot</strong>. Or skip the tapping and use <strong>&#10024; fill all empty</strong> to fill every slot at once.'
+    body: 'Tap a slot on the canvas, select your pattern in the tray, then tap <strong>fill selected slot</strong>. Or skip the tapping and use <strong>&#129497; magic fill</strong> to fill every slot at once.'
   },
   {
     title: '5. Export',
@@ -3951,7 +3952,7 @@ const SWATCHBOOK_DATA = [
     ["&minus;", "Zoom out."],
     ["+", "Zoom in."],
     ["left-handed layout", "Switch which side the panels are on."],
-    ["🧵 swatch book", "Open this reference."],
+    ["📖 button guide", "Open this reference."],
     ["feedback 💌", "Open the feedback form."],
     ["? help", "Open the Quick Start Guide."]
   ]},
@@ -3970,8 +3971,10 @@ const SWATCHBOOK_DATA = [
     ["tap patterns to select several / clear selection", "Multi-select mode for the tray, so one action can use more than one pattern.", true],
     ["place pattern", "Add the selected pattern as a new layer on the page."],
     ["fill selected slot", "Fill the currently selected frame or slot with the selected pattern."],
-    ["✨ fill all empty", "Fill every empty slot at once with patterns from the tray."],
-    ["replace all", "Replace every filled slot with the selected pattern."]
+    ["🪄 magic fill", "Fill every empty slot at once with patterns from the tray."],
+    ["replace all", "Replace every filled slot with the selected pattern."],
+    ["delete selected pattern / delete selected asset", "Remove the selected item from the pattern or asset tray."],
+    ["clear selected slot", "Empty just the currently selected slot on the page."]
   ]},
   { section: "Pattern showcase", note: "Auto-generated grids of pattern slots.", entries: [
     ["strips", "Arrange the showcase as full-width strips."],
@@ -3981,7 +3984,9 @@ const SWATCHBOOK_DATA = [
     ["vertical", "Stack strips side by side."],
     ["horizontal stash", "Stack strips edge to edge, like a folded fabric stash."],
     ["&minus; / + (number of slots)", "Remove or add a pattern slot."],
-    ["generate layout", "Build or rebuild the showcase with the chosen layout and slot count."],
+    ["generate layout / update layout", "Build the showcase with the chosen layout and slot count &mdash; reads &ldquo;update layout&rdquo; once slots already exist."],
+    ["reset layout position", "Put the showcase's size and position sliders back to their defaults."],
+    ["remove showcase", "Delete the whole generated showcase from the page."],
     ["fill selected slot / clear slot", "Inside the showcase itself: fill or empty just the highlighted slot."]
   ]},
   { section: "Frames", note: "Shaped containers you drop a pattern into.", entries: [
@@ -3997,7 +4002,8 @@ const SWATCHBOOK_DATA = [
     ["mock-up page", "Create a new page from an uploaded mock-up photo."],
     ["banner", "Add a wide banner image layer."],
     ["overlay", "Add a full-page overlay image layer."],
-    ["add AI generated badge", "Add a movable &ldquo;AI generated&rdquo; disclosure badge."]
+    ["add AI generated badge", "Add a movable &ldquo;AI generated&rdquo; disclosure badge."],
+    ["✂️ crop selected to layer / crop mode on", "Draw a rectangle over a selected image or template and turn just that piece into its own movable image layer."]
   ]},
   { section: "Batch listing set", note: "One tap, five coordinated Etsy listing photos.", entries: [
     ["✨ create listing set", "Add 5 new pages pre-built for a coordinated Etsy listing set (main shot, detail, lifestyle, info card, collection grid)."],
@@ -4016,7 +4022,8 @@ const SWATCHBOOK_DATA = [
     ["align left / centre / right", "Align an inserted image, with body text wrapping beside it (left/right) or on its own line (centre).", true],
     ["create / update TOC", "Build or refresh the table of contents from your headings."],
     ["rename contents title", "Rename the &ldquo;Contents&rdquo; heading."],
-    ["print / save PDF", "Print the document, or save it as a PDF."]
+    ["print / save PDF", "Print the document, or save it as a PDF."],
+    ["delete image", "Delete the selected image from the document page."]
   ]},
   { section: "Page size & presets", note: "", entries: [
     ["listing 3000×2250", "Set the page to Etsy&rsquo;s recommended listing image size."],
@@ -4086,7 +4093,8 @@ const SWATCHBOOK_DATA = [
     ["safe middle", "Centre the selected layer within the safe printable area."]
   ]},
   { section: "Font matchmaker", note: "", entries: [
-    ["generate matches", "Suggest font pairings based on your chosen style."]
+    ["generate matches", "Suggest font pairings based on your chosen style."],
+    ["use selected text font", "Use the selected text's own font as the starting point for new matches."]
   ]},
   { section: "Text", note: "", entries: [
     ["+ plain text", "Add a plain text layer."],
@@ -4148,7 +4156,7 @@ function ppBuildSwatchBookHTML(){
   return ''+
     '<div class="qsHeader">'+
       '<span class="qsBadge">PATTERN PAGES</span>'+
-      '<h2>Swatch Book</h2>'+
+      '<h2>Button Guide</h2>'+
       '<p>What every button does &mdash; '+total+' in total. Search, or scroll through by panel.</p>'+
     '</div>'+
     '<div class="swbSearchRow">'+
@@ -4172,8 +4180,8 @@ function openSwatchBook(){
   box.className = 'swbBox';
   box.innerHTML =
     '<div class="swbHeader" title="Drag to move">'+
-      '<span class="swbHeaderTitle">🧵 Swatch Book</span>'+
-      '<button type="button" class="swbCloseBtn" aria-label="Close swatch book" title="Close the Swatch Book">&times;</button>'+
+      '<span class="swbHeaderTitle">📖 Button Guide</span>'+
+      '<button type="button" class="swbCloseBtn" aria-label="Close button guide" title="Close the Button Guide">&times;</button>'+
     '</div>'+
     '<div class="swbScrollArea">'+ppBuildSwatchBookHTML()+'</div>'+
     '<div class="swbResizeHandle" title="Drag to resize"></div>';
@@ -4191,8 +4199,11 @@ function openSwatchBook(){
   var h = Math.max(260, Math.min(saved.h || Math.round(window.innerHeight * 0.72), window.innerHeight - 24));
   var left = saved.left != null ? saved.left : Math.max(12, window.innerWidth - w - 28);
   var top = saved.top != null ? saved.top : 84;
-  left = Math.max(0, Math.min(left, window.innerWidth - 80));
-  top = Math.max(0, Math.min(top, window.innerHeight - 60));
+  // Clamp against the box's own width/height, not an arbitrary constant - otherwise a tall/wide
+  // panel dragged toward an edge can push its resize handle (bottom-right corner) off-screen
+  // entirely, out of reach of any pointer event.
+  left = Math.max(0, Math.min(left, Math.max(0, window.innerWidth - w)));
+  top = Math.max(0, Math.min(top, Math.max(0, window.innerHeight - h)));
   box.style.width = w + 'px';
   box.style.height = h + 'px';
   box.style.left = left + 'px';
@@ -4206,7 +4217,23 @@ function openSwatchBook(){
     }catch(e){}
   }
 
-  function close(){ overlay.remove(); document.removeEventListener('keydown', escHandler); }
+  // If the window itself resizes (e.g. an iPad rotating) after the panel was positioned, make
+  // sure it - and its resize handle - stay reachable rather than getting stranded off-screen.
+  function reclamp(){
+    var maxLeft = Math.max(0, window.innerWidth - box.offsetWidth);
+    var maxTop = Math.max(0, window.innerHeight - box.offsetHeight);
+    box.style.left = Math.max(0, Math.min(box.offsetLeft, maxLeft)) + 'px';
+    box.style.top = Math.max(0, Math.min(box.offsetTop, maxTop)) + 'px';
+    box.style.width = Math.min(box.offsetWidth, window.innerWidth - 8) + 'px';
+    box.style.height = Math.min(box.offsetHeight, window.innerHeight - 8) + 'px';
+  }
+  window.addEventListener('resize', reclamp);
+
+  function close(){
+    overlay.remove();
+    document.removeEventListener('keydown', escHandler);
+    window.removeEventListener('resize', reclamp);
+  }
   function escHandler(e){ if(e.key === 'Escape') close(); }
   box.querySelector('.swbCloseBtn').addEventListener('click', close);
   document.addEventListener('keydown', escHandler);
@@ -4220,8 +4247,10 @@ function openSwatchBook(){
   });
   header.addEventListener('pointermove', function(e){
     if(!drag) return;
-    var newLeft = Math.max(0, Math.min(drag.startLeft + (e.clientX - drag.startX), window.innerWidth - 80));
-    var newTop = Math.max(0, Math.min(drag.startTop + (e.clientY - drag.startY), window.innerHeight - 44));
+    var maxLeft = Math.max(0, window.innerWidth - box.offsetWidth);
+    var maxTop = Math.max(0, window.innerHeight - box.offsetHeight);
+    var newLeft = Math.max(0, Math.min(drag.startLeft + (e.clientX - drag.startX), maxLeft));
+    var newTop = Math.max(0, Math.min(drag.startTop + (e.clientY - drag.startY), maxTop));
     box.style.left = newLeft + 'px';
     box.style.top = newTop + 'px';
   });
@@ -4306,10 +4335,18 @@ window.openSwatchBook = openSwatchBook;
   color:#fff8fb;
 }
 .swbResizeHandle{
-  position:absolute; right:0; bottom:0; width:22px; height:22px;
+  position:absolute; right:0; bottom:0; width:34px; height:34px;
   cursor:nwse-resize; touch-action:none;
-  background:linear-gradient(135deg,transparent 50%,rgba(255,232,248,.3) 50%);
   border-radius:0 0 15px 0;
+  display:flex; align-items:flex-end; justify-content:flex-end;
+  padding:5px;
+}
+.swbResizeHandle::after{
+  content:"";
+  width:14px; height:14px;
+  background:
+    linear-gradient(135deg,transparent calc(50% - 1.5px),rgba(255,232,248,.7) calc(50% - 1.5px),rgba(255,232,248,.7) calc(50% + 1.5px),transparent calc(50% + 1.5px)),
+    linear-gradient(135deg,transparent calc(75% - 1.5px),rgba(255,232,248,.5) calc(75% - 1.5px),rgba(255,232,248,.5) calc(75% + 1.5px),transparent calc(75% + 1.5px));
 }
 .swbSearchRow{
   display:flex; align-items:center; gap:10px; flex-wrap:wrap;
@@ -8456,6 +8493,7 @@ function makeNumberedList(){
     btn.type = "button";
     btn.className = "full clearSlotBtn";
     btn.textContent = "Clear Selected Slot";
+    btn.title = "Empty just the currently selected slot on the page";
     btn.onclick = function(e){
       e.preventDefault();
       e.stopPropagation();
@@ -10101,6 +10139,7 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
     btn.type='button';
     btn.className='full cropToLayerBtn';
     btn.textContent='✂️ crop selected to layer';
+    btn.title='Draw a rectangle over the selection and turn just that piece into its own image layer';
     btn.onclick=toggleCropToLayer;
     const hint=document.createElement('div');
     hint.className='cropToLayerHint';
@@ -17627,6 +17666,7 @@ else install();
       useBtn.className='full';
       useBtn.type='button';
       useBtn.textContent='use selected text font';
+      useBtn.title="Use the selected text's own font as the starting point for new matches";
       useBtn.onclick=function(){
         if(setBaseFontToSelected()){
           if(typeof generateFontMatches === 'function') generateFontMatches();
@@ -18412,6 +18452,7 @@ else install();
       reset.type='button';
       reset.className='showcaseResetBtn';
       reset.textContent='reset layout position';
+      reset.title="Put the showcase's size and position sliders back to their defaults";
       reset.addEventListener('click',resetShowcaseControlRoom);
       sizeBox.appendChild(reset);
     }
@@ -19124,7 +19165,7 @@ else install();
     var gen=body.querySelector('#showcaseGenerateBtn')||Array.from(body.querySelectorAll('button')).find(function(b){return /generate layout|update layout/i.test(b.textContent||'');});
     if(gen){gen.id='showcaseGenerateBtn';gen.onclick=window.generateSelectedShowcaseLayout;}
     var btn=byId('showcaseRemoveBtn');
-    if(!btn){btn=document.createElement('button');btn.id='showcaseRemoveBtn';btn.type='button';btn.textContent='remove showcase';btn.onclick=window.removePatternShowcase;
+    if(!btn){btn=document.createElement('button');btn.id='showcaseRemoveBtn';btn.type='button';btn.textContent='remove showcase';btn.title='Delete the whole generated showcase from the page';btn.onclick=window.removePatternShowcase;
       if(gen&&gen.parentNode)gen.parentNode.insertBefore(btn,gen.nextSibling);else body.appendChild(btn);
     }
     /* Remove the older duplicate delete button if it exists. */
@@ -21030,6 +21071,7 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
       btn.type='button';
       btn.className='full';
       btn.textContent='delete image';
+      btn.title='Delete the selected image from the document page';
       btn.style.marginTop='8px';
       btn.onclick=function(e){e.preventDefault();deleteSelectedImage();};
       body.appendChild(btn);
