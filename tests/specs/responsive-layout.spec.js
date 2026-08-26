@@ -268,6 +268,42 @@ test('icon-only controls (zoom, panel-collapse arrows, frame count stepper) have
   await expect(page.locator('button[onclick="changeFrameCount(1)"]')).toHaveAttribute('title', /./);
 });
 
+// Real request: "I'm thinking of adding a quick explanation to each button" - a full audit pass
+// giving every static <button> in the page a hover tooltip explaining what it does, on top of the
+// icon-only ones already covered above. Checks the raw source rather than the live DOM, since
+// most of these buttons live in panels/dialogs that only render into the DOM once triggered
+// (document mode, recolor, save-as, PDF-ready, debug report...) - the source scan covers every
+// one of them regardless of whether that panel happens to be open right now.
+test('every static button in the app has a hover tooltip explaining what it does', async ({ page, baseURL }) => {
+  const html = await (await page.request.get(`${baseURL}/index.html`)).text();
+  const re = /<button\b([^>]*)>([^<]*)<\/button>/g;
+  const missing = [];
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const attrs = m[1];
+    // The Layers panel's wide/default toggle sets its own title live in JS on every render
+    // (it flips between two different messages depending on state) rather than a static one.
+    if (/id="ppLayerPanelWideToggle"/.test(attrs)) continue;
+    if (!/title\s*=/.test(attrs)) missing.push({ attrs: attrs.trim(), text: m[2].trim() });
+  }
+  expect(missing).toEqual([]);
+});
+
+// Real bug caught while doing the audit above: the "rename placeholder" button lives inside a
+// single-quoted JS string (the "templates" panel's innerHTML=' ... ' assignment), and its
+// tooltip's apostrophe ("this placeholder's label") closed that string early, breaking the whole
+// script block with a syntax error - one bad apostrophe silently killed every later
+// window.xyz=function(){...} assignment in that same <script> tag. Confirms the fix (the
+// apostrophe is escaped to match this block's own \' convention) actually renders correctly with
+// no page errors, not just that the source contains a title= attribute.
+test('the "templates" panel with the escaped-apostrophe tooltip renders without a page error', async ({ page }) => {
+  const title = await page.evaluate(() => {
+    const btn = document.querySelector('button[onclick="renameSelectedPlaceholder()"]');
+    return btn ? btn.title : null;
+  });
+  expect(title).toBe("Rename this placeholder's label");
+});
+
 // Real report, with a screenshot: on a genuinely wide monitor (2K+), the side panels (270/288px)
 // and canvas (capped at 760px) left a huge dead strip of empty workspace either side of a
 // comparatively tiny page. Widened both above 1600px - a moderate bump, not edge-to-edge, since

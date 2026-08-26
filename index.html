@@ -1312,17 +1312,17 @@ body.autoGroupEditing .layer.collectionGrouped{
  <div class="toolbar compactToolbar" aria-label="workspace actions">
   <div class="toolbarRow studioActions">
     <div class="actionGroup softGroup">
-      <button onclick="undo()">↶ undo</button>
-      <button onclick="redo()">↷ redo</button>
-      <button onclick="deselect()">deselect</button>
+      <button onclick="undo()" title="Undo the last change">↶ undo</button>
+      <button onclick="redo()" title="Redo the last undone change">↷ redo</button>
+      <button onclick="deselect()" title="Deselect the current layer">deselect</button>
     </div>
     <div class="actionGroup softGroup">
-      <button onclick="duplicateSelected()">duplicate</button>
-      <button onclick="deleteSelected()">delete</button>
+      <button onclick="duplicateSelected()" title="Duplicate the selected layer">duplicate</button>
+      <button onclick="deleteSelected()" title="Delete the selected layer">delete</button>
     </div>
     <div class="actionGroup primaryGroup">
-      <button class="primary" onclick="downloadCurrentPagePNG()">download page</button>
-      <button onclick="downloadAllPagesZip()">download ZIP</button>
+      <button class="primary" onclick="downloadCurrentPagePNG()" title="Download the current page as a PNG image">download page</button>
+      <button onclick="downloadAllPagesZip()" title="Download every page as PNG files in one ZIP">download ZIP</button>
     </div>
     <div class="actionGroup projectGroup">
       <button onclick="downloadPstudio()" title="Download your whole project as a .ppages file you can reopen later">save .ppages</button>
@@ -1348,15 +1348,15 @@ body.autoGroupEditing .layer.collectionGrouped{
     <span>Upload patterns, choose a page size, then build your layout with frames, strips and labels.</span>
   </div>
   <div class="box trayTop"><h2>pattern tray</h2><div class="panelBody"><input id="patternInput" class="hidden" type="file" accept="image/*" multiple onchange="loadTray(event,'pattern')"><button class="full primary" onclick="patternInput.click()" title="Add your own pattern images to the tray below">upload patterns</button><p class="smallText">Patterns live here. Choose a pattern, select a layout slot on the canvas, then fill that exact slot.</p><div id="patternTray" class="thumbGrid"></div><div class="grid2"><button onclick="placePatternOnPage()" title="Add the selected pattern as a new layer on the page">place pattern</button><button onclick="fillSelectedFrame()" title="Fill the currently selected frame or slot with the selected pattern">fill selected slot</button></div><div class="grid2"><button class="primary" onclick="magicFillEmptySlots()" title="Fill every empty slot at once with patterns from the tray">✨ fill all empty</button><button onclick="replaceAllShowcaseSlots()" title="Replace every filled slot with the selected pattern">replace all</button></div></div></div>
-  <div class="box trayTop"><h2>pattern showcase</h2><div class="panelBody"><p class="smallText"><strong>Generate a clean layout.</strong> Your patterns stay in the Pattern Tray until you choose where they go.</p><div class="showcaseTypeGrid" role="radiogroup" aria-label="layout type"><button id="showcaseStripsBtn" class="active" onclick="chooseShowcaseLayout('strips')">strips</button><button id="showcaseSquaresBtn" onclick="chooseShowcaseLayout('squares')">squares</button><button id="showcaseRectanglesBtn" onclick="chooseShowcaseLayout('rectangles')">rectangles</button><button id="showcaseCirclesBtn" onclick="chooseShowcaseLayout('circles')">circles</button></div><div id="stripDirectionControls" class="stripDirectionBox">
+  <div class="box trayTop"><h2>pattern showcase</h2><div class="panelBody"><p class="smallText"><strong>Generate a clean layout.</strong> Your patterns stay in the Pattern Tray until you choose where they go.</p><div class="showcaseTypeGrid" role="radiogroup" aria-label="layout type"><button id="showcaseStripsBtn" class="active" onclick="chooseShowcaseLayout('strips')" title="Arrange the showcase as full-width strips">strips</button><button id="showcaseSquaresBtn" onclick="chooseShowcaseLayout('squares')" title="Arrange the showcase as an even grid of squares">squares</button><button id="showcaseRectanglesBtn" onclick="chooseShowcaseLayout('rectangles')" title="Arrange the showcase as a grid of rectangles">rectangles</button><button id="showcaseCirclesBtn" onclick="chooseShowcaseLayout('circles')" title="Arrange the showcase as a grid of circles">circles</button></div><div id="stripDirectionControls" class="stripDirectionBox">
   <div class="stripDirectionTitle">strip direction</div>
   <div class="stripDirectionGrid" role="radiogroup" aria-label="strip direction">
-    <button id="stripDirVerticalBtn" class="active" type="button" onclick="stripDirection='vertical';chooseStripDirection('vertical')">vertical</button>
-    <button id="stripDirHorizontalBtn" type="button" onclick="stripDirection='horizontal';chooseStripDirection('horizontal')">horizontal stash</button>
+    <button id="stripDirVerticalBtn" class="active" type="button" onclick="stripDirection='vertical';chooseStripDirection('vertical')" title="Stack strips side by side">vertical</button>
+    <button id="stripDirHorizontalBtn" type="button" onclick="stripDirection='horizontal';chooseStripDirection('horizontal')" title="Stack strips edge to edge like a folded fabric stash">horizontal stash</button>
   </div>
   <p class="smallText">Horizontal stash stacks full-width fabric strips with stronger shadows.</p>
-</div><div class="frameCountRow"><label>number of slots</label><div class="frameStepper" aria-label="number of pattern slots"><button type="button" onclick="changeFrameCount(-1)" title="Remove a pattern slot">−</button><span id="cardCountDisplay">1</span><button type="button" onclick="changeFrameCount(1)" title="Add a pattern slot">+</button><input id="cardCount" type="hidden" value="1"></div></div><label class="checkRow" id="showcaseCaptionRow"><input id="showcaseAddCaptions" type="checkbox">add a caption below each shape</label><button class="full primary" onclick="generateSelectedShowcaseLayout()">generate layout</button><p class="smallText">After generating: tap a strip, tile, rectangle or circle so it highlights, then choose a pattern from the tray and tap <strong>fill selected slot</strong>.</p></div></div>
-  <div class="box trayTop frameWowBox"><h2>frames</h2><div class="panelBody"><p class="smallText"><strong>Add a pattern frame.</strong> Choose a built-in shape or add your own PNG shape with transparency, then fill it from the Pattern Tray.</p><button class="full primary" onclick="toggleFramePicker()">add frame</button><div id="framePicker" class="framePicker hidden"><div class="framePickerTitle">built-in frames</div><div class="frameShapeGrid"><button onclick="addPatternFrame('flower')">✿<span>flower</span></button><button onclick="addPatternFrame('heart')">♥<span>heart</span></button><button onclick="addPatternFrame('star')">★<span>star</span></button><button onclick="addPatternFrame('circle')">●<span>circle</span></button><button onclick="addPatternFrame('arch')">⌒<span>arch</span></button><button onclick="addPatternFrame('label')">▭<span>label</span></button></div><div class="framePickerTitle">custom frame</div><input id="customFrameInput" class="hidden" type="file" accept="image/png,image/*" onchange="addCustomFrameFromPNG(event)"><button class="full" onclick="customFrameInput.click()">add your PNG</button><p class="smallText">Tip: use a PNG shape with a transparent background. Pattern Pages turns the visible shape into a fillable frame.</p></div></div></div>
+</div><div class="frameCountRow"><label>number of slots</label><div class="frameStepper" aria-label="number of pattern slots"><button type="button" onclick="changeFrameCount(-1)" title="Remove a pattern slot">−</button><span id="cardCountDisplay">1</span><button type="button" onclick="changeFrameCount(1)" title="Add a pattern slot">+</button><input id="cardCount" type="hidden" value="1"></div></div><label class="checkRow" id="showcaseCaptionRow"><input id="showcaseAddCaptions" type="checkbox">add a caption below each shape</label><button class="full primary" onclick="generateSelectedShowcaseLayout()" title="Build or rebuild the showcase with the chosen layout and slot count">generate layout</button><p class="smallText">After generating: tap a strip, tile, rectangle or circle so it highlights, then choose a pattern from the tray and tap <strong>fill selected slot</strong>.</p></div></div>
+  <div class="box trayTop frameWowBox"><h2>frames</h2><div class="panelBody"><p class="smallText"><strong>Add a pattern frame.</strong> Choose a built-in shape or add your own PNG shape with transparency, then fill it from the Pattern Tray.</p><button class="full primary" onclick="toggleFramePicker()" title="Choose a built-in shape or upload your own PNG frame">add frame</button><div id="framePicker" class="framePicker hidden"><div class="framePickerTitle">built-in frames</div><div class="frameShapeGrid"><button onclick="addPatternFrame('flower')">✿<span>flower</span></button><button onclick="addPatternFrame('heart')">♥<span>heart</span></button><button onclick="addPatternFrame('star')">★<span>star</span></button><button onclick="addPatternFrame('circle')">●<span>circle</span></button><button onclick="addPatternFrame('arch')">⌒<span>arch</span></button><button onclick="addPatternFrame('label')">▭<span>label</span></button></div><div class="framePickerTitle">custom frame</div><input id="customFrameInput" class="hidden" type="file" accept="image/png,image/*" onchange="addCustomFrameFromPNG(event)"><button class="full" onclick="customFrameInput.click()" title="Upload a PNG shape with a transparent background to use as a custom frame">add your PNG</button><p class="smallText">Tip: use a PNG shape with a transparent background. Pattern Pages turns the visible shape into a fillable frame.</p></div></div></div>
 
 
   <div class="box trayTop customMockupBox"><h2>custom mock-up</h2><div class="panelBody">
@@ -1372,29 +1372,29 @@ body.autoGroupEditing .layer.collectionGrouped{
     <div class="rangeRow"><label>move up/down</label><input id="customMockupOffsetY" type="range" min="-100" max="100" value="0"></div>
     <div class="rangeRow"><label>texture</label><input id="customMockupTexture" type="range" min="0" max="100" value="55"></div>
     <div class="rangeRow"><label>blend</label><select id="customMockupBlendMode"><option value="multiply" selected>multiply</option><option value="soft-light">soft light</option><option value="overlay">overlay</option><option value="normal">normal</option></select></div>
-    <button class="full primary" onclick="createCustomMockupFromMask()">create live custom mock-up ✨</button>
+    <button class="full primary" onclick="createCustomMockupFromMask()" title="Generate a live, fillable mock-up from your uploaded background and mask">create live custom mock-up ✨</button>
     <div class="status" id="customMockupStatus">mock-up needed · mask needed</div>
     <p class="mockupTinyNote">White mask area fills with the selected pattern. The new live mock-up stays editable with the sliders after creation.</p>
   </div></div>
 
-  <div class="box trayTop"><h2>images & mock-ups</h2><input id="assetInput" class="hidden" type="file" accept="image/*" multiple onchange="loadTray(event,'asset')"><input id="mockupInput" class="hidden" type="file" accept="image/*" onchange="createMockupPage(event)"><input id="imageLayerInput" class="hidden" type="file" accept="image/*" onchange="addUploadedImageLayer(event)"><button class="full" onclick="assetInput.click()">Upload Design Assets</button><div id="assetTray" class="thumbGrid"></div><div class="grid2"><button onclick="addImageLayer('image')">add selected image</button><button onclick="mockupInput.click()">mock-up page</button></div><div class="grid2"><button onclick="addImageLayer('banner')">banner</button><button onclick="addImageLayer('overlay')">overlay</button></div><div class="aiDisclosureControls"><label class="checkRow"><input id="aiDisclosureToggle" type="checkbox" checked>add movable “AI generated” badge to mock-up</label><button class="full" onclick="addAIDisclosureBadge()">add AI generated badge</button><p class="smallText">Subtle white pill with fixed soft-grey text. Resize the badge shape, but the words stay readable.</p></div><p class="smallText">One tray for images, banners and mock-ups. Images now arrive at a useful page size instead of tiny; resize them afterwards if needed.</p></div>
+  <div class="box trayTop"><h2>images & mock-ups</h2><input id="assetInput" class="hidden" type="file" accept="image/*" multiple onchange="loadTray(event,'asset')"><input id="mockupInput" class="hidden" type="file" accept="image/*" onchange="createMockupPage(event)"><input id="imageLayerInput" class="hidden" type="file" accept="image/*" onchange="addUploadedImageLayer(event)"><button class="full" onclick="assetInput.click()" title="Add your own images, banners or mock-up backgrounds to the tray">Upload Design Assets</button><div id="assetTray" class="thumbGrid"></div><div class="grid2"><button onclick="addImageLayer('image')" title="Add the selected asset as an image layer on the page">add selected image</button><button onclick="mockupInput.click()" title="Create a new page from an uploaded mock-up photo">mock-up page</button></div><div class="grid2"><button onclick="addImageLayer('banner')" title="Add a wide banner image layer">banner</button><button onclick="addImageLayer('overlay')" title="Add a full-page overlay image layer">overlay</button></div><div class="aiDisclosureControls"><label class="checkRow"><input id="aiDisclosureToggle" type="checkbox" checked>add movable “AI generated” badge to mock-up</label><button class="full" onclick="addAIDisclosureBadge()" title="Add a movable &quot;AI generated&quot; disclosure badge">add AI generated badge</button><p class="smallText">Subtle white pill with fixed soft-grey text. Resize the badge shape, but the words stay readable.</p></div><p class="smallText">One tray for images, banners and mock-ups. Images now arrive at a useful page size instead of tiny; resize them afterwards if needed.</p></div>
   <div class="box"><h2>batch listing set</h2><div class="panelBody"><p class="smallText">Etsy wants several photos per listing. One tap builds a coordinated 5-page set - main shot, detail, lifestyle/mock-up, an info card and a collection grid - all placeholders, ready to fill from the Pattern Tray.</p><button class="full primary" onclick="window.createEtsyListingSet()" title="Add 5 new pages pre-built for a coordinated Etsy listing set">✨ create listing set</button><div class="status" id="etsyBatchSetHint">Nothing created yet.</div></div></div>
-  <div class="box"><h2>pages</h2><div class="launchBadge">Pattern Pages workspace</div><p class="smallText">Your pages stack here like a little design desk. Choose a format in <strong>page size & presets</strong>, then add it as a new page.</p><button class="full" onclick="deleteCurrentPage()">delete current page</button>
+  <div class="box"><h2>pages</h2><div class="launchBadge">Pattern Pages workspace</div><p class="smallText">Your pages stack here like a little design desk. Choose a format in <strong>page size & presets</strong>, then add it as a new page.</p><button class="full" onclick="deleteCurrentPage()" title="Delete the page you're currently viewing">delete current page</button>
   <!-- Real report: this used to live at the bottom of "extra design elements" (an unrelated,
        add-things panel) as "blank page", where it was both easy to miss and easy to misread as
        adding a new blank page. Moved next to its comparably-destructive sibling
        "delete current page", where a page-management action is actually expected to be found. -->
-  <button class="full" onclick="clearCurrentPage()">clear current page</button><div id="pageList"></div></div>
+  <button class="full" onclick="clearCurrentPage()" title="Remove every layer from the current page, keeping the page itself">clear current page</button><div id="pageList"></div></div>
   <div class="box"><h2>page size & presets</h2><p class="smallText">Choose a format first, then add it as a new page or resize the current page. Social sizes live here too.</p>
   <div class="sizePresetSections">
-    <div class="presetMiniGroup"><span>etsy</span><button onclick="chooseQuickSize('Etsy listing image',3000,2250)">listing 3000×2250</button><button onclick="chooseQuickSize('Etsy square / pattern preview',3000,3000)">square 3000×3000</button><button onclick="chooseQuickSize('Etsy shop banner',3360,840)">shop banner 3360×840</button></div>
-    <div class="presetMiniGroup"><span>instagram</span><button onclick="chooseQuickSize('Instagram square post',1080,1080)">square post 1080×1080</button><button onclick="chooseQuickSize('Instagram portrait post',1080,1350)">portrait post 1080×1350</button><button onclick="chooseQuickSize('Instagram reel / story',1080,1920)">reel / story 1080×1920</button></div>
-    <div class="presetMiniGroup"><span>pinterest</span><button onclick="chooseQuickSize('Pinterest pin',1000,1500)">pin 1000×1500</button><button onclick="chooseQuickSize('Long Pinterest pin',1000,2100)">long pin 1000×2100</button></div>
+    <div class="presetMiniGroup"><span>etsy</span><button onclick="chooseQuickSize('Etsy listing image',3000,2250)" title="Set the page to Etsy's recommended listing image size">listing 3000×2250</button><button onclick="chooseQuickSize('Etsy square / pattern preview',3000,3000)" title="Set the page to a square Etsy pattern preview size">square 3000×3000</button><button onclick="chooseQuickSize('Etsy shop banner',3360,840)" title="Set the page to Etsy's shop banner size">shop banner 3360×840</button></div>
+    <div class="presetMiniGroup"><span>instagram</span><button onclick="chooseQuickSize('Instagram square post',1080,1080)" title="Set the page to an Instagram square post size">square post 1080×1080</button><button onclick="chooseQuickSize('Instagram portrait post',1080,1350)" title="Set the page to an Instagram portrait post size">portrait post 1080×1350</button><button onclick="chooseQuickSize('Instagram reel / story',1080,1920)" title="Set the page to an Instagram Reel/Story size">reel / story 1080×1920</button></div>
+    <div class="presetMiniGroup"><span>pinterest</span><button onclick="chooseQuickSize('Pinterest pin',1000,1500)" title="Set the page to a standard Pinterest pin size">pin 1000×1500</button><button onclick="chooseQuickSize('Long Pinterest pin',1000,2100)" title="Set the page to a long Pinterest pin size">long pin 1000×2100</button></div>
     <!-- Real report: this group used to also have its own "square" button at 1080x1080 - pixel-
          identical to instagram's "square post" above, just relabeled. Removed rather than
          relabeled: a genuine duplicate output is more useful gone than disambiguated. -->
-    <div class="presetMiniGroup"><span>facebook</span><button onclick="chooseQuickSize('Facebook landscape post',1200,630)">landscape 1200×630</button><button onclick="chooseQuickSize('Facebook cover',1640,924)">cover 1640×924</button></div>
-    <div class="presetMiniGroup"><span>pattern</span><button onclick="chooseQuickSize('Pattern tile square',3600,3600)">3600 square</button><button onclick="chooseQuickSize('Custom size',+$('customW').value||3000,+$('customH').value||2250)">custom</button></div>
+    <div class="presetMiniGroup"><span>facebook</span><button onclick="chooseQuickSize('Facebook landscape post',1200,630)" title="Set the page to a Facebook landscape post size">landscape 1200×630</button><button onclick="chooseQuickSize('Facebook cover',1640,924)" title="Set the page to a Facebook cover photo size">cover 1640×924</button></div>
+    <div class="presetMiniGroup"><span>pattern</span><button onclick="chooseQuickSize('Pattern tile square',3600,3600)" title="Set the page to a 3600×3600 seamless pattern tile size">3600 square</button><button onclick="chooseQuickSize('Custom size',+$('customW').value||3000,+$('customH').value||2250)" title="Set the page to the custom width/height entered above">custom</button></div>
   </div>
   <!-- Real report, with a screenshot: this pill sat directly above the <select> below it,
        showing the exact same "current preset · WxH" info a second time right underneath - looked
@@ -1404,23 +1404,23 @@ body.autoGroupEditing .layer.collectionGrouped{
        call sites are removed too rather than left as permanent no-ops. -->
   <select id="sizePreset" onchange="applyPresetLabel()"><option value="3000,2250">Etsy listing image — 3000×2250</option><option value="3000,3000">Etsy square / pattern preview — 3000×3000</option><option value="3360,840">Etsy shop banner — 3360×840</option><option value="1080,1080">Instagram square post — 1080×1080</option><option value="1080,1350">Instagram portrait post — 1080×1350</option><option value="1080,1920">Instagram reel / story — 1080×1920</option><option value="1000,1500">Pinterest pin — 1000×1500</option><option value="1000,2100">Long Pinterest pin — 1000×2100</option><option value="1200,630">Facebook landscape post — 1200×630</option><option value="1640,924">Facebook cover — 1640×924</option><option value="3600,3600">Pattern tile square — 3600×3600</option><option value="custom">Custom size</option></select>
   <div class="sizeInputs"><input id="customW" type="number" value="3000" aria-label="width"><span>×</span><input id="customH" type="number" value="2250" aria-label="height"></div>
-  <div class="grid2"><button class="primary" onclick="addSelectedSizePage()">add new page</button><button onclick="applyPageSize()">resize current</button></div></div>
+  <div class="grid2"><button class="primary" onclick="addSelectedSizePage()" title="Add a new page using the size chosen above">add new page</button><button onclick="applyPageSize()" title="Resize the current page to the size chosen above">resize current</button></div></div>
   <div class="box texturePanelBox"><h2>background textures</h2>
   <p class="smallText">Tap a paper, fabric or natural background to apply it instantly to the current page.</p>
   <select id="textureSelect" class="hidden" aria-hidden="true" tabindex="-1">
     <option value="none">pure white</option>
   </select>
-  <button id="clearTextureBtn" class="full" onclick="clearTextureChoice()">clear background</button>
+  <button id="clearTextureBtn" class="full" onclick="clearTextureChoice()" title="Remove the page's background texture">clear background</button>
 </div>
   <div class="box"><h2>badges & labels</h2>
   <p class="smallText">Add ready-made labels, then edit text, colour, size, rotation and font on the right.</p>
   <div class="grid2">
-    <button onclick="addBadge('oval')">oval / pill</button>
-    <button onclick="addBadge('rounded')">rounded rectangle</button>
-    <button onclick="addBadge('square')">square label</button>
-    <button onclick="addBadge('circle')">circle badge</button>
-    <button onclick="addBadge('ribbon')">ribbon badge</button>
-    <button onclick="addText('text')">plain text</button>
+    <button onclick="addBadge('oval')" title="Add an oval/pill-shaped label">oval / pill</button>
+    <button onclick="addBadge('rounded')" title="Add a rounded-rectangle label">rounded rectangle</button>
+    <button onclick="addBadge('square')" title="Add a square label">square label</button>
+    <button onclick="addBadge('circle')" title="Add a circular badge">circle badge</button>
+    <button onclick="addBadge('ribbon')" title="Add a ribbon-shaped badge">ribbon badge</button>
+    <button onclick="addText('text')" title="Add a plain text layer">plain text</button>
   </div>
 </div>
 
@@ -1430,25 +1430,25 @@ body.autoGroupEditing .layer.collectionGrouped{
   <textarea id="listingPatternName" placeholder="e.g. Strawberry Picnic"></textarea>
   <label for="listingKeywords">pattern theme</label>
   <textarea id="listingKeywords" placeholder="e.g. strawberries, summer fruit, cottagecore, seamless pattern"></textarea>
-  <div class="grid2"><button class="primary" onclick="generateListingHelper()">generate Etsy ideas</button><button onclick="clearListingHelper()">clear</button></div>
-  <button class="full" onclick="downloadEtsyAssistantTxt()">save EtsyAssistant.txt</button>
-  <div class="helperOutputTitle"><strong>etsy tags</strong><button onclick="copyListingOutput('etsyTagsOutput')">copy</button></div>
+  <div class="grid2"><button class="primary" onclick="generateListingHelper()" title="Generate tags, keywords and title ideas from your pattern name">generate Etsy ideas</button><button onclick="clearListingHelper()" title="Clear all generated Etsy listing suggestions">clear</button></div>
+  <button class="full" onclick="downloadEtsyAssistantTxt()" title="Download all the generated suggestions as a text file">save EtsyAssistant.txt</button>
+  <div class="helperOutputTitle"><strong>etsy tags</strong><button onclick="copyListingOutput('etsyTagsOutput')" title="Copy the generated Etsy tags to your clipboard">copy</button></div>
   <textarea id="etsyTagsOutput" class="output" readonly placeholder="13 Etsy-friendly tag ideas will appear here. Suggestions only — no ranking promises."></textarea>
-  <div class="helperOutputTitle"><strong>long-tail keywords</strong><button onclick="copyListingOutput('longTailKeywordsOutput')">copy</button></div>
+  <div class="helperOutputTitle"><strong>long-tail keywords</strong><button onclick="copyListingOutput('longTailKeywordsOutput')" title="Copy the generated long-tail keywords to your clipboard">copy</button></div>
   <textarea id="longTailKeywordsOutput" class="output" readonly placeholder="Pattern-related long-tail keyword phrases will appear here."></textarea>
-  <div class="helperOutputTitle"><strong>listing title</strong><button onclick="copyListingOutput('listingTitleOutput')">copy</button></div>
+  <div class="helperOutputTitle"><strong>listing title</strong><button onclick="copyListingOutput('listingTitleOutput')" title="Copy the generated listing title to your clipboard">copy</button></div>
   <textarea id="listingTitleOutput" class="output" readonly placeholder="A listing title idea will appear here."></textarea>
-  <div class="helperOutputTitle"><strong>pinterest keywords</strong><button onclick="copyListingOutput('pinterestKeywordsOutput')">copy</button></div>
+  <div class="helperOutputTitle"><strong>pinterest keywords</strong><button onclick="copyListingOutput('pinterestKeywordsOutput')" title="Copy the generated Pinterest keywords to your clipboard">copy</button></div>
   <textarea id="pinterestKeywordsOutput" class="output" readonly placeholder="Pinterest discovery keywords will appear here."></textarea>
-  <div class="helperOutputTitle"><strong>instagram hashtags</strong><button onclick="copyListingOutput('instagramHashtagsOutput')">copy</button></div>
+  <div class="helperOutputTitle"><strong>instagram hashtags</strong><button onclick="copyListingOutput('instagramHashtagsOutput')" title="Copy the generated Instagram hashtags to your clipboard">copy</button></div>
   <textarea id="instagramHashtagsOutput" class="output" readonly placeholder="Instagram hashtags will appear here."></textarea>
   <div class="installNote"><strong>gentle note:</strong> These are writing and keyword ideas for pattern listings — not ranking or sales guarantees.</div>
 </div>
 <div class="box"><h2>extra design elements</h2>
   <div class="grid3">
-    <button onclick="addShape('rectangle')">+ rectangle</button>
-    <button onclick="addShape('square')">+ square</button>
-    <button onclick="addShape('circle')">+ circle</button>
+    <button onclick="addShape('rectangle')" title="Add a plain rectangle shape">+ rectangle</button>
+    <button onclick="addShape('square')" title="Add a plain square shape">+ square</button>
+    <button onclick="addShape('circle')" title="Add a plain circle shape">+ circle</button>
   </div>
 </div>
  </aside>
@@ -1458,9 +1458,9 @@ body.autoGroupEditing .layer.collectionGrouped{
     <strong>Editing panel</strong>
     <span>Select something on the page, then adjust layers, size, fonts, alignment and colours here.</span>
   </div>
-  <div class="box layerPanelV2"><h2>layers</h2><div class="panelBody"><p class="smallText">Layer Panel 2.0: select layers, group them, then move or resize the group as one.</p><div class="layerV2Toolbar"><button id="multiSelectBtn" onclick="toggleLayerMultiSelect()">select</button><button id="groupSelectedBtn" onclick="groupSelectedLayers()" disabled>group</button><button id="ungroupBtn" onclick="ungroupSelected()" disabled>ungroup</button></div><div id="layerList" class="layerList"></div><div class="grid2"><button onclick="bringForward()">to front</button><button onclick="sendBack()">to back</button></div><div class="grid2"><button onclick="selectedForwardOne()">↑ one step</button><button onclick="selectedBackOne()">↓ one step</button></div><button class="full" onclick="duplicateSelected()">duplicate selected</button><button class="full" onclick="deleteSelected()">delete selected</button></div></div>
-  <div class="box"><h2>edit & adjust</h2><div class="rangeRow"><label>scale</label><input id="scale" type="range" min="20" max="250" value="100" oninput="applyControls()"></div><div class="rangeRow"><label>opacity</label><input id="opacity" type="range" min="0" max="100" value="100" oninput="applyControls()"></div><div class="rangeRow"><label>x move</label><input id="xpos" type="range" min="-30" max="120" value="10" oninput="applyControls()"></div><div class="rangeRow"><label>y move</label><input id="ypos" type="range" min="-30" max="120" value="10" oninput="applyControls()"></div><div class="rangeRow"><label>width</label><input id="width" type="range" min="3" max="130" value="40" oninput="applyControls()"></div><div class="rangeRow"><label>height</label><input id="height" type="range" min="3" max="130" value="20" oninput="applyControls()"></div><div class="rangeRow"><label>rotate</label><input id="rotate" type="range" min="-180" max="180" value="0" oninput="applyControls()"></div><div class="grid2"><button onclick="fitSelected('width')">fit width</button><button onclick="fitSelected('canvas')">fit canvas</button></div><div class="editMiniGroup"><button onclick="setSelectedFit('contain')">fit</button><button onclick="setSelectedFit('cover')">fill</button><button onclick="setSelectedFit('cover');fitSelected('canvas')">cover page</button><button onclick="deselect()">done</button></div><div class="gestureHint">Tap empty canvas to deselect. Pinch with two fingers to zoom the page. Two-finger double tap = undo.</div><div class="status" id="selectedHint">Nothing selected</div><button id="fillThisSlotBtn" class="full primary hidden" onclick="window.fillSelectedFrame&&window.fillSelectedFrame()" title="Fill just this placeholder with the pattern selected in the tray">✨ fill this placeholder from tray</button></div>
-  <div class="box" id="alignPanel"><h2>alignment</h2><p class="smallText">Align the selected text, banner, image, label or frame to the page.</p><div class="grid3"><button onclick="alignSelected('left')">left</button><button onclick="alignSelected('hcenter')">centre</button><button onclick="alignSelected('right')">right</button></div><div class="grid3"><button onclick="alignSelected('top')">top</button><button onclick="alignSelected('vcenter')">middle</button><button onclick="alignSelected('bottom')">bottom</button></div><div class="grid2"><button onclick="alignSelected('centerBoth')">centre page</button><button onclick="alignSelected('safeMiddle')">safe middle</button></div></div>
+  <div class="box layerPanelV2"><h2>layers</h2><div class="panelBody"><p class="smallText">Layer Panel 2.0: select layers, group them, then move or resize the group as one.</p><div class="layerV2Toolbar"><button id="multiSelectBtn" onclick="toggleLayerMultiSelect()" title="Turn on multi-select so you can pick several layers at once">select</button><button id="groupSelectedBtn" onclick="groupSelectedLayers()" disabled title="Group the selected layers so they move and resize together">group</button><button id="ungroupBtn" onclick="ungroupSelected()" disabled title="Split the selected group back into separate layers">ungroup</button></div><div id="layerList" class="layerList"></div><div class="grid2"><button onclick="bringForward()" title="Bring the selected layer to the very front">to front</button><button onclick="sendBack()" title="Send the selected layer to the very back">to back</button></div><div class="grid2"><button onclick="selectedForwardOne()" title="Move the selected layer forward one step">↑ one step</button><button onclick="selectedBackOne()" title="Move the selected layer back one step">↓ one step</button></div><button class="full" onclick="duplicateSelected()" title="Duplicate the selected layer">duplicate selected</button><button class="full" onclick="deleteSelected()" title="Delete the selected layer">delete selected</button></div></div>
+  <div class="box"><h2>edit & adjust</h2><div class="rangeRow"><label>scale</label><input id="scale" type="range" min="20" max="250" value="100" oninput="applyControls()"></div><div class="rangeRow"><label>opacity</label><input id="opacity" type="range" min="0" max="100" value="100" oninput="applyControls()"></div><div class="rangeRow"><label>x move</label><input id="xpos" type="range" min="-30" max="120" value="10" oninput="applyControls()"></div><div class="rangeRow"><label>y move</label><input id="ypos" type="range" min="-30" max="120" value="10" oninput="applyControls()"></div><div class="rangeRow"><label>width</label><input id="width" type="range" min="3" max="130" value="40" oninput="applyControls()"></div><div class="rangeRow"><label>height</label><input id="height" type="range" min="3" max="130" value="20" oninput="applyControls()"></div><div class="rangeRow"><label>rotate</label><input id="rotate" type="range" min="-180" max="180" value="0" oninput="applyControls()"></div><div class="grid2"><button onclick="fitSelected('width')" title="Resize the selected layer to the page's full width">fit width</button><button onclick="fitSelected('canvas')" title="Resize the selected layer to fill the whole page">fit canvas</button></div><div class="editMiniGroup"><button onclick="setSelectedFit('contain')" title="Scale the selected image to fit fully inside its box, keeping its own proportions">fit</button><button onclick="setSelectedFit('cover')" title="Scale the selected image to fill its box completely, cropping if needed">fill</button><button onclick="setSelectedFit('cover');fitSelected('canvas')" title="Scale the selected image to fill the entire page">cover page</button><button onclick="deselect()" title="Finish editing and deselect this layer">done</button></div><div class="gestureHint">Tap empty canvas to deselect. Pinch with two fingers to zoom the page. Two-finger double tap = undo.</div><div class="status" id="selectedHint">Nothing selected</div><button id="fillThisSlotBtn" class="full primary hidden" onclick="window.fillSelectedFrame&&window.fillSelectedFrame()" title="Fill just this placeholder with the pattern selected in the tray">✨ fill this placeholder from tray</button></div>
+  <div class="box" id="alignPanel"><h2>alignment</h2><p class="smallText">Align the selected text, banner, image, label or frame to the page.</p><div class="grid3"><button onclick="alignSelected('left')" title="Align the selected layer to the left edge of the page">left</button><button onclick="alignSelected('hcenter')" title="Centre the selected layer horizontally">centre</button><button onclick="alignSelected('right')" title="Align the selected layer to the right edge of the page">right</button></div><div class="grid3"><button onclick="alignSelected('top')" title="Align the selected layer to the top of the page">top</button><button onclick="alignSelected('vcenter')" title="Centre the selected layer vertically">middle</button><button onclick="alignSelected('bottom')" title="Align the selected layer to the bottom of the page">bottom</button></div><div class="grid2"><button onclick="alignSelected('centerBoth')" title="Centre the selected layer on the page, both ways">centre page</button><button onclick="alignSelected('safeMiddle')" title="Centre the selected layer within the safe printable area">safe middle</button></div></div>
   <div class="box matchmakerBox"><h2>font matchmaker</h2>
   <p class="smallText">Choose the main font you like, then let Pattern Pages suggest matching fonts. This is separate from quick presets.</p>
   <label class="smallText" for="matchBaseFont">choose your main font</label>
@@ -1478,20 +1478,20 @@ body.autoGroupEditing .layer.collectionGrouped{
     <option value="Lora">Lora</option>
     <option value="Liberation Sans">Liberation Sans</option>
   </select>
-  <button class="full primary" onclick="generateFontMatches()">generate matches</button>
+  <button class="full primary" onclick="generateFontMatches()" title="Suggest font pairings based on your chosen style">generate matches</button>
   <div id="fontMatchResults" class="fontPairGrid"></div>
 </div>
 <div class="box textStudioBox" id="textStudioPanel"><h2>text</h2>
   <p class="smallText">Add text, style it, make lists and add links from one place. Select text on the canvas to edit it here.</p>
   <div class="textSectionTitle">add text</div>
-  <div class="grid2"><button class="primary" onclick="addText('text')">+ plain text</button><button onclick="addTitleSubtitle()">+ title & subtitle</button></div>
-  <div class="grid2"><button onclick="makePinterestTextBlock()">Pinterest title</button><button onclick="addLinkNote()">link note</button></div>
+  <div class="grid2"><button class="primary" onclick="addText('text')" title="Add a plain text layer">+ plain text</button><button onclick="addTitleSubtitle()" title="Add a matching title and subtitle text pair">+ title & subtitle</button></div>
+  <div class="grid2"><button onclick="makePinterestTextBlock()" title="Add a bold text block styled for a Pinterest pin title">Pinterest title</button><button onclick="addLinkNote()" title="Add a small text note for a link or URL">link note</button></div>
   <div class="textSectionTitle">write / edit</div>
   <textarea id="textValue" class="mainTextEditor" rows="3" placeholder="type your text…">Your label</textarea>
-  <div class="grid2"><button onclick="makeBulletList()">bullet list</button><button onclick="makeNumberedList()">numbered list</button></div>
-  <button class="full ppDocAddLinkBtn" onclick="ppDocInsertLink()">add link</button>
+  <div class="grid2"><button onclick="makeBulletList()" title="Add a bulleted list text block">bullet list</button><button onclick="makeNumberedList()" title="Add a numbered list text block">numbered list</button></div>
+  <button class="full ppDocAddLinkBtn" onclick="ppDocInsertLink()" title="Wrap the selected text in a clickable link">add link</button>
   <textarea id="pasteTextArea" class="pasteArea" placeholder="paste text from Notes…"></textarea>
-  <div class="grid2"><button onclick="addPastedTextBlock()">add pasted text</button><button onclick="pasteFromClipboardIntoPage()">paste clipboard</button></div>
+  <div class="grid2"><button onclick="addPastedTextBlock()" title="Add a text layer prefilled from your clipboard">add pasted text</button><button onclick="pasteFromClipboardIntoPage()" title="Paste an image or text from your clipboard onto the page">paste clipboard</button></div>
   <div class="textSectionTitle">font</div>
   <style id="pp-embedded-standard-fonts">
 /* Montserrat, Roboto, Bebas Neue, Lora, Liberation Sans - Google Fonts / Liberation Fonts,
@@ -1514,15 +1514,15 @@ body.autoGroupEditing .layer.collectionGrouped{
 <optgroup label="Handwritten &amp; script"><option value="Snell Roundhand">Snell Roundhand</option><option value="Bradley Hand">Bradley Hand</option><option value="Noteworthy">Noteworthy</option><option value="Marker Felt">Marker Felt</option><option value="Chalkboard SE">Chalkboard SE</option><option value="American Typewriter">Typewriter</option><option value="Papyrus">Papyrus</option></optgroup>
 </select>
   <input id="fontFile" class="hidden" type="file" accept=".ttf,.otf,.woff,.woff2" onchange="importFont(event)">
-  <button class="full" onclick="fontFile.click()">import own font</button>
-  <div class="styleChipGrid"><button onclick="applyTextStylePreset('pinHeadline')">Pinterest headline</button><button onclick="applyTextStylePreset('smallSubtitle')">small subtitle</button><button onclick="applyTextStylePreset('saleBadge')">sale badge</button><button onclick="applyTextStylePreset('softLabel')">soft label</button></div>
+  <button class="full" onclick="fontFile.click()" title="Upload your own font file (.ttf/.otf/.woff) to use in the app">import own font</button>
+  <div class="styleChipGrid"><button onclick="applyTextStylePreset('pinHeadline')" title="Apply a bold headline style suited to Pinterest">Pinterest headline</button><button onclick="applyTextStylePreset('smallSubtitle')" title="Apply a small, understated subtitle style">small subtitle</button><button onclick="applyTextStylePreset('saleBadge')" title="Apply a bold sale/promo badge style">sale badge</button><button onclick="applyTextStylePreset('softLabel')" title="Apply a soft, muted label style">soft label</button></div>
   <div class="textSectionTitle">spacing & style</div>
   <div class="rangeRow"><label>font size</label><input id="fontSize" type="range" min="8" max="130" value="36"></div>
   <div class="rangeRow"><label>line space</label><input id="lineHeight" type="range" min="70" max="220" value="105"></div>
   <div class="rangeRow"><label>letter gap</label><input id="letterSpacing" type="range" min="-3" max="12" value="0" step="0.5"></div>
   <div class="rangeRow"><label>padding</label><input id="textPadding" type="range" min="0" max="35" value="10"></div>
-  <div class="grid2"><button id="boldBtn">bold</button><button id="italicBtn">italic</button></div>
-  <div class="grid3"><button onclick="setTextAlign('left')">text left</button><button onclick="setTextAlign('center')">text centre</button><button onclick="setTextAlign('right')">text right</button></div>
+  <div class="grid2"><button id="boldBtn" title="Toggle bold for the selected text">bold</button><button id="italicBtn" title="Toggle italic for the selected text">italic</button></div>
+  <div class="grid3"><button onclick="setTextAlign('left')" title="Align this text to the left">text left</button><button onclick="setTextAlign('center')" title="Centre this text">text centre</button><button onclick="setTextAlign('right')" title="Align this text to the right">text right</button></div>
   <div class="colorRow"><label class="smallText">font colour</label><input id="textColor" type="color" value="#111111"></div>
   <div class="textSectionTitle">effects</div>
   <div class="rangeRow"><label>shadow</label><input id="textShadow" type="range" min="0" max="20" value="0"></div>
@@ -1534,13 +1534,13 @@ body.autoGroupEditing .layer.collectionGrouped{
   <div class="box recolorPngBox" id="recolorPngPanel"><h2>recolor png</h2><div class="panelBody">
     <p class="smallText">Select an image in Design Assets or on the canvas, then recolour it here. No second upload needed.</p>
     <div class="recolorSourcePill empty" id="recolorSourcePill">Source: select an asset or image layer</div>
-    <button class="full primary" onclick="ppRecolorUseSelected()">use selected image</button>
+    <button class="full primary" onclick="ppRecolorUseSelected()" title="Load the selected layer's image into the recolour tool">use selected image</button>
     <div class="smallText" style="margin:8px 0 10px;line-height:1.35">Live preview updates the selected canvas image while you choose colours.</div>
-    <div class="grid2"><button onclick="ppRecolorAutoDetect()">auto detect colour</button><button onclick="ppRecolorSwapColours()">swap</button></div>
+    <div class="grid2"><button onclick="ppRecolorAutoDetect()" title="Automatically detect the image's main colour">auto detect colour</button><button onclick="ppRecolorSwapColours()" title="Swap the &quot;from&quot; and &quot;to&quot; colours">swap</button></div>
     <div class="colorRow"><label class="smallText">from colour</label><input id="recolorFromColor" type="color" value="#000000" oninput="ppRecolorRender()"></div>
     <div class="colorRow"><label class="smallText">to colour</label><input id="recolorToColor" type="color" value="#ffffff" oninput="ppRecolorRender()"></div>
-    <div class="grid2"><button onclick="ppRecolorAddToAssets()">add to assets</button><button onclick="ppRecolorReplaceSelected()">keep on canvas</button></div>
-    <button class="full" onclick="ppRecolorDownload()">download recoloured png</button>
+    <div class="grid2"><button onclick="ppRecolorAddToAssets()" title="Save the recoloured image to your asset tray">add to assets</button><button onclick="ppRecolorReplaceSelected()" title="Replace the selected layer with the recoloured image">keep on canvas</button></div>
+    <button class="full" onclick="ppRecolorDownload()" title="Download the recoloured image as a PNG file">download recoloured png</button>
     <div class="status" id="recolorPngStatus">Ready for a PNG.</div>
   </div></div>
   <div class="box"><h2>shape colours</h2><div class="colorRow"><label class="smallText">fill colour</label><input id="fillColor" type="color" value="#ffffff" oninput="applyColorControls()"></div><div class="colorRow"><label class="smallText">border colour</label><input id="borderColor" type="color" value="#111111" oninput="applyColorControls()"></div><div class="rangeRow"><label>border</label><input id="borderWidth" type="range" min="0" max="16" value="0" oninput="applyColorControls()"></div></div>
@@ -2248,10 +2248,10 @@ function rowForLayer(l, mode='all'){
  row.draggable=!isGroup;
  row.dataset.id=l.id;
  row.dataset.mode=mode;
- const check=state.layerMultiSelect && !isGroup ? `<button class="layerCheck" onclick="event.stopPropagation();toggleLayerSelection('${l.id}')">${selectedForGroup?'☑':'☐'}</button>` : `<span class="dragGrip" title="drag to reorder">${isGroup?(state.collapsedGroups[l.id]?'▶':'▼'):'☰'}</span>`;
+ const check=state.layerMultiSelect && !isGroup ? `<button class="layerCheck" onclick="event.stopPropagation();toggleLayerSelection('${l.id}')" title="Include this layer in the group">${selectedForGroup?'☑':'☐'}</button>` : `<span class="dragGrip" title="drag to reorder">${isGroup?(state.collapsedGroups[l.id]?'▶':'▼'):'☰'}</span>`;
  const thumbSrc=(l.customMockup&&l.customMockupPatternSrc)?l.customMockupPatternSrc:l.src;
  const thumb=thumbSrc?`<span class="layerThumb"><img src="${thumbSrc}"></span>`:`<span class="layerThumb ${isGroup?'groupIcon':''}">${isGroup?'▣':''}</span>`;
- const groupControls=l.customMockup?`<span class="pill">mock-up</span>`:(isGroup?`<button onclick="event.stopPropagation();toggleGroupExpanded('${l.id}')">${state.collapsedGroups[l.id]?'open':'hide'}</button><button onclick="event.stopPropagation();selectLayer('${l.id}')">select</button>`:`<button onclick="event.stopPropagation();selectLayer('${l.id}')">select</button>`);
+ const groupControls=l.customMockup?`<span class="pill">mock-up</span>`:(isGroup?`<button onclick="event.stopPropagation();toggleGroupExpanded('${l.id}')" title="${state.collapsedGroups[l.id]?'Expand this group':'Collapse this group'}">${state.collapsedGroups[l.id]?'open':'hide'}</button><button onclick="event.stopPropagation();selectLayer('${l.id}')" title="Select this layer">select</button>`:`<button onclick="event.stopPropagation();selectLayer('${l.id}')" title="Select this layer">select</button>`);
  row.innerHTML=`${check}${thumb}<span class="layerName">${l.name}</span><span class="layerBtns">${groupControls}</span>`;
  row.onclick=()=>{if(l.customMockup){state.selected=null; renderLayers(); syncControls(); return;} if(state.layerMultiSelect && !isGroup)toggleLayerSelection(l.id);else selectLayer(l.id)};
  if(!isGroup){
@@ -3825,7 +3825,7 @@ function openQuickStartGuide(){
 
   const box = document.createElement('div');
   box.className = 'qsBox';
-  box.innerHTML = '<button type="button" class="qsClose" aria-label="Close quick start guide">&times;</button>'+
+  box.innerHTML = '<button type="button" class="qsClose" aria-label="Close quick start guide" title="Close the Quick Start Guide">&times;</button>'+
     '<div class="qsScroll">'+ppBuildQuickStartHTML()+'</div>';
 
   overlay.appendChild(box);
@@ -6024,7 +6024,7 @@ aside:last-of-type .shadowSliderBox{
       const g=document.createElement('div');
       g.className='presetMiniGroup';
       g.id='a4PresetMiniGroup';
-      g.innerHTML='<span>pdf</span><button onclick="chooseQuickSize(\'A4 PDF portrait\',2480,3508)">a4 portrait 2480×3508</button><button onclick="chooseQuickSize(\'A4 PDF landscape\',3508,2480)">a4 landscape 3508×2480</button>';
+      g.innerHTML='<span>pdf</span><button onclick="chooseQuickSize(\'A4 PDF portrait\',2480,3508)" title="Set the page to A4 portrait size">a4 portrait 2480×3508</button><button onclick="chooseQuickSize(\'A4 PDF landscape\',3508,2480)" title="Set the page to A4 landscape size">a4 landscape 3508×2480</button>';
       presetSections.insertBefore(g, presetSections.firstChild);
     }
     const sel=safe$('sizePreset');
@@ -6813,8 +6813,8 @@ document.addEventListener('click', function(e){
     box.innerHTML='<div style="color:#fff8fb;font:900 15px system-ui;margin-bottom:10px;">Save as</div>'+
       '<input id="ppSaveAsInput" type="text" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,232,248,.24);background:rgba(255,255,255,.06);color:#fff8fb;font-size:15px;margin-bottom:14px;" />'+
       '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
-      '<button type="button" id="ppSaveAsCancel" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:#fff8fb;font-weight:700;">Cancel</button>'+
-      '<button type="button" id="ppSaveAsConfirm" style="padding:9px 16px;border-radius:10px;border:0;background:linear-gradient(135deg,#9b6bff,#ff8ed6);color:#fff;font-weight:800;">Save</button>'+
+      '<button type="button" id="ppSaveAsCancel" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:#fff8fb;font-weight:700;" title="Cancel without saving">Cancel</button>'+
+      '<button type="button" id="ppSaveAsConfirm" style="padding:9px 16px;border-radius:10px;border:0;background:linear-gradient(135deg,#9b6bff,#ff8ed6);color:#fff;font-weight:800;" title="Save with this file name">Save</button>'+
       '</div>';
     overlay.appendChild(box);
     document.body.appendChild(overlay);
@@ -8350,7 +8350,7 @@ function makeNumberedList(){
     var body=showcase.querySelector('.panelBody') || showcase;
     var tools=document.createElement('div');
     tools.className='showcaseFillTools';
-    tools.innerHTML='<button type="button" id="ppFillSlotInsideShowcase">fill selected slot</button><button type="button" id="ppClearSlotInsideShowcase">clear slot</button>';
+    tools.innerHTML='<button type="button" id="ppFillSlotInsideShowcase" title="Fill just the selected showcase slot with the chosen pattern">fill selected slot</button><button type="button" id="ppClearSlotInsideShowcase" title="Empty the selected showcase slot">clear slot</button>';
     var generate=body.querySelector('button.primary[onclick*="generatePatternShowcaseLayout"], button[onclick*="generatePatternShowcaseLayout"]');
     if(generate && generate.parentNode){
       generate.insertAdjacentElement('afterend', tools);
@@ -11469,7 +11469,7 @@ window.addEventListener('DOMContentLoaded',function(){
     var list=$id('layerList'); if(!list) return;
     var body=list.closest('.panelBody'); if(!body || body.querySelector('#ppLayerReuseBar')) return;
     var bar=document.createElement('div'); bar.id='ppLayerReuseBar'; bar.className='ppLayerReuseBar';
-    bar.innerHTML='<button type="button" onclick="ppDuplicateSelectedLayer()">duplicate</button><button type="button" onclick="ppCopySelectedLayer()">copy</button><button type="button" class="wide" onclick="ppPasteLayerToPage()">paste to page…</button><div id="ppLayerClipboardNote" class="ppLayerClipboardNote">tap a layer row to select · duplicate for same page · copy + paste to page for headers/footers</div>';
+    bar.innerHTML='<button type="button" onclick="ppDuplicateSelectedLayer()" title="Duplicate this layer">duplicate</button><button type="button" onclick="ppCopySelectedLayer()" title="Copy this layer so it can be pasted onto another page">copy</button><button type="button" class="wide" onclick="ppPasteLayerToPage()" title="Paste the copied layer onto another page">paste to page…</button><div id="ppLayerClipboardNote" class="ppLayerClipboardNote">tap a layer row to select · duplicate for same page · copy + paste to page for headers/footers</div>';
     list.parentNode.insertBefore(bar,list.nextSibling);
     var info=body.querySelector('p.smallText');
     if(info) info.textContent='Tap a layer row to select it. Use duplicate for a quick copy, or copy + Paste to Page for repeating headers and footers.';
@@ -15295,7 +15295,7 @@ window.generatePatternShowcaseLayout=function(){
     if(!bar){
       bar=document.createElement('div');
       bar.className='ppMagicSelectionBar';
-      bar.innerHTML='<span class="ppMagicCount">tap patterns to select several</span><button type="button">clear selection</button>';
+      bar.innerHTML='<span class="ppMagicCount">tap patterns to select several</span><button type="button" title="Clear the selected patterns">clear selection</button>';
       bar.querySelector('button').addEventListener('click',function(e){
         e.preventDefault(); e.stopPropagation(); selected=[]; schedulePaint();
       });
@@ -16198,9 +16198,9 @@ else install();
     box.style.cssText='background:#1c1626;border:1px solid rgba(255,232,248,.18);border-radius:16px;padding:20px;max-width:340px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.5);text-align:center;';
     box.innerHTML='<div style="color:#fff8fb;font:900 15px system-ui;margin-bottom:14px;">Your PDF is ready</div>'+
       '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">'+
-      '<button type="button" id="ppPdfReadyClose" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:#fff8fb;font-weight:700;">Close</button>'+
-      '<button type="button" id="ppPdfReadyOpen" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:#fff8fb;font-weight:700;">Open in new tab</button>'+
-      '<button type="button" id="ppPdfReadyDownload" style="padding:9px 16px;border-radius:10px;border:0;background:linear-gradient(135deg,#9b6bff,#ff8ed6);color:#fff;font-weight:800;">Download PDF</button>'+
+      '<button type="button" id="ppPdfReadyClose" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:#fff8fb;font-weight:700;" title="Close this dialog">Close</button>'+
+      '<button type="button" id="ppPdfReadyOpen" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:#fff8fb;font-weight:700;" title="Open the finished PDF in a new browser tab">Open in new tab</button>'+
+      '<button type="button" id="ppPdfReadyDownload" style="padding:9px 16px;border-radius:10px;border:0;background:linear-gradient(135deg,#9b6bff,#ff8ed6);color:#fff;font-weight:800;" title="Download the finished PDF file">Download PDF</button>'+
       '</div>';
     overlay.appendChild(box);
     document.body.appendChild(overlay);
@@ -16278,7 +16278,7 @@ else install();
   function installPanel(){
     if(document.getElementById('ppDocumentLitePanel'))return;
     const pageList=document.getElementById('pageList');const box=pageList&&pageList.closest('.box');if(!box)return;
-    const panel=document.createElement('div');panel.id='ppDocumentLitePanel';panel.className='box documentLiteBox';panel.innerHTML=`<h2>document mode</h2><div class="panelBody"><p class="smallText">Write a manual or welcome PDF. Text flows onto a new A4 page automatically.</p><button class="full primary" onclick="addDocumentLitePage()">add document page</button><div class="docQuickStyles"><button onclick="ppDocStyle('h1')">heading 1</button><button onclick="ppDocStyle('h2')">heading 2</button><button onclick="ppDocStyle('p')">body</button></div><p class="smallText">Format a heading or line of body text the way you want it, put your cursor in it, then tap below to use that look everywhere in the document.</p><div class="docQuickStyles"><button onclick="ppSetHeadingStyleFromSelection('h1')">set heading 1 style</button><button onclick="ppSetHeadingStyleFromSelection('h2')">set heading 2 style</button><button onclick="ppSetHeadingStyleFromSelection('p')">set body style</button></div><div class="grid2"><button onclick="ppDocInsertLink()">add link</button><button onclick="ppDocChooseImage()">add image</button></div><input id="ppDocImageInput" type="file" accept="image/*" onchange="ppDocInsertImage(this)"><div class="grid2"><button onclick="ppUpdateDocumentTOC()">create / update TOC</button><button onclick="ppRenameDocTOC()">rename contents title</button></div><button class="full" onclick="ppPrintDocument()">print / save PDF</button><div class="documentLiteStatus">Automatic page numbers appear at the bottom of every document page.</div></div>`;
+    const panel=document.createElement('div');panel.id='ppDocumentLitePanel';panel.className='box documentLiteBox';panel.innerHTML=`<h2>document mode</h2><div class="panelBody"><p class="smallText">Write a manual or welcome PDF. Text flows onto a new A4 page automatically.</p><button class="full primary" onclick="addDocumentLitePage()" title="Add a new multi-page text document page">add document page</button><div class="docQuickStyles"><button onclick="ppDocStyle('h1')" title="Make the current line a large heading">heading 1</button><button onclick="ppDocStyle('h2')" title="Make the current line a smaller heading">heading 2</button><button onclick="ppDocStyle('p')" title="Make the current line regular body text">body</button></div><p class="smallText">Format a heading or line of body text the way you want it, put your cursor in it, then tap below to use that look everywhere in the document.</p><div class="docQuickStyles"><button onclick="ppSetHeadingStyleFromSelection('h1')" title="Apply the selected text's formatting to every Heading 1 in the document">set heading 1 style</button><button onclick="ppSetHeadingStyleFromSelection('h2')" title="Apply the selected text's formatting to every Heading 2 in the document">set heading 2 style</button><button onclick="ppSetHeadingStyleFromSelection('p')" title="Apply the selected text's formatting to every body paragraph in the document">set body style</button></div><div class="grid2"><button onclick="ppDocInsertLink()" title="Wrap the selected text in a clickable link">add link</button><button onclick="ppDocChooseImage()" title="Insert an image into the document page">add image</button></div><input id="ppDocImageInput" type="file" accept="image/*" onchange="ppDocInsertImage(this)"><div class="grid2"><button onclick="ppUpdateDocumentTOC()" title="Build or refresh the table of contents from your headings">create / update TOC</button><button onclick="ppRenameDocTOC()" title="Rename the &quot;Contents&quot; heading">rename contents title</button></div><button class="full" onclick="ppPrintDocument()" title="Print the document or save it as a PDF">print / save PDF</button><div class="documentLiteStatus">Automatic page numbers appear at the bottom of every document page.</div></div>`;
     box.insertAdjacentElement('afterend',panel);
   }
   const oldRenderPages=window.renderPages;window.renderPages=function(){oldRenderPages.apply(this,arguments);decorate()};
@@ -18173,8 +18173,8 @@ else install();
       <div class="templateGrid"><button type="button" onclick="downloadPatternPagesTemplate()" title="Save this layout as a reusable template - placeholder artwork is removed, banners and text are kept">save template</button><button type="button" onclick="openPatternPagesTemplateLoader()" title="Load a previously saved template">load template</button></div>\
       <div class="templateAdvancedLabel">advanced: mark other layers as placeholders</div>\
       <p class="smallText">Banners, frames or other image layers can be marked as placeholders too. Custom mock-ups are always included automatically - no marking needed for those.</p>\
-      <div class="templateGrid"><button type="button" onclick="markSelectedAsPlaceholder()">mark placeholder</button><button type="button" onclick="clearSelectedPlaceholder()">clear mark</button></div>\
-      <button type="button" class="full" onclick="renameSelectedPlaceholder()">rename placeholder</button>\
+      <div class="templateGrid"><button type="button" onclick="markSelectedAsPlaceholder()" title="Mark the selected layer as a fillable placeholder">mark placeholder</button><button type="button" onclick="clearSelectedPlaceholder()" title="Remove the placeholder mark from the selected layer">clear mark</button></div>\
+      <button type="button" class="full" onclick="renameSelectedPlaceholder()" title="Rename this placeholder\'s label">rename placeholder</button>\
     </div>';
     const intro=left.querySelector('.panelIntro');
     if(intro && intro.nextSibling) left.insertBefore(box,intro.nextSibling); else left.prepend(box);
@@ -20579,7 +20579,7 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
       row.id='ppDocImgAlignRow';
       row.className='grid3';
       row.style.marginBottom='8px';
-      row.innerHTML='<button type="button" id="ppDocImgAlignLeft">align left</button><button type="button" id="ppDocImgAlignCenter">align centre</button><button type="button" id="ppDocImgAlignRight">align right</button>';
+      row.innerHTML='<button type="button" id="ppDocImgAlignLeft" title="Align the image to the left, with text wrapping beside it">align left</button><button type="button" id="ppDocImgAlignCenter" title="Centre the image on its own line">align centre</button><button type="button" id="ppDocImgAlignRight" title="Align the image to the right, with text wrapping beside it">align right</button>';
       var opacityRow=body.querySelector('.rangeRow:has(#opacity)');
       if(opacityRow)opacityRow.insertAdjacentElement('afterend',row);else body.appendChild(row);
       row.querySelector('#ppDocImgAlignLeft').onclick=function(){alignImage('left')};
@@ -20991,9 +20991,9 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
       '<div style="color:rgba(216,206,222,.8);font-size:12px;margin-bottom:10px;line-height:1.4;">Reproduce the issue first, then open this and send the text below.</div>'+
       '<textarea id="ppDebugReportText" readonly style="width:100%;height:260px;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid rgba(255,232,248,.24);background:rgba(255,255,255,.06);color:#fff8fb;font-size:11px;font-family:monospace;margin-bottom:14px;"></textarea>'+
       '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">'+
-      '<button type="button" id="ppDebugReportClose" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:#fff8fb;font-weight:700;">Close</button>'+
-      '<button type="button" id="ppDebugReportCopy" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.3);background:rgba(255,255,255,.08);color:#fff8fb;font-weight:800;">Copy</button>'+
-      '<button type="button" id="ppDebugReportDownload" style="padding:9px 16px;border-radius:10px;border:0;background:linear-gradient(135deg,#9b6bff,#ff8ed6);color:#fff;font-weight:800;">Download .txt</button>'+
+      '<button type="button" id="ppDebugReportClose" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:#fff8fb;font-weight:700;" title="Close the debug report">Close</button>'+
+      '<button type="button" id="ppDebugReportCopy" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.3);background:rgba(255,255,255,.08);color:#fff8fb;font-weight:800;" title="Copy the debug report to your clipboard">Copy</button>'+
+      '<button type="button" id="ppDebugReportDownload" style="padding:9px 16px;border-radius:10px;border:0;background:linear-gradient(135deg,#9b6bff,#ff8ed6);color:#fff;font-weight:800;" title="Download the debug report as a text file">Download .txt</button>'+
       '</div>';
     overlay.appendChild(box);
     document.body.appendChild(overlay);
