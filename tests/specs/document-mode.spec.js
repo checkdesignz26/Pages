@@ -644,6 +644,81 @@ test('document image: select, resize via handle, rotate via handle, align, delet
   expect(stillThere).toBe(false);
 });
 
+// Real report, with a screenshot: dragging a freshly-inserted logo bigger on a page that already
+// had a decent amount of written text made a brand new (essentially empty) page appear and broke
+// the live resize handle mid-drag. Root cause: ppDocInsertImage always follows an inserted image
+// with a throwaway `<p><br></p>` filler paragraph, so there's somewhere to keep typing afterward -
+// it carries no content of its own. moveOverflow() (the auto-pagination that flows overflowing
+// text onto the next page) always looks at editor.lastElementChild first when the page overflows -
+// which is that empty filler, not the image - and, finding it non-empty enough by its old
+// standard (any node at all), migrated it onto a brand new page and forced a full render()
+// rebuild of every .documentEditor node. That rebuild is what actually broke the resize handle:
+// the overlay was tracking the now-replaced <img> DOM node, saw it was no longer attached, and
+// deselected. Confirmed by measuring the exact page/child structure before and after each resize
+// step - fixed by never letting a paragraph with nothing in it (no text, no image) trigger a new
+// page; it's just dropped instead, unless the caret is actively inside it.
+test('resizing an image bigger keeps the resize handle working and does not spawn a stray new page', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.waitForTimeout(1800);
+
+  await page.click('.documentEditor');
+  await page.waitForTimeout(150);
+  // Enough real paragraph text to leave the page nearly (but not quite) full, like a seller who
+  // already wrote their manual and is now adding a logo underneath.
+  const text = 'Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor. '.repeat(16);
+  await page.evaluate((txt) => {
+    const ed = document.querySelector('.documentEditor');
+    ed.focus();
+    const r = document.createRange();
+    r.selectNodeContents(ed);
+    r.collapse(false);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    document.execCommand('insertText', false, txt);
+  }, text);
+  await page.waitForTimeout(500);
+  const pageCountBefore = await page.evaluate(() => state.pages.length);
+
+  const png1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor[data-page-index="0"]');
+    ed.focus();
+    const r = document.createRange();
+    r.selectNodeContents(ed);
+    r.collapse(false);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
+  await page.setInputFiles('#ppDocImageInput', { name: 'test.png', mimeType: 'image/png', buffer: png1x1 });
+  await page.waitForSelector('.documentEditor img');
+  await page.waitForTimeout(400);
+
+  await page.locator('.documentEditor img').first().click({ force: true });
+  await page.waitForTimeout(150);
+  // Several separate drag gestures (each fires its own pointerup -> input -> debounced overflow
+  // check), enlarging the image until the page is genuinely at capacity.
+  for (let i = 0; i < 5; i++) {
+    const hb = await page.locator('#ppDocImgOverlay .handle').boundingBox();
+    expect(hb, `resize handle should still be present/usable on drag attempt ${i}`).not.toBeNull();
+    await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(hb.x + hb.width / 2 + 150, hb.y + hb.height / 2, { steps: 5 });
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+  }
+
+  const after = await page.evaluate(() => ({
+    pageCount: state.pages.length,
+    imgExistsOnPage0: !!document.querySelector('.documentEditor[data-page-index="0"] img'),
+  }));
+  expect(after.imgExistsOnPage0).toBe(true);
+  // A resize that only overflowed by a few pixels of empty filler space should not spawn a
+  // whole new document page.
+  expect(after.pageCount).toBe(pageCountBefore);
+});
+
 // Real report, with screenshots: a selected image's purple outline stayed stuck permanently -
 // visibly "framed" and un-draggable - no matter how many times it was tapped away from
 // afterward. Root cause: .ppDocImgSelected lives directly on the live <img> node, and a

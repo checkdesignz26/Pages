@@ -16367,6 +16367,20 @@ else install();
         break;
       }
       const n=editor.lastElementChild;
+      // Real report, with a screenshot: dragging a freshly-inserted logo bigger on an otherwise
+      // near-full page made a brand new page 2 appear and broke the live resize handle mid-drag.
+      // Every image insert is immediately followed by a trailing `<p><br></p>` filler paragraph
+      // (see ppDocInsertImage) so there's somewhere to keep typing afterward - it carries no
+      // content of its own, and that's exactly where the caret naturally lands right after
+      // inserting an image (before the user has clicked away to grab the resize handle), so a
+      // caret-inside exception doesn't help here. Growing the image by even a few pixels was
+      // enough to push the page just over its height, and this loop always looks at
+      // editor.lastElementChild first - which is that empty filler, not the image. Treating it as
+      // real content worth preserving on a whole new page (and, via the render() that follows,
+      // rebuilding every .documentEditor node from scratch - which is what actually kills the
+      // resize overlay, since it's tracking the now-replaced <img> DOM node) is overkill for a
+      // paragraph with nothing in it - there's no text to lose, so it's simply dropped instead.
+      if(!n.querySelector('img')&&!(n.textContent||'').trim()){n.remove();continue}
       if(caretNode&&n.contains(caretNode))caretWasInMovedContent=true;
       moved.unshift(n.outerHTML);n.remove();
     }
