@@ -553,6 +553,24 @@ test('a template mock-up filled from the tray can still be resized/repositioned 
   , mockupId);
   expect(wired).toBe(true);
 
+  // Real follow-up report, with a screenshot: once tapping a mock-up correctly wired the
+  // sliders (above), there was no visible sign on the canvas that anything had happened -
+  // clearing state.selected (so the mock-up stays "locked" against normal drag/resize) also
+  // meant the ordinary .selected outline never applied. A separate, narrower
+  // .customMockupEditing class exists just to show a box for whichever mock-up the sliders are
+  // currently wired to, without reviving the handles/drag behavior the "locked" design
+  // intentionally disables.
+  const hasBoundingBox = await page.evaluate(
+    (id) => document.querySelector(`.layer[data-id="${id}"]`).classList.contains('customMockupEditing'),
+    mockupId
+  );
+  expect(hasBoundingBox).toBe(true);
+  const outline = await page.evaluate(
+    (id) => getComputedStyle(document.querySelector(`.layer[data-id="${id}"]`)).outlineStyle,
+    mockupId
+  );
+  expect(outline).toBe('solid');
+
   // Drag the "move left/right" slider - the same gesture a seller would use to reposition the
   // pattern inside the mock-up. Before the fix, updateClean() (the only code path that ever
   // writes customMockupRecipe back onto a layer) couldn't find this layer at all - it only

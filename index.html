@@ -1252,6 +1252,18 @@ body.autoGroupEditing .layer.collectionGrouped{
   opacity:0!important;
   pointer-events:none!important;
 }
+/* Real report, with a screenshot: after wiring the repeat/offset/texture sliders to whichever
+   mock-up was tapped (see ppWireMockupControls), there was no visual sign on the canvas that a
+   tap had landed anywhere - the mock-up lock rules above intentionally zero out any outline for
+   .selected, since a real selection box would bring back the handles/drag-to-wander problems
+   those fixes were written for. This is a separate, narrower class (only ever added to
+   whichever one mock-up cage.lastLayerId currently points the sliders at, never combined with
+   real selection/drag) so a higher-specificity rule can safely show a box again without
+   touching any of the pointer-events/handle rules above.  */
+.layer.customMockupLayer.customMockupEditing{
+  outline:3px solid rgba(255,142,214,.98)!important;
+  outline-offset:5px!important;
+}
 .layerItem.customMockupRow{
   cursor:default!important;
 }
@@ -2564,7 +2576,7 @@ if(isGroupLayer(l)){
 let d=document.createElement('div');
 const selectedGroupLayer=selectedAutoGroupLayer(pi);
 const isGroupMate=selectedGroupLayer && isSameAutoGroupMember(l,selectedGroupLayer);
-d.className='layer '+l.type+(isAutoGroupedCollectionLayer(l)?' collectionGrouped':'')+(isGroupMate?' groupMate':'')+(l.type==='label'?' labelBadge label'+((l.badgeShape||'rounded').charAt(0).toUpperCase()+(l.badgeShape||'rounded').slice(1)):'')+(l.patternSlot?' patternSlot '+(l.slotShape==='circle'?'circleSlot':(l.slotShape==='strip'?'stripSlot '+((l.stripDirection==='horizontal'||l.horizontalStash)?'horizontalStrip':'verticalStrip'):'')):'')+(l.type==='frame'?' frameSlot frame'+((l.frameShape||'custom').charAt(0).toUpperCase()+(l.frameShape||'custom').slice(1)):'')+(l.patternSlot&&l.src?' filledSlot':'')+(l.disclosureBadge?' disclosureBadge':'')+(l.customMockup?' customMockupLayer':'')+(!l.customMockup&&state.selected===l.id&&state.selectedPage===pi?' selected':'')+(!l.customMockup&&state.lastDeselected===l.id&&state.selectedPage===pi?' justDeselected':'')+(l.fit==='contain'?' contain':'')+(l.positionLocked?' positionLocked':'');
+d.className='layer '+l.type+(isAutoGroupedCollectionLayer(l)?' collectionGrouped':'')+(isGroupMate?' groupMate':'')+(l.type==='label'?' labelBadge label'+((l.badgeShape||'rounded').charAt(0).toUpperCase()+(l.badgeShape||'rounded').slice(1)):'')+(l.patternSlot?' patternSlot '+(l.slotShape==='circle'?'circleSlot':(l.slotShape==='strip'?'stripSlot '+((l.stripDirection==='horizontal'||l.horizontalStash)?'horizontalStrip':'verticalStrip'):'')):'')+(l.type==='frame'?' frameSlot frame'+((l.frameShape||'custom').charAt(0).toUpperCase()+(l.frameShape||'custom').slice(1)):'')+(l.patternSlot&&l.src?' filledSlot':'')+(l.disclosureBadge?' disclosureBadge':'')+(l.customMockup?' customMockupLayer'+(window.PP_MOCKUP_PAPARAZZI_CAGE_V163&&window.PP_MOCKUP_PAPARAZZI_CAGE_V163.lastLayerId===l.id?' customMockupEditing':''):'')+(!l.customMockup&&state.selected===l.id&&state.selectedPage===pi?' selected':'')+(!l.customMockup&&state.lastDeselected===l.id&&state.selectedPage===pi?' justDeselected':'')+(l.fit==='contain'?' contain':'')+(l.positionLocked?' positionLocked':'');
 d.style.left=l.x+'%';
 d.style.top=l.y+'%';
 d.style.width=l.w+'%';
@@ -12295,6 +12307,15 @@ window.addEventListener('DOMContentLoaded',function(){
     const box=document.querySelector('.customMockupBox');
     if(box){ box.classList.remove('collapsed'); box.scrollIntoView({block:'nearest',behavior:'smooth'}); }
     status('adjust this mock-up with the sliders below');
+    // Real report, with a screenshot: wiring the sliders to a mock-up left no visible sign on
+    // the canvas that anything had actually been selected for editing - the callers of this
+    // function only ever re-render the layers PANEL (renderLayers()), not the stage itself, so
+    // the .customMockupEditing class renderLayer() now adds (see its className line) wouldn't
+    // actually reach the DOM until some unrelated re-render happened to come along. Toggle it
+    // directly here for instant feedback regardless of what the caller does afterward.
+    document.querySelectorAll('.layer.customMockupLayer.customMockupEditing').forEach(function(el){el.classList.remove('customMockupEditing');});
+    const el=document.querySelector('.layer[data-id="'+l.id+'"]');
+    if(el)el.classList.add('customMockupEditing');
   };
   async function createClean(e){
     if(e){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
