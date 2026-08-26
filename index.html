@@ -1337,7 +1337,7 @@ body.autoGroupEditing .layer.collectionGrouped{
       <button onclick="zoomPage(-0.05)" title="Zoom out">−</button>
       <button onclick="zoomPage(0.05)" title="Zoom in">+</button>
       <button onclick="toggleHandedMode()" id="handModeBtn" title="Switch which side the panels are on">left-handed layout</button>
-      <button onclick="openSwatchBook()" title="Open the Button Guide - a searchable reference for what every button does">📖 button guide</button>
+      <button onclick="openSwatchBook()" title="Open the Guide - a searchable reference for what every button does">📖 guide</button>
     </div>
   </div>
  </div>
@@ -3956,7 +3956,7 @@ const SWATCHBOOK_DATA = [
     ["&minus;", "Zoom out."],
     ["+", "Zoom in."],
     ["left-handed layout", "Switch which side the panels are on."],
-    ["📖 button guide", "Open this reference."],
+    ["📖 guide", "Open this reference."],
     ["feedback 💌", "Open the feedback form."],
     ["? help", "Open the Quick Start Guide."]
   ]},
@@ -4170,7 +4170,7 @@ function ppBuildSwatchBookHTML(){
   return ''+
     '<div class="qsHeader">'+
       '<span class="qsBadge">PATTERN PAGES</span>'+
-      '<h2>Button Guide</h2>'+
+      '<h2>guide</h2>'+
       '<p>What every button does &mdash; '+total+' in total. Search, or scroll through by panel.</p>'+
     '</div>'+
     '<div class="swbSearchRow">'+
@@ -4194,8 +4194,8 @@ function openSwatchBook(){
   box.className = 'swbBox';
   box.innerHTML =
     '<div class="swbHeader" title="Drag to move">'+
-      '<span class="swbHeaderTitle">📖 Button Guide</span>'+
-      '<button type="button" class="swbCloseBtn" aria-label="Close button guide" title="Close the Button Guide">&times;</button>'+
+      '<span class="swbHeaderTitle">📖 guide</span>'+
+      '<button type="button" class="swbCloseBtn" aria-label="Close guide" title="Close the guide">&times;</button>'+
     '</div>'+
     '<div class="swbScrollArea">'+ppBuildSwatchBookHTML()+'</div>'+
     '<div class="swbResizeHandle" title="Drag to resize"></div>';

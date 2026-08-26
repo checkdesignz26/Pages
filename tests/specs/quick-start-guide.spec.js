@@ -97,16 +97,17 @@ test.describe('desktop mouse: feedback/help move into the top toolbar', () => {
 // worked fine for the person who built it, but the link was unreachable for beta testers - the
 // artifact was private. Rebuilt entirely inside the app instead, the same way as the Quick Start
 // Guide above: a plain JS-built overlay with no external dependency, so there's nothing to share
-// or for a link to fail to reach.
-test('the "button guide" button in the toolbar opens the in-app button reference', async ({ page }) => {
-  const btn = page.locator('button', { hasText: 'button guide' });
+// or for a link to fail to reach. Later renamed from "button guide" to just "guide" at the
+// maker's request, since not everyone knows what a "button guide" is.
+test('the "guide" button in the toolbar opens the in-app button reference', async ({ page }) => {
+  const btn = page.locator('button', { hasText: 'guide' });
   await expect(btn).toBeVisible();
   await expect(btn).toHaveAttribute('title', /./);
   await btn.click();
 
   const overlay = page.locator('#ppSwatchBookOverlay');
   await expect(overlay).toBeVisible();
-  await expect(page.locator('.qsHeader h2')).toHaveText('Button Guide');
+  await expect(page.locator('.qsHeader h2')).toHaveText('guide');
 
   // A real cross-section of buttons from different panels, not just the top toolbar.
   const text = (await overlay.textContent()).toLowerCase();
