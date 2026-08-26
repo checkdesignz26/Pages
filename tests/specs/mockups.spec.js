@@ -457,6 +457,121 @@ test('a custom mock-up survives save-template/load-template WITHOUT manually mar
   await page.waitForTimeout(150);
 });
 
+// Real report: after loading a .ptemplate and filling its mock-up from the tray, the repeat/
+// offset/texture sliders in the "custom mock-up" panel did nothing - the pattern couldn't be
+// resized or repositioned inside the mock-up at all. Root cause: a mock-up preview layer is
+// intentionally "locked" against ordinary selection (clicking one resets state.selected back to
+// null, elsewhere in the app, so it can't be dragged/resized like a normal layer) - the sliders
+// can only ever reach it via a separate cage.lastLayerId reference, which only ever got set
+// inside the "create a new mock-up" flow. A mock-up that came from a loaded template and was
+// filled via fillLinkedPlaceholdersFromTray() never passed through that flow, so lastLayerId
+// stayed unset (or pointed at an unrelated mock-up) and the sliders were wired to nothing.
+test('a template mock-up filled from the tray can still be resized/repositioned via the mock-up sliders', async ({ page }) => {
+  page.on('dialog', (d) => d.accept());
+  await expandAllBoxes(page);
+
+  const bgInput = page.locator('#customMockupBgInput');
+  const maskInput = page.locator('#customMockupMaskInput');
+  const btn = page.locator('#createCustomMockupBtnV163');
+  const patternInput = page.locator('input[onchange*="loadTray"][onchange*="pattern"]');
+
+  await bgInput.setInputFiles({ name: 'bg.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await maskInput.setInputFiles({ name: 'mask.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await patternInput.setInputFiles({ name: 'pat-a.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await page.locator('#patternTray .thumb').last().click();
+
+  await clickResilient(page, btn);
+  await expect
+    .poll(
+      () => page.evaluate(() => state.pages.some((p) => (p.layers || []).some((l) => l.customMockupCropped))),
+      { timeout: 5000 }
+    )
+    .toBe(true);
+
+  const templateJson = await page.evaluate(async () => {
+    const orig = URL.createObjectURL;
+    let captured = null;
+    URL.createObjectURL = function (blob) {
+      captured = blob;
+      return orig.call(URL, blob);
+    };
+    window.downloadPatternPagesTemplate();
+    await new Promise((r) => setTimeout(r, 50));
+    document.getElementById('ppSaveAsConfirm').click();
+    await new Promise((r) => setTimeout(r, 50));
+    URL.createObjectURL = orig;
+    return await captured.text();
+  });
+
+  await page.evaluate((json) => {
+    const file = new File([json], 'test.ptemplate', { type: 'application/json' });
+    window.loadPatternPagesTemplate({ target: { files: [file], value: '' } });
+  }, templateJson);
+
+  // Real-world condition this bug needs: cage.lastLayerId unrelated to the template's own
+  // mock-up. Building the mock-up above (to get a real, valid recipe into the template) already
+  // set it to that original layer's id, and the template reload keeps the same layer id - so
+  // without this reset, this one test session would coincidentally still work even with the bug
+  // present, unlike a real seller opening a template without having just created a mock-up.
+  await page.evaluate(() => {
+    if (window.PP_MOCKUP_PAPARAZZI_CAGE_V163) window.PP_MOCKUP_PAPARAZZI_CAGE_V163.lastLayerId = null;
+  });
+
+  await expect
+    .poll(() => page.evaluate(() => state.pages.some((p) => (p.layers || []).some((l) => l.customMockupCropped))), {
+      timeout: 5000,
+    })
+    .toBe(true);
+
+  await page.locator('#patternTray .thumb').last().click();
+  await page.evaluate(() => window.fillLinkedPlaceholdersFromTray());
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const l = state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped);
+          // Not just !!l.src - restorePlaceholderShape() already puts a plain placeholder src on
+          // a freshly-loaded template's mock-up before it's ever filled, so that alone wouldn't
+          // prove the actual pattern fill (fillLayerWithSelectedPattern, which sets customMockup
+          // back to true and records the pattern in customMockupRecipe) really ran.
+          return !!(l && l.customMockup && l.customMockupRecipe && l.customMockupRecipe.pattern);
+        }),
+      { timeout: 5000 }
+    )
+    .toBe(true);
+  await page.waitForTimeout(150); // let the fill-all confirmation alert settle
+
+  // Tap the now-filled mock-up on the canvas, exactly like a seller would to try adjusting it.
+  const mockupId = await page.evaluate(
+    () => state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockupCropped).id
+  );
+  await page.locator(`.layer[data-id="${mockupId}"]`).click();
+  await page.waitForTimeout(100);
+
+  const wired = await page.evaluate(
+    (id) => window.PP_MOCKUP_PAPARAZZI_CAGE_V163 && window.PP_MOCKUP_PAPARAZZI_CAGE_V163.lastLayerId === id
+  , mockupId);
+  expect(wired).toBe(true);
+
+  // Drag the "move left/right" slider - the same gesture a seller would use to reposition the
+  // pattern inside the mock-up. Before the fix, updateClean() (the only code path that ever
+  // writes customMockupRecipe back onto a layer) couldn't find this layer at all - it only
+  // matched via cage.lastLayerId, which stayed unset for a template-loaded mock-up - so this
+  // recipe update, and the re-render it triggers, never happened.
+  await page.locator('#customMockupOffsetX').fill('40');
+  await page.locator('#customMockupOffsetX').dispatchEvent('input');
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (id) => state.pages.flatMap((p) => p.layers || []).find((x) => x.id === id).customMockupRecipe.offsetX,
+          mockupId
+        ),
+      { timeout: 2000 }
+    )
+    .toBe(40);
+});
+
 test('creating a mock-up with no pattern selected places a plain white mask-shaped cutout, photo visible', async ({ page }) => {
   // Real request: the mock-up used to require a pattern to be selected at creation time
   // (createClean threw an alert otherwise), forcing the seller to pick one of their 450+

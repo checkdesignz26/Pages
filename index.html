@@ -2259,7 +2259,7 @@ function rowForLayer(l, mode='all'){
  const thumb=thumbSrc?`<span class="layerThumb"><img src="${thumbSrc}"></span>`:`<span class="layerThumb ${isGroup?'groupIcon':''}">${isGroup?'▣':''}</span>`;
  const groupControls=l.customMockup?`<span class="pill">mock-up</span>`:(isGroup?`<button onclick="event.stopPropagation();toggleGroupExpanded('${l.id}')" title="${state.collapsedGroups[l.id]?'Expand this group':'Collapse this group'}">${state.collapsedGroups[l.id]?'open':'hide'}</button><button onclick="event.stopPropagation();selectLayer('${l.id}')" title="Select this layer">select</button>`:`<button onclick="event.stopPropagation();selectLayer('${l.id}')" title="Select this layer">select</button>`);
  row.innerHTML=`${check}${thumb}<span class="layerName">${l.name}</span><span class="layerBtns">${groupControls}</span>`;
- row.onclick=()=>{if(l.customMockup){state.selected=null; renderLayers(); syncControls(); return;} if(state.layerMultiSelect && !isGroup)toggleLayerSelection(l.id);else selectLayer(l.id)};
+ row.onclick=()=>{if(l.customMockup){state.selected=null; if(typeof window.ppWireMockupControls==='function')window.ppWireMockupControls(l); renderLayers(); syncControls(); return;} if(state.layerMultiSelect && !isGroup)toggleLayerSelection(l.id);else selectLayer(l.id)};
  if(!isGroup){
    row.addEventListener('dragstart',e=>{row.classList.add('dragging'); e.dataTransfer.setData('text/plain', JSON.stringify({id:l.id,mode}));});
    row.addEventListener('dragend',()=>row.classList.remove('dragging'));
@@ -2573,7 +2573,7 @@ d.style.setProperty("opacity", (l.opacity ?? 1), "important");
 d.style.zIndex=l.z;
 d.style.transform=`rotate(${l.r}deg) scale(${l.disclosureBadge?1:(l.scale||1)})`;
 d.dataset.id=l.id;
-d.onclick=e=>{e.stopPropagation(); if(l.customMockup){state.selected=null; renderLayers(); syncControls(); return;} state.selectedPage=pi;state.selected=l.id;render()};
+d.onclick=e=>{e.stopPropagation(); if(l.customMockup){state.selected=null; if(typeof window.ppWireMockupControls==='function')window.ppWireMockupControls(l); renderLayers(); syncControls(); return;} state.selectedPage=pi;state.selected=l.id;render()};
 if(l.patternSlot){
   d.addEventListener('dragover',e=>{e.preventDefault();d.classList.add('selected')});
   d.addEventListener('dragleave',()=>{if(state.selected!==l.id)d.classList.remove('selected')});
@@ -2834,6 +2834,20 @@ el.addEventListener('pointerdown',e=>{
  // canvas, not just a data flag - untouchable by tap here, same as the app's other "locked"
  // controls (custom mock-ups etc.); still reachable to select/unlock via its layer list row.
  if(l.positionLocked){return;}
+ // Real report: resizing/repositioning a custom mock-up's pattern never worked for one filled
+ // from a loaded template. This pointerdown handler runs before any click/select handler ever
+ // gets a chance to (and its own renderLayers() below can rebuild the very element being
+ // clicked out from under it), so it was unconditionally selecting a mock-up layer like any
+ // other draggable one despite the comment above claiming mock-ups were already excluded -
+ // they weren't. Wire the mock-up controls (cage.lastLayerId + the sliders) here instead of
+ // falling through to normal drag/select, so a tap anywhere always reaches them regardless of
+ // whether the mock-up was just created or came from a template.
+ if(l.customMockup){
+   state.selected=null;
+   if(typeof window.ppWireMockupControls==='function')window.ppWireMockupControls(l);
+   renderLayers();syncControls();
+   return;
+ }
  state.selectedPage=pi;
  state.selected=l.id;
  el.classList.add('selected');
@@ -3028,7 +3042,7 @@ function reorderLayerByDrop(dragId,targetId,mode='all'){
 function selectedForwardOne(){if(state.selected)moveLayerOne(state.selected,1,'all')}
 function selectedBackOne(){if(state.selected)moveLayerOne(state.selected,-1,'all')}
 
-function selectLayer(id){const l=(current().layers||[]).find(o=>o.id===id); if(l&&l.customMockup){state.selected=null; renderLayers(); syncControls(); return;} state.selected=id;render()}
+function selectLayer(id){const l=(current().layers||[]).find(o=>o.id===id); if(l&&l.customMockup){state.selected=null; if(typeof window.ppWireMockupControls==='function')window.ppWireMockupControls(l); renderLayers(); syncControls(); return;} state.selected=id;render()}
 
 function getSelectedAutoGroupMembers(){
   const p=current();
@@ -12256,6 +12270,32 @@ window.addEventListener('DOMContentLoaded',function(){
     let l=p.layers.find(o=>o&&o.id===s.selected&&o.customMockupCropped); if(l)return l;
     l=p.layers.find(o=>o&&o.id===cage.lastLayerId&&o.customMockupCropped); return l||null;
   }
+  // Real report: filling a custom mock-up that came from a loaded .ptemplate (rather than one
+  // just created fresh in this session) left the repeat/offset/texture sliders completely
+  // unresponsive - moving them did nothing. Root cause: a mock-up preview layer is intentionally
+  // "locked" against normal selection (see the customMockup click-guards elsewhere - clicking one
+  // resets state.selected to null so it can't be dragged/resized like an ordinary layer), so
+  // selectedCroppedLayer() above can only ever find it via cage.lastLayerId. That only ever got
+  // set inside buildPage()/buildMaskPlaceholderPage() when a mock-up was freshly created THIS
+  // session - a template's own pre-existing mock-up layer, filled later via
+  // fillLayerWithSelectedPattern, never passes through either of those, so lastLayerId stayed
+  // whatever it was before (often nothing at all). Called from each of those click-guards
+  // instead, so tapping ANY mock-up - freshly made or loaded from a template - wires the panel
+  // to it, and pre-fills the sliders from its own saved recipe so adjusting continues smoothly
+  // from where that mock-up actually is, instead of jumping to whatever the sliders last showed.
+  window.ppWireMockupControls=function(l){
+    if(!l)return;
+    cage.lastLayerId=l.id;
+    const rec=l.customMockupRecipe||{};
+    const set=function(id,val){ if(val==null)return; const el=$(id); if(el)el.value=val; };
+    set('customMockupRepeat',rec.repeat);
+    set('customMockupOffsetX',rec.offsetX);
+    set('customMockupOffsetY',rec.offsetY);
+    set('customMockupTexture',rec.texture);
+    const box=document.querySelector('.customMockupBox');
+    if(box){ box.classList.remove('collapsed'); box.scrollIntoView({block:'nearest',behavior:'smooth'}); }
+    status('adjust this mock-up with the sliders below');
+  };
   async function createClean(e){
     if(e){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
     if(cage.busy){ status('already creating a mock-up…'); return false; }
@@ -18373,6 +18413,7 @@ else install();
     var scroll=saveScroll();
     if(l.customMockup){
       s.selected=null;
+      if(typeof window.ppWireMockupControls==='function')window.ppWireMockupControls(l);
     }else{
       s.selected=id;
       if(Array.isArray(s.selectedLayerIds))s.selectedLayerIds=[];
