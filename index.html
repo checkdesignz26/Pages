@@ -16508,7 +16508,42 @@ else install();
   // superseded by a later generation (confirmed via a fresh scan: the final ppDocStyle
   // generation fully replaces with no fallback to a previous version), so it was dead code.
   // selectedEditor stays live - ppDocInsertLink/ppDocInsertImage below still use it.
-  window.ppDocInsertLink=function(){const ed=selectedEditor();if(!ed){alert('Select a document page first.');return}const url=prompt('Paste the download or website link:');if(!url)return;ed.focus();document.execCommand('createLink',false,url);ed.dispatchEvent(new Event('input',{bubbles:true}));}
+  // Real report: "add link" always showed the raw URL as the clickable text, with no way to
+  // give it a friendlier label - document.execCommand('createLink',...) just wraps whatever's
+  // selected (or, with nothing selected, inserts the URL itself as the link's own text). Now
+  // asks for the link text as a second step, defaulting to whatever was actually selected (or
+  // the URL itself if nothing was), and always builds the <a> directly so the visible label and
+  // the destination can differ.
+  window.ppDocInsertLink=function(){
+    const ed=selectedEditor();if(!ed){alert('Select a document page first.');return}
+    const sel=window.getSelection();
+    const hasSelection=!!(sel&&sel.rangeCount&&ed.contains(sel.anchorNode));
+    const selectedText=(hasSelection&&!sel.isCollapsed)?sel.toString():'';
+    // A native prompt() round-trip can clear/collapse the live document selection - confirmed:
+    // even RE-saving and restoring the actual Range object between dialogs didn't survive two
+    // of them in a row (this used to only need to survive one, before the label prompt below
+    // was added). Rather than fight the browser for it, mark the exact spot with a plain-text
+    // placeholder span right away, before either dialog opens, and finish the edit via a normal
+    // getElementById lookup afterward - unaffected by whatever the dialogs do to focus/selection.
+    const markerId='ppLinkMarker'+Date.now();
+    if(hasSelection){
+      ed.focus();
+      document.execCommand('insertHTML',false,'<span id="'+markerId+'">'+escTitle(selectedText)+'</span>');
+    }
+    function restorePlainText(){
+      const stray=document.getElementById(markerId);
+      if(stray)stray.replaceWith(document.createTextNode(selectedText));
+    }
+    const url=prompt('Paste the download or website link:');
+    if(!url){restorePlainText();return}
+    const label=prompt('Text to show for this link:',selectedText||url);
+    if(!label){restorePlainText();return}
+    const linkHtml='<a href="'+escTitle(url).replace(/"/g,'%22')+'">'+escTitle(label)+'</a>';
+    const marker=document.getElementById(markerId);
+    if(marker){marker.outerHTML=linkHtml;}
+    else{ed.focus();document.execCommand('insertHTML',false,linkHtml);}
+    ed.dispatchEvent(new Event('input',{bubbles:true}));
+  }
   window.ppDocChooseImage=function(){const f=document.getElementById('ppDocImageInput');if(f)f.click()}
   window.ppDocInsertImage=function(input){const file=input.files&&input.files[0];if(!file)return;const ed=selectedEditor();if(!ed)return;const r=new FileReader();r.onload=()=>{ed.focus();document.execCommand('insertHTML',false,`<img src="${r.result}" alt="manual image"><p><br></p>`);ed.dispatchEvent(new Event('input',{bubbles:true}));input.value=''};r.readAsDataURL(file)}
   function escTitle(s){return String(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
@@ -16539,7 +16574,7 @@ else install();
   // foreignObject, no tainting, and unlike window.print() this can be verified end-to-end
   // in tests instead of only on a real device.
   function ppFlattenInlineRuns(node,style,runs){
-    style=style||{bold:false,italic:false,color:'#222',fontFamily:'Georgia'};
+    style=style||{bold:false,italic:false,color:'#222',fontFamily:'Georgia',href:null};
     node.childNodes.forEach(function(child){
       if(child.nodeType===3){if(child.textContent)runs.push(Object.assign({text:child.textContent},style));return}
       if(child.nodeType!==1)return;
@@ -16567,7 +16602,14 @@ else install();
         bold:style.bold||tag==='B'||tag==='STRONG'||parseInt(cs.fontWeight,10)>=600,
         italic:style.italic||tag==='I'||tag==='EM'||cs.fontStyle==='italic',
         color:tag==='A'?'#6b42bb':style.color,
-        fontFamily:inlineFont||style.fontFamily
+        fontFamily:inlineFont||style.fontFamily,
+        // Real report: a link in the document ("add link") showed up underlined and blue in the
+        // exported PDF, exactly as on screen, but tapping it did nothing - the PDF is a flat
+        // rasterized image (see the note above this function), so nothing about an <a> tag's
+        // href ever survived into it. Carrying the href through the same style-inheritance chain
+        // as color/font lets ppDrawDocBlock below record where each linked word actually lands
+        // on the page, so a real clickable annotation can be added over it.
+        href:tag==='A'?(child.getAttribute('href')||null):style.href
       },runs);
     });
   }
@@ -16576,7 +16618,7 @@ else install();
     if(tag==='H2')return{size:38,weight:750,lineHeight:1.3};
     return{size:24,weight:400,lineHeight:1.55};
   }
-  async function ppDrawDocBlock(ctx,block,y,pad,contentW){
+  async function ppDrawDocBlock(ctx,block,y,pad,contentW,links){
     if(block.classList&&block.classList.contains('documentTOCRow')){
       const isL2=block.classList.contains('level2');
       const left=(block.querySelector('span')||block).textContent;
@@ -16598,19 +16640,38 @@ else install();
       run.text.split(/(\n)/).forEach(function(part){
         if(part==='')return;
         if(part==='\n'){tokens.push({brk:true});return}
-        part.split(/(\s+)/).forEach(function(w){if(w)tokens.push({text:w,bold:run.bold,italic:run.italic,color:run.color,fontFamily:run.fontFamily})});
+        part.split(/(\s+)/).forEach(function(w){if(w)tokens.push({text:w,bold:run.bold,italic:run.italic,color:run.color,fontFamily:run.fontFamily,href:run.href})});
       });
     });
     let line=[],lineWidth=0;
     const flush=async function(){
       if(!line.length){y+=lineHeight;return}
       let x=pad.left;
+      // Real report: a link's blue underlined text drew correctly but wasn't actually clickable
+      // in the exported PDF - the rasterizer only ever drew pixels, it never recorded WHERE a
+      // linked run of words ended up. Track a run of consecutive same-href tokens on this line
+      // (adjacent words plus the spaces between them) as one clickable rectangle, so
+      // ppRasterizeDocPage can hand real coordinates back to the PDF builder's link-annotation
+      // support (see makePdfBlobFromPages) instead of that support going unused.
+      let linkRun=null;
+      const commitLinkRun=function(){
+        if(linkRun&&links){links.push({x:linkRun.x1,y:y,w:linkRun.x2-linkRun.x1,h:lineHeight,href:linkRun.href});}
+        linkRun=null;
+      };
       for(const t of line){
         ctx.font=`${t.italic?'italic ':''}${t.bold?800:font.weight} ${font.size}px "${t.fontFamily||'Georgia'}", Georgia, serif`;
         ctx.fillStyle=t.color||'#222';
         ctx.fillText(t.text,x,y+font.size);
-        x+=ctx.measureText(t.text).width;
+        const tw=ctx.measureText(t.text).width;
+        if(t.href){
+          if(linkRun&&linkRun.href===t.href)linkRun.x2=x+tw;
+          else{commitLinkRun();linkRun={href:t.href,x1:x,x2:x+tw};}
+        }else{
+          commitLinkRun();
+        }
+        x+=tw;
       }
+      commitLinkRun();
       y+=lineHeight;line=[];lineWidth=0;
     };
     for(const tok of tokens){
@@ -16670,13 +16731,18 @@ else install();
       const wrapper=document.createElement('p');wrapper.textContent=n.textContent;
       return wrapper;
     }):[holder];
+    const links=[];
     for(const block of blocks){
       if(y>h-pad.bottom)break;
-      y=await ppDrawDocBlock(ctx,block,y,pad,contentW);
+      y=await ppDrawDocBlock(ctx,block,y,pad,contentW,links);
     }
     holder.remove();
     ctx.fillStyle='#666';ctx.font='21px system-ui, sans-serif';ctx.textAlign='center';
     ctx.fillText(String(pageNum),w/2,h-pad.bottom+40);ctx.textAlign='left';
+    // Stashed on the canvas rather than changing this function's return value - existing callers
+    // (including tests) treat the return value as a plain canvas and call .toDataURL() on it
+    // directly. ppPrintDocument below reads this off to build real clickable PDF annotations.
+    canvas.ppLinks=links;
     return canvas;
   }
   window.ppRasterizeDocPage=ppRasterizeDocPage;
@@ -16759,7 +16825,13 @@ else install();
       for(let i=0;i<docs.length;i++){
         const canvas=await ppRasterizeDocPage(docs[i].docHtml,DOC_W,DOC_H,i+1);
         dlog('ppPrintDocument:page-rasterized',{index:i,ok:!!canvas});
-        items.push({w:DOC_W,h:DOC_H,dataUrl:canvas.toDataURL('image/jpeg',0.92),links:[]});
+        // Real report: a document's own "add link" text drew correctly in the PDF but wasn't
+        // clickable - this used to always pass links:[] here even though makePdfBlobFromPages
+        // already knows how to turn link rects into real /Annot link annotations. canvas.ppLinks
+        // (set by ppRasterizeDocPage, in pixel coordinates matching this page's own w/h) just
+        // needed converting to the percentages that builder expects.
+        const links=(canvas.ppLinks||[]).map(function(l){return{x:l.x/DOC_W*100,y:l.y/DOC_H*100,w:l.w/DOC_W*100,h:l.h/DOC_H*100,href:l.href};});
+        items.push({w:DOC_W,h:DOC_H,dataUrl:canvas.toDataURL('image/jpeg',0.92),links:links});
       }
     }catch(e){
       dlog('ppPrintDocument:rasterize-threw',{error:String(e)});

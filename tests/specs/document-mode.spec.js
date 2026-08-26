@@ -383,6 +383,39 @@ test('a longer manual (~20 pages) builds a PDF without crashing on the byte-stre
   expect(result.pdfPageCount).toBe(docPageCount);
 });
 
+// Real report: a link added via "add link" showed up underlined and blue in the exported PDF,
+// exactly as on the page, but tapping it did nothing. Root cause - the PDF is a flat rasterized
+// image of each page (see the notes above ppRasterizeDocPage/ppFlattenInlineRuns), and nothing
+// about an <a>'s href ever made it into that image; makePdfBlobFromPages already knows how to
+// add real clickable /Annot link annotations, but ppPrintDocument always passed it links:[].
+// Confirms the built PDF actually contains a real link annotation with the right URI.
+test('a document link is a real, clickable annotation in the exported PDF, not just blue underlined pixels', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.innerHTML = '<h1>Title</h1><p>Visit our <a href="https://example.com/manual-download">website</a> for the full manual.</p>';
+    state.pages[state.selectedPage].docHtml = ed.innerHTML;
+  });
+  await page.waitForTimeout(300);
+
+  const resultPromise = page.evaluate(() => new Promise((resolve) => {
+    const orig = window.downloadBlob;
+    window.downloadBlob = async (blob) => {
+      window.downloadBlob = orig;
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      resolve(new TextDecoder('latin1').decode(bytes));
+    };
+  }));
+
+  await page.evaluate(() => window.ppPrintDocument());
+  await page.waitForSelector('#ppPdfReadyDownload', { timeout: 15000 });
+  await page.click('#ppPdfReadyDownload');
+  const pdfText = await resultPromise;
+
+  expect(pdfText).toContain('/Subtype /Link');
+  expect(pdfText).toContain('/URI (https://example.com/manual-download)');
+});
+
 test('pressing Enter after a heading drops back to body text instead of leaving another heading', async ({ page }) => {
   // Real request: the TOC filled up with several "Untitled heading" rows that the user never
   // knowingly created. Root cause - WebKit's default contentEditable behavior continues a
@@ -1933,7 +1966,19 @@ test('the add link button in the text panel wraps the current selection in a doc
     ed.focus();
   });
 
-  page.once('dialog', (dialog) => dialog.accept('https://example.com/manual-download'));
+  // Two prompts now: the URL, then the link's own display text (defaulting to whatever was
+  // selected). Chained rather than two separate page.once() calls: Playwright's dialog event
+  // fires on every listener still attached, so both would otherwise race to accept the SAME
+  // first dialog instead of one each in sequence. The second prompt's default value already IS
+  // the selected text (asserted via defaultValue() below) - accept it explicitly rather than
+  // relying on omitted-argument default-value semantics.
+  page.once('dialog', (dialog) => {
+    dialog.accept('https://example.com/manual-download');
+    page.once('dialog', (dialog2) => {
+      expect(dialog2.defaultValue()).toBe('download page for more');
+      dialog2.accept('download page for more');
+    });
+  });
 
   await expandAllBoxes(page);
   await clickResilient(page, page.locator('#textStudioPanel button:text-is("add link")'));
@@ -1941,7 +1986,31 @@ test('the add link button in the text panel wraps the current selection in a doc
 
   const afterLink = await page.evaluate(() => document.querySelector('.documentEditor').innerHTML);
   expect(afterLink).toMatch(/<a[^>]*href="https:\/\/example\.com\/manual-download"[^>]*>download page for more<\/a>/);
-  expect(afterLink).toContain('Visit our ');
+  // A plain space right before inserted HTML can come back as &nbsp; (a normal, purely visual-
+  // whitespace-representation browser quirk, not a functional change) - accept either form.
+  expect(afterLink).toMatch(/Visit our(&nbsp;| )/);
+});
+
+// Real report: "add link" always showed the raw URL as the link's own clickable text, with no
+// way to give it a friendlier label. Confirms the label prompt (now a second step) can differ
+// from the URL, and is what actually gets used as the link's visible text.
+test('the add link button lets the link show custom text instead of the raw URL', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.click('.documentEditor');
+  await page.waitForTimeout(150);
+
+  page.once('dialog', (dialog) => {
+    dialog.accept('https://ppages.checkdesignz.com/');
+    page.once('dialog', (dialog2) => dialog2.accept('Visit our website'));
+  });
+
+  await expandAllBoxes(page);
+  await clickResilient(page, page.locator('#textStudioPanel button:text-is("add link")'));
+  await page.waitForTimeout(200);
+
+  const afterLink = await page.evaluate(() => document.querySelector('.documentEditor').innerHTML);
+  expect(afterLink).toMatch(/<a[^>]*href="https:\/\/ppages\.checkdesignz\.com\/"[^>]*>Visit our website<\/a>/);
+  expect(afterLink).not.toContain('>https://ppages.checkdesignz.com/<');
 });
 
 // Real report: viewing the built PDF replaced the whole app tab with no way back to the project.
