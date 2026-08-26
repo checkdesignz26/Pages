@@ -115,7 +115,7 @@ test('the "swatch book" button in the toolbar opens the in-app button reference'
   expect(text).toContain('recolor');
   expect(text).toContain('etsy assistant');
 
-  await page.locator('.qsClose').click();
+  await page.locator('.swbCloseBtn').click();
   await expect(overlay).toHaveCount(0);
 });
 
@@ -133,4 +133,56 @@ test('the swatch book search box filters entries live, down to just the matching
   for (let i = 0; i < count; i++) {
     expect((await visibleEntries.nth(i).textContent()).toLowerCase()).toContain('quick save');
   }
+});
+
+// Real request: "wondering if it could be made moveable or floating and resizable so it can sit
+// beside while the user is working" - rebuilt as a floating panel instead of a full-screen modal:
+// no dimmed backdrop, drag by its header, resize from its bottom-right corner, and the canvas
+// underneath stays fully usable while it's open.
+test('the swatch book floats without blocking the app underneath - it can be dragged and resized, and remembers where you left it', async ({ page }) => {
+  await page.evaluate(() => window.openSwatchBook());
+  await page.waitForTimeout(150);
+
+  // The overlay wrapper doesn't intercept clicks - only the floating box itself does.
+  const overlayPointerEvents = await page.locator('#ppSwatchBookOverlay').evaluate((el) => getComputedStyle(el).pointerEvents);
+  expect(overlayPointerEvents).toBe('none');
+  const hitOutsideBox = await page.evaluate(() => {
+    const el = document.elementFromPoint(50, 900);
+    return el ? (el.className || el.tagName) : null;
+  });
+  expect(String(hitOutsideBox)).not.toContain('swb');
+
+  const before = await page.locator('.swbBox').boundingBox();
+
+  // Drag by the header.
+  const header = page.locator('.swbHeader');
+  const hb = await header.boundingBox();
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hb.x + hb.width / 2 - 120, hb.y + hb.height / 2 + 80, { steps: 5 });
+  await page.mouse.up();
+  const afterDrag = await page.locator('.swbBox').boundingBox();
+  expect(afterDrag.x).not.toBeCloseTo(before.x, 0);
+  expect(afterDrag.y).not.toBeCloseTo(before.y, 0);
+
+  // Resize from the bottom-right handle.
+  const handle = page.locator('.swbResizeHandle');
+  const hb2 = await handle.boundingBox();
+  await page.mouse.move(hb2.x + hb2.width / 2, hb2.y + hb2.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hb2.x + 90, hb2.y + 70, { steps: 5 });
+  await page.mouse.up();
+  const afterResize = await page.locator('.swbBox').boundingBox();
+  expect(afterResize.width).toBeGreaterThan(before.width + 40);
+  expect(afterResize.height).toBeGreaterThan(before.height + 40);
+
+  // Close and reopen - the new position and size should be remembered.
+  await page.locator('.swbCloseBtn').click();
+  await page.evaluate(() => window.openSwatchBook());
+  await page.waitForTimeout(150);
+  const reopened = await page.locator('.swbBox').boundingBox();
+  expect(reopened.x).toBeCloseTo(afterDrag.x, 0);
+  expect(reopened.y).toBeCloseTo(afterDrag.y, 0);
+  expect(reopened.width).toBeCloseTo(afterResize.width, 0);
+  expect(reopened.height).toBeCloseTo(afterResize.height, 0);
 });

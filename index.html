@@ -4158,28 +4158,96 @@ function ppBuildSwatchBookHTML(){
     sectionsHtml;
 }
 
+var SWATCHBOOK_RECT_KEY = 'patternPages.swatchBook.rect.v1';
+
 function openSwatchBook(){
   var old = document.getElementById('ppSwatchBookOverlay');
   if(old) old.remove();
 
   var overlay = document.createElement('div');
   overlay.id = 'ppSwatchBookOverlay';
-  overlay.className = 'qsOverlay';
+  overlay.className = 'swbOverlay';
 
   var box = document.createElement('div');
-  box.className = 'qsBox swbBox';
-  box.innerHTML = '<button type="button" class="qsClose" aria-label="Close swatch book" title="Close the Swatch Book">&times;</button>'+
-    '<div class="qsScroll">'+ppBuildSwatchBookHTML()+'</div>';
+  box.className = 'swbBox';
+  box.innerHTML =
+    '<div class="swbHeader" title="Drag to move">'+
+      '<span class="swbHeaderTitle">🧵 Swatch Book</span>'+
+      '<button type="button" class="swbCloseBtn" aria-label="Close swatch book" title="Close the Swatch Book">&times;</button>'+
+    '</div>'+
+    '<div class="swbScrollArea">'+ppBuildSwatchBookHTML()+'</div>'+
+    '<div class="swbResizeHandle" title="Drag to resize"></div>';
 
   overlay.appendChild(box);
   document.body.appendChild(overlay);
 
-  function close(){ overlay.remove(); }
-  box.querySelector('.qsClose').addEventListener('click', close);
-  overlay.addEventListener('click', function(e){ if(e.target === overlay) close(); });
-  document.addEventListener('keydown', function escHandler(e){
-    if(e.key === 'Escape'){ close(); document.removeEventListener('keydown', escHandler); }
+  // Floating, draggable, resizable - meant to sit alongside the canvas while working, not
+  // block it like the Quick Start Guide's modal does. Remembers where you left it (position
+  // and size) so it reopens the same way next time, matching this app's existing pattern of
+  // persisting UI preferences (layers panel width, quick-start-seen flag, etc.) in localStorage.
+  var saved = {};
+  try{ saved = JSON.parse(localStorage.getItem(SWATCHBOOK_RECT_KEY) || '{}'); }catch(e){}
+  var w = Math.max(320, Math.min(saved.w || 460, window.innerWidth - 24));
+  var h = Math.max(260, Math.min(saved.h || Math.round(window.innerHeight * 0.72), window.innerHeight - 24));
+  var left = saved.left != null ? saved.left : Math.max(12, window.innerWidth - w - 28);
+  var top = saved.top != null ? saved.top : 84;
+  left = Math.max(0, Math.min(left, window.innerWidth - 80));
+  top = Math.max(0, Math.min(top, window.innerHeight - 60));
+  box.style.width = w + 'px';
+  box.style.height = h + 'px';
+  box.style.left = left + 'px';
+  box.style.top = top + 'px';
+
+  function saveRect(){
+    try{
+      localStorage.setItem(SWATCHBOOK_RECT_KEY, JSON.stringify({
+        left: box.offsetLeft, top: box.offsetTop, w: box.offsetWidth, h: box.offsetHeight
+      }));
+    }catch(e){}
+  }
+
+  function close(){ overlay.remove(); document.removeEventListener('keydown', escHandler); }
+  function escHandler(e){ if(e.key === 'Escape') close(); }
+  box.querySelector('.swbCloseBtn').addEventListener('click', close);
+  document.addEventListener('keydown', escHandler);
+
+  var header = box.querySelector('.swbHeader');
+  var drag = null;
+  header.addEventListener('pointerdown', function(e){
+    if(e.target.closest('.swbCloseBtn')) return;
+    drag = { startX: e.clientX, startY: e.clientY, startLeft: box.offsetLeft, startTop: box.offsetTop };
+    try{ header.setPointerCapture(e.pointerId); }catch(err){}
   });
+  header.addEventListener('pointermove', function(e){
+    if(!drag) return;
+    var newLeft = Math.max(0, Math.min(drag.startLeft + (e.clientX - drag.startX), window.innerWidth - 80));
+    var newTop = Math.max(0, Math.min(drag.startTop + (e.clientY - drag.startY), window.innerHeight - 44));
+    box.style.left = newLeft + 'px';
+    box.style.top = newTop + 'px';
+  });
+  function endDrag(e){ if(drag){ drag = null; saveRect(); try{ header.releasePointerCapture(e.pointerId); }catch(err){} } }
+  header.addEventListener('pointerup', endDrag);
+  header.addEventListener('pointercancel', endDrag);
+
+  var handle = box.querySelector('.swbResizeHandle');
+  var resize = null;
+  handle.addEventListener('pointerdown', function(e){
+    resize = { startX: e.clientX, startY: e.clientY, startW: box.offsetWidth, startH: box.offsetHeight };
+    try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+    e.preventDefault();
+  });
+  handle.addEventListener('pointermove', function(e){
+    if(!resize) return;
+    var maxW = window.innerWidth - box.offsetLeft - 8;
+    var maxH = window.innerHeight - box.offsetTop - 8;
+    var newW = Math.max(320, Math.min(resize.startW + (e.clientX - resize.startX), maxW));
+    var newH = Math.max(260, Math.min(resize.startH + (e.clientY - resize.startY), maxH));
+    box.style.width = newW + 'px';
+    box.style.height = newH + 'px';
+  });
+  function endResize(e){ if(resize){ resize = null; saveRect(); try{ handle.releasePointerCapture(e.pointerId); }catch(err){} } }
+  handle.addEventListener('pointerup', endResize);
+  handle.addEventListener('pointercancel', endResize);
 
   var totalEntries = SWATCHBOOK_DATA.reduce(function(n,g){return n+g.entries.length;},0);
   var searchInput = box.querySelector('#swbSearch');
@@ -4203,7 +4271,46 @@ window.openSwatchBook = openSwatchBook;
 </script>
 
 <style>
-.swbBox{ max-width:760px; }
+.swbOverlay{
+  position:fixed; inset:0; z-index:2147483000;
+  pointer-events:none;
+}
+.swbBox{
+  position:absolute;
+  display:flex; flex-direction:column;
+  background:#1c1626;
+  border:1px solid rgba(255,232,248,.18);
+  border-radius:16px;
+  box-shadow:0 24px 60px rgba(0,0,0,.5);
+  overflow:hidden;
+  min-width:320px; min-height:260px;
+  pointer-events:auto;
+}
+.swbHeader{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:12px 8px 12px 16px;
+  background:linear-gradient(90deg,rgba(155,107,255,.22),rgba(255,142,214,.16));
+  border-bottom:1px solid rgba(255,232,248,.12);
+  cursor:move; touch-action:none; user-select:none;
+  flex:0 0 auto;
+}
+.swbHeaderTitle{ font-weight:900; font-size:14px; color:#fff8fb; }
+.swbCloseBtn{
+  border:0; background:rgba(255,255,255,.1); color:#fff8fb;
+  width:28px; height:28px; border-radius:50%;
+  font-size:17px; line-height:1; cursor:pointer; flex:0 0 auto;
+}
+.swbScrollArea{
+  flex:1 1 auto; overflow-y:auto; min-height:0;
+  padding:14px 16px 20px;
+  color:#fff8fb;
+}
+.swbResizeHandle{
+  position:absolute; right:0; bottom:0; width:22px; height:22px;
+  cursor:nwse-resize; touch-action:none;
+  background:linear-gradient(135deg,transparent 50%,rgba(255,232,248,.3) 50%);
+  border-radius:0 0 15px 0;
+}
 .swbSearchRow{
   display:flex; align-items:center; gap:10px; flex-wrap:wrap;
   position:sticky; top:0; z-index:2;
