@@ -2232,7 +2232,14 @@ function groupSelectedLayers(){
   const groupId=uid();
   const z=Math.max(...p.layers.filter(l=>ids.includes(l.id)).map(l=>l.z||1))+0.5;
   p.layers.forEach(l=>{if(ids.includes(l.id)){l.groupId=groupId;}});
-  const g=layer('group',{id:groupId,name:'group',x:0,y:0,w:10,h:10,z:z,opacity:1,src:null,fit:'cover'});
+  // Real report, with a screen recording: two groups sat right next to each other in the layers
+  // panel, both literally named "group" with the same generic icon and no content preview - there
+  // was no way to tell them apart, so a seller with more than one group on a page couldn't find
+  // "their" group at a glance. Numbering new groups the moment they're created (matching the
+  // existing "fabric stash N" convention used elsewhere for auto-named layers) keeps every group
+  // visually distinct without requiring a manual rename.
+  const groupNumber=p.layers.filter(isGroupLayer).length+1;
+  const g=layer('group',{id:groupId,name:'group '+groupNumber,x:0,y:0,w:10,h:10,z:z,opacity:1,src:null,fit:'cover'});
   g.expanded=true;
   p.layers.push(g);
   updateGroupLayerBounds(g);

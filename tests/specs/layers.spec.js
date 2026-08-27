@@ -170,6 +170,40 @@ test('grouping two layers via the layer panel lets them be dragged together, the
   expect(afterUngroup.every((l) => !l.groupId)).toBe(true);
 });
 
+// Real report, with a screen recording: two groups sat right next to each other in the layers
+// panel, both literally named "group" with the same generic icon and no content preview - there
+// was no way to tell them apart, so with more than one group on a page the seller couldn't find
+// "their" group at a glance.
+test('a second group on the same page gets a name distinct from the first, not another identical "group"', async ({ page }) => {
+  await expandAllBoxes(page);
+  const secondPairIds = await page.evaluate(() => {
+    addText('one'); addBadge('oval'); addText('two'); addBadge('rect');
+    return current().layers.slice(-2).map((l) => l.id);
+  });
+  await page.waitForTimeout(1800);
+
+  await clickResilient(page, page.locator('#multiSelectBtn'));
+  let checks = page.locator('#layerList .layerCheck');
+  await expect(checks).toHaveCount(4);
+  await clickResilient(page, checks.nth(0));
+  await clickResilient(page, checks.nth(1));
+  await clickResilient(page, page.locator('#groupSelectedBtn'));
+  await page.waitForTimeout(300);
+
+  // The first group's two members are still individually checkable rows (nested under it), so
+  // pick this pair's checkboxes by the layer ids created above rather than by position.
+  await clickResilient(page, page.locator('#multiSelectBtn'));
+  for (const id of secondPairIds) {
+    await clickResilient(page, page.locator(`#layerList .layerItem[data-id="${id}"] .layerCheck`));
+  }
+  await clickResilient(page, page.locator('#groupSelectedBtn'));
+  await page.waitForTimeout(300);
+
+  const groupNames = await page.evaluate(() => current().layers.filter((l) => l.type === 'group').map((l) => l.name));
+  expect(groupNames).toHaveLength(2);
+  expect(groupNames[0]).not.toBe(groupNames[1]);
+});
+
 // Real report: "you can't close the group layer". Two independent, unrelated bugs stacked to
 // silently swallow every tap on a group row's collapse/expand arrow (a <span class="dragGrip">,
 // not a <button>):
