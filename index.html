@@ -21812,3 +21812,44 @@ body.leftCollapsed.rightCollapsed .stage.pattern,body.leftCollapsed.rightCollaps
   }
 </style>
 
+<!-- Real report, with a screenshot: after ppWireMockupControls (see the custom mock-up script
+     earlier in the file) started showing a pink .customMockupEditing bounding box for whichever
+     mock-up the sliders are wired to, that box kept showing even after moving on to a completely
+     different tool (the screenshot showed it still there while using "recolor png" on an
+     unrelated image). cage.lastLayerId is what drives the box (a mock-up layer's className
+     includes customMockupEditing exactly when it matches), and nothing ever cleared it once set -
+     tapping a mock-up always leaves state.selected null as part of locking it against normal
+     drag/resize, so a later real selection (or an explicit deselect) needs its own signal to know
+     the mock-up is no longer what's being worked on. Two hooks, placed last so they wrap
+     whichever render()/deselect() implementations are actually live by the end of the file:
+     selecting a genuinely different layer (state.selected pointing at something other than the
+     wired mock-up) clears it on the next render, and the explicit "deselect" button clears it
+     immediately. -->
+<script id="pp-mockup-editing-box-clears-js">
+(function(){
+  'use strict';
+  if(window.__PP_MOCKUP_EDITING_BOX_CLEARS__) return;
+  window.__PP_MOCKUP_EDITING_BOX_CLEARS__=true;
+  function S(){ try{ return state; }catch(e){ return window.state||null; } }
+  const oldRender=window.render;
+  if(typeof oldRender==='function'){
+    window.render=function(){
+      try{
+        const cage=window.PP_MOCKUP_PAPARAZZI_CAGE_V163, s=S();
+        if(cage&&cage.lastLayerId&&s&&s.selected&&s.selected!==cage.lastLayerId){
+          cage.lastLayerId=null;
+        }
+      }catch(e){}
+      return oldRender.apply(this,arguments);
+    };
+  }
+  const oldDeselect=window.deselect;
+  if(typeof oldDeselect==='function'){
+    window.deselect=function(){
+      try{ const cage=window.PP_MOCKUP_PAPARAZZI_CAGE_V163; if(cage) cage.lastLayerId=null; }catch(e){}
+      return oldDeselect.apply(this,arguments);
+    };
+  }
+})();
+</script>
+

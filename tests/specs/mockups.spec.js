@@ -590,6 +590,57 @@ test('a template mock-up filled from the tray can still be resized/repositioned 
     .toBe(40);
 });
 
+// Real report, with a screenshot: after tapping a mock-up correctly showed the pink
+// .customMockupEditing bounding box, the box kept showing forever afterward - even once the
+// seller had moved on to a totally different tool (the screenshot showed it still there while
+// using "recolor png" on an unrelated image). Root cause: nothing ever cleared
+// cage.lastLayerId (the id customMockupEditing is keyed off) once set - a mock-up always leaves
+// state.selected null as part of locking it against normal drag/resize, so there was no signal
+// left behind that the user had genuinely moved on to something else.
+test('the mock-up bounding box clears once something else is selected or deselect is used', async ({ page }) => {
+  page.on('dialog', (d) => d.accept());
+  await expandAllBoxes(page);
+
+  const bgInput = page.locator('#customMockupBgInput');
+  const maskInput = page.locator('#customMockupMaskInput');
+  const btn = page.locator('#createCustomMockupBtnV163');
+  const patternInput = page.locator('input[onchange*="loadTray"][onchange*="pattern"]');
+
+  await bgInput.setInputFiles({ name: 'bg.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await maskInput.setInputFiles({ name: 'mask.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await patternInput.setInputFiles({ name: 'pat.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await clickResilient(page, btn);
+  await expect
+    .poll(() => page.evaluate(() => state.pages.some((p) => (p.layers || []).some((l) => l.customMockup))), {
+      timeout: 5000,
+    })
+    .toBe(true);
+
+  const mockupId = await page.evaluate(
+    () => state.pages.flatMap((p) => p.layers || []).find((x) => x.customMockup).id
+  );
+  const boxVisible = () =>
+    page.evaluate(
+      (id) => document.querySelector(`.layer[data-id="${id}"]`).classList.contains('customMockupEditing'),
+      mockupId
+    );
+  await expect.poll(boxVisible).toBe(true); // the mock-up is freshly created, so already "wired"
+
+  // Selecting something else entirely (a plain text layer, like moving on to a different part of
+  // the page) should clear it.
+  await page.evaluate(() => window.addText());
+  await page.waitForTimeout(100);
+  expect(await boxVisible()).toBe(false);
+
+  // Re-wire it, then confirm the explicit "deselect" control also clears it.
+  await page.locator(`.layer[data-id="${mockupId}"]`).click();
+  await page.waitForTimeout(100);
+  await expect.poll(boxVisible).toBe(true);
+  await page.evaluate(() => window.deselect());
+  await page.waitForTimeout(100);
+  expect(await boxVisible()).toBe(false);
+});
+
 test('creating a mock-up with no pattern selected places a plain white mask-shaped cutout, photo visible', async ({ page }) => {
   // Real request: the mock-up used to require a pattern to be selected at creation time
   // (createClean threw an alert otherwise), forcing the seller to pick one of their 450+
