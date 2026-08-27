@@ -482,6 +482,43 @@ test('duplicating a group gives each new member (and the group itself) its own d
   expect(new Set(zs).size).toBe(zs.length); // every z in the new group + its members is unique
 });
 
+// Real report, with a screenshot: a duplicated group's own members looked swapped compared to
+// the original. groupMembers() returns a group's layers in raw array/insertion order, not the z
+// order they actually display in - stepping the new members' z up in that raw order meant a
+// member that visually sat above another inside the source group could end up BELOW its
+// counterpart in the duplicate, if it simply happened to have been added to the page earlier.
+test('duplicating a group keeps its members in the same relative order as the original, not insertion order', async ({ page }) => {
+  await expandAllBoxes(page);
+  const ids = await page.evaluate(() => {
+    addText('member-a'); addText('member-b');
+    const [a, b] = current().layers;
+    a.name = 'member-a'; a._manualName = true; a.z = 5; // inserted first, but z now above b
+    b.name = 'member-b'; b._manualName = true; b.z = 2; // inserted second, but z now below a
+    return { a: a.id, b: b.id };
+  });
+  await page.waitForTimeout(1800);
+
+  await clickResilient(page, page.locator('#multiSelectBtn'));
+  await clickResilient(page, page.locator(`#layerList .layerItem[data-id="${ids.a}"] .layerCheck`));
+  await clickResilient(page, page.locator(`#layerList .layerItem[data-id="${ids.b}"] .layerCheck`));
+  await clickResilient(page, page.locator('#groupSelectedBtn'));
+  await page.waitForTimeout(300);
+
+  await clickResilient(page, page.locator('#ppLayerReuseBar button:has-text("duplicate")'));
+  await page.waitForTimeout(300);
+
+  const newGroupId = await page.evaluate(() => state.selected);
+  const newZs = await page.evaluate((id) => {
+    const members = current().layers.filter((l) => l.groupId === id);
+    return {
+      a: members.find((l) => l.name === 'member-a').z,
+      b: members.find((l) => l.name === 'member-b').z,
+    };
+  }, newGroupId);
+  // member-a sat above member-b in the original (z 5 > 2) - the duplicate must preserve that.
+  expect(newZs.a).toBeGreaterThan(newZs.b);
+});
+
 // Real request, following the report above: duplicating anything should drop the copy right next
 // to its source in the list, not always jump it to the very front of the whole stack (every
 // duplicate path used nextZ()/nextZSafe() - "current highest z + 1" - unconditionally before).
@@ -1310,6 +1347,48 @@ test('exporting a plain circle shape fills a circle, not a square', async ({ pag
   expect(pixel.corner[0]).toBeGreaterThan(240);
   expect(pixel.corner[1]).toBeGreaterThan(240);
   expect(pixel.corner[2]).toBeGreaterThan(240);
+  expect(pixel.center[0]).toBeGreaterThan(200);
+  expect(pixel.center[1]).toBeLessThan(60);
+  expect(pixel.center[2]).toBeLessThan(60);
+});
+
+// Real report: a circular pattern slot exported as a plain square photo instead of a circle.
+// Live on screen this is just CSS (border-radius:50% + overflow:hidden on the layer wrapper -
+// see .circleSlot), but renderPageToCanvas draws straight from layer data onto a blank canvas and
+// always clipped an image layer to a plain rectangle, regardless of slotShape.
+test('exporting a circular pattern slot clips the image to a circle, not a plain square', async ({ page }) => {
+  const pixel = await page.evaluate(async () => {
+    // A solid red 4x4 PNG, filling the whole slot so any uncropped corner reads back as red.
+    const redSrc = await new Promise((resolve) => {
+      const c = document.createElement('canvas'); c.width = 4; c.height = 4;
+      const cx = c.getContext('2d'); cx.fillStyle = '#ff0000'; cx.fillRect(0, 0, 4, 4);
+      resolve(c.toDataURL());
+    });
+    save();
+    state.pages = [{
+      type: 'listing', w: 1000, h: 1000, layers: [{
+        id: 'slot1', type: 'rectangle', patternSlot: true, slotShape: 'circle', fit: 'cover',
+        src: redSrc, x: 25, y: 25, w: 50, h: 50, r: 0, opacity: 1, scale: 1, z: 1,
+      }],
+    }];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+
+    const p = state.pages[0];
+    const canvas = await window.renderPageToCanvas(p);
+    const ctx = canvas.getContext('2d');
+    return {
+      corner: Array.from(ctx.getImageData(260, 260, 1, 1).data),
+      center: Array.from(ctx.getImageData(500, 500, 1, 1).data),
+    };
+  });
+
+  // Corner stays the white page background - a rectangular clip would have painted it red.
+  expect(pixel.corner[0]).toBeGreaterThan(240);
+  expect(pixel.corner[1]).toBeGreaterThan(240);
+  expect(pixel.corner[2]).toBeGreaterThan(240);
+  // Centre is inside the circle either way - painted red.
   expect(pixel.center[0]).toBeGreaterThan(200);
   expect(pixel.center[1]).toBeLessThan(60);
   expect(pixel.center[2]).toBeLessThan(60);

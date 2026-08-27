@@ -10788,7 +10788,11 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
     // below only copied the invisible wrapper itself, leaving the new "group" with zero
     // members and nothing visible on the page, while the real content never got duplicated.
     if(typeof isGroupLayer==='function' && isGroupLayer(l)){
-      var members=(typeof groupMembers==='function')?groupMembers(l.id):[];
+      // groupMembers() returns layers in raw array/insertion order, not the z order they actually
+      // display in - sorted here (lowest z first, matching the ascending zs[] step-up below) so a
+      // member that visually sits above another inside the original group still sits above its
+      // counterpart in the duplicate, instead of the pairing depending on insertion order.
+      var members=(typeof groupMembers==='function')?groupMembers(l.id).slice().sort(function(a,b){return (a.z||0)-(b.z||0);}):[];
       var newGroupId=(typeof uid==='function')?uid():('l'+Date.now());
       // Real report, with a screenshot: a duplicated group jumped to the very top of the layers
       // panel instead of landing near the original. nextZ() re-derives "current highest z + 1"
@@ -12192,7 +12196,11 @@ window.addEventListener('DOMContentLoaded',function(){
     return gc;
   }
   function groupBundleFor(l){
-    var members=(typeof groupMembers==='function')?groupMembers(l.id):[];
+    // groupMembers() returns layers in raw array/insertion order, not the z order they actually
+    // display in - sorted here (lowest z first, matching insertGroupBundle's ascending zs[]
+    // step-up) so a member that visually sits above another inside the original group still sits
+    // above its counterpart in the duplicate, instead of the pairing depending on insertion order.
+    var members=(typeof groupMembers==='function')?groupMembers(l.id).slice().sort(function(a,b){return (a.z||0)-(b.z||0);}):[];
     return {__ppGroupBundle:true, group:clone(l), members:members.map(clone)};
   }
   window.ppCopySelectedLayer=function(){
@@ -19320,7 +19328,22 @@ else install();
         // pp-parked-page-preview's snapshotStageToDataURL) - apply it for just this layer's draw.
         var mockBlend=l.customMockupLive?((l.customMockupRecipe&&l.customMockupRecipe.blend)||'multiply'):null;
         if(mockBlend) ctx.globalCompositeOperation=mockBlend;
-        if(l.fit==='contain'){var sc=Math.min(w/img.width,h/img.height),dw=img.width*sc,dh=img.height*sc; ctx.drawImage(img,-dw/2,-dh/2,dw,dh);}else{var sc2=Math.max(w/img.width,h/img.height),dw2=img.width*sc2,dh2=img.height*sc2; ctx.save();ctx.beginPath();ctx.rect(-w/2,-h/2,w,h);ctx.clip();ctx.drawImage(img,-dw2/2,-dh2/2,dw2,dh2);ctx.restore();}
+        // Real report: an exported page's circular pattern slot / circle frame came out as a
+        // plain square photo instead of a circle. Live on screen this is just CSS
+        // (border-radius:50% + overflow:hidden on the layer wrapper, see .circleSlot and
+        // .builtinFrame.circleFrame above) - this exporter draws straight from layer data onto a
+        // blank canvas, so it never picked that up and always clipped to a plain rectangle.
+        var isCircleShape=l.slotShape==='circle'||(l.type==='frame'&&l.frameShape==='circle');
+        if(l.fit==='contain'){
+          var sc=Math.min(w/img.width,h/img.height),dw=img.width*sc,dh=img.height*sc;
+          if(isCircleShape){ ctx.save();ctx.beginPath();ctx.ellipse(0,0,w/2,h/2,0,0,Math.PI*2);ctx.clip();ctx.drawImage(img,-dw/2,-dh/2,dw,dh);ctx.restore(); }
+          else ctx.drawImage(img,-dw/2,-dh/2,dw,dh);
+        }else{
+          var sc2=Math.max(w/img.width,h/img.height),dw2=img.width*sc2,dh2=img.height*sc2;
+          ctx.save();ctx.beginPath();
+          if(isCircleShape) ctx.ellipse(0,0,w/2,h/2,0,0,Math.PI*2); else ctx.rect(-w/2,-h/2,w,h);
+          ctx.clip();ctx.drawImage(img,-dw2/2,-dh2/2,dw2,dh2);ctx.restore();
+        }
         if(mockBlend) ctx.globalCompositeOperation='source-over';
       }catch(e){}
       }else if(['text','label','rectangle','square','circle'].includes(l.type)||l.text){
