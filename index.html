@@ -10766,6 +10766,20 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
     var n=countBase(base,p,null)+1;
     return base+' '+n;
   }
+  // Real request: duplicating something should drop the copy right next to its source, not jump
+  // it to the very front of the stack (nextZ() = current highest z + 1, which every duplicate
+  // used unconditionally). Finds the free gap in z immediately above baseZ - up to and just short
+  // of whatever the next-higher layer already sits at, or +1 if baseZ is already the topmost -
+  // and returns `count` increasing points inside it. Halving into whatever's left of that gap
+  // (rather than a fixed offset) keeps working even if the same source gets duplicated repeatedly
+  // back-to-back, without ever colliding with an existing z.
+  function zsJustAbove(baseZ,count,p){
+    var zs=layers(p).map(function(l){return +l.z||0;}).filter(function(z){return z>baseZ;});
+    var ceiling=zs.length?Math.min.apply(null,zs):baseZ+1;
+    var step=(ceiling-baseZ)/(count+1);
+    var out=[]; for(var i=1;i<=count;i++) out.push(baseZ+step*i);
+    return out;
+  }
   window.duplicateSelected=function(){
     var l=(typeof getLayer==='function')?getLayer():null; if(!l)return;
     try{save();}catch(e){}
@@ -10776,20 +10790,29 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
     if(typeof isGroupLayer==='function' && isGroupLayer(l)){
       var members=(typeof groupMembers==='function')?groupMembers(l.id):[];
       var newGroupId=(typeof uid==='function')?uid():('l'+Date.now());
-      var newMembers=members.map(function(m){
+      // Real report, with a screenshot: a duplicated group jumped to the very top of the layers
+      // panel instead of landing near the original. nextZ() re-derives "current highest z + 1"
+      // from the page's layers - every duplicate always used that, unconditionally sorting it
+      // above absolutely everything else. zsJustAbove finds room in the actual gap right above
+      // the source group's own z instead, so the copy lands immediately next to what it's a copy
+      // of. Each of its own layers still gets its own distinct z within that gap, the group
+      // wrapper highest (matching groupSelectedLayers's own "group sits above its members"
+      // convention) - a tied z was the earlier bug here (see below).
+      var zs=zsJustAbove(+l.z||0,members.length+1,page());
+      var newMembers=members.map(function(m,i){
         var mc=JSON.parse(JSON.stringify(m));
         mc.id=(typeof uid==='function')?uid():('l'+Date.now()+Math.random());
         mc.groupId=newGroupId;
         mc._manualName=false; mc._autoNamed=true;
         mc.x=(+mc.x||0)+3; mc.y=(+mc.y||0)+3;
-        mc.z=(typeof nextZ==='function')?nextZ():((+mc.z||1)+1);
+        mc.z=zs[i];
         return mc;
       });
       var gc=JSON.parse(JSON.stringify(l));
       gc.id=newGroupId;
       gc._manualName=false; gc._autoNamed=true;
       gc.name=copyName(l.name||baseNameFor(l), page());
-      gc.z=(typeof nextZ==='function')?nextZ():((+gc.z||1)+1);
+      gc.z=zs[zs.length-1];
       newMembers.forEach(function(mc){ page().layers.push(mc); });
       page().layers.push(gc);
       if(typeof updateGroupLayerBounds==='function') updateGroupLayerBounds(gc);
@@ -10801,7 +10824,10 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
     c.id=(typeof uid==='function')?uid():('l'+Date.now());
     c._manualName=false; c._autoNamed=true;
     c.name=copyName(l.name||baseNameFor(l), page());
-    c.x=(+c.x||0)+3; c.y=(+c.y||0)+3; c.z=(typeof nextZ==='function')?nextZ():((+c.z||1)+1);
+    c.x=(+c.x||0)+3; c.y=(+c.y||0)+3;
+    // Real request: land the duplicate right next to its source instead of jumping to the front
+    // of the whole stack (see zsJustAbove above).
+    c.z=zsJustAbove(+l.z||0,1,page())[0];
     page().layers.push(c); state.selected=c.id;
     try{render();}catch(e){try{renderPages();renderLayers();syncControls();}catch(_){}}
   };
@@ -12086,6 +12112,21 @@ window.addEventListener('DOMContentLoaded',function(){
     try{ if(typeof nextZ==='function') return nextZ(); }catch(e){}
     var max=0; layersOf(p||currentPage()).forEach(function(l){ max=Math.max(max,+l.z||0); }); return max+1;
   }
+  // Real request: duplicating something should drop the copy right next to its source, not jump
+  // it to the front of the whole stack (nextZSafe() = current highest z + 1, used unconditionally
+  // before). Finds the free gap in z immediately above baseZ - up to whatever the next-higher
+  // layer already sits at, or +1 if baseZ is already the topmost - and returns `count` increasing
+  // points inside it. Halving into whatever's left of that gap keeps working even if the same
+  // source gets duplicated repeatedly back-to-back, without colliding with an existing z. Used
+  // only for same-page duplication - ppPasteLayerToPage keeps nextZSafe()'s front-of-destination-
+  // page default, since there's no "original" on the page being pasted onto.
+  function zsJustAbove(baseZ,count,p){
+    var zs=layersOf(p).map(function(l){return +l.z||0;}).filter(function(z){return z>baseZ;});
+    var ceiling=zs.length?Math.min.apply(null,zs):baseZ+1;
+    var step=(ceiling-baseZ)/(count+1);
+    var out=[]; for(var i=1;i<=count;i++) out.push(baseZ+step*i);
+    return out;
+  }
   function clone(o){ return JSON.parse(JSON.stringify(o)); }
   function baseName(n){ return String(n||'Layer').replace(/\s+copy(\s+\d+)?$/i,'').trim()||'Layer'; }
   function copyName(n,p){
@@ -12104,7 +12145,7 @@ window.addEventListener('DOMContentLoaded',function(){
     var c=clone(src);
     c.id=uidSafe();
     c.name=opts.keepName ? (src.name||src.type||'Layer') : (opts.name || copyName(src.name||src.type,p));
-    c.z=nextZSafe(p);
+    c.z=(typeof opts.z==='number')?opts.z:nextZSafe(p);
     c._manualName=true;
     if(opts.offset){ c.x=(+c.x||0)+3; c.y=(+c.y||0)+3; }
     layersOf(p).push(c);
@@ -12120,20 +12161,31 @@ window.addEventListener('DOMContentLoaded',function(){
   function insertGroupBundle(bundle,p,opts){
     opts=opts||{};
     var newGroupId=uidSafe();
-    var newMembers=bundle.members.map(function(m){
+    // Real report, with a screenshot: a duplicated group jumped to the very top of the layers
+    // panel instead of landing near the original. nextZSafe(p) (= current highest z + 1) used to
+    // back every one of these unconditionally, sorting the copy above absolutely everything else
+    // regardless of where the source group actually was. zsJustAbove finds room in the actual gap
+    // right above the source's own z (opts.baseZ) instead, so a duplicate lands next to what it's
+    // a copy of - ppPasteLayerToPage doesn't pass baseZ, so pasting onto a different page keeps
+    // landing at that page's front, which is the sensible default there (no "original" to sit
+    // next to). Each new layer still gets its own distinct z within the gap, the group wrapper
+    // highest - a tied z across all of them was the earlier bug here.
+    var zs=(typeof opts.baseZ==='number')?zsJustAbove(opts.baseZ,bundle.members.length+1,p):null;
+    var zBase=zs?null:nextZSafe(p);
+    var newMembers=bundle.members.map(function(m,i){
       var mc=clone(m);
       mc.id=uidSafe();
       mc.groupId=newGroupId;
       mc._manualName=true;
       if(opts.offset){ mc.x=(+mc.x||0)+3; mc.y=(+mc.y||0)+3; }
-      mc.z=nextZSafe(p);
+      mc.z=zs?zs[i]:zBase+i;
       return mc;
     });
     var gc=clone(bundle.group);
     gc.id=newGroupId;
     gc.name=opts.keepName ? (bundle.group.name||bundle.group.type||'group') : copyName(bundle.group.name||bundle.group.type,p);
     gc._manualName=true;
-    gc.z=nextZSafe(p);
+    gc.z=zs?zs[zs.length-1]:zBase+newMembers.length+0.5;
     newMembers.forEach(function(mc){ layersOf(p).push(mc); });
     layersOf(p).push(gc);
     if(typeof updateGroupLayerBounds==='function') updateGroupLayerBounds(gc);
@@ -12157,12 +12209,12 @@ window.addEventListener('DOMContentLoaded',function(){
     try{ if(typeof save==='function') save(); }catch(e){}
     var s=appState(), p=currentPage();
     if(typeof isGroupLayer==='function' && isGroupLayer(l)){
-      var gc=insertGroupBundle(groupBundleFor(l),p,{offset:true});
+      var gc=insertGroupBundle(groupBundleFor(l),p,{offset:true,baseZ:+l.z||0});
       s.selected=gc.id;
       redraw();
       return false;
     }
-    var c=insertLayer(l,p,{offset:true});
+    var c=insertLayer(l,p,{offset:true,z:zsJustAbove(+l.z||0,1,p)[0]});
     s.selected=c.id;
     redraw();
     return false;
@@ -18036,6 +18088,12 @@ else install();
      thumbnail (see thumbFor below) and adds this small corner badge purely to still mark it as a
      group, rather than replacing the preview with a plain icon like before. */
   #layerList .ppCleanLayerThumb.groupThumb::after{content:'▣';position:absolute;right:2px;bottom:1px;font-size:9px;line-height:1;opacity:.85;z-index:3;text-shadow:0 1px 2px rgba(0,0,0,.65);}
+  /* Real report, with a screenshot: a group whose topmost member is a badge/circle showed no
+     group marker at all - the badge above sits close enough to the corner that a circular
+     thumb's own border-radius (which clips its whole box to a circle) cut most of it away.
+     Pull it further in just for the circular thumb shapes, enough to clear the circle's curve. */
+  #layerList .ppCleanLayerThumb.groupThumb.circleThumb::after,
+  #layerList .ppCleanLayerThumb.groupThumb.badgeThumb::after{right:7px;bottom:6px;}
   #layerList .layerItem.ppCleanThumbRow .layerName{cursor:pointer!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
   #layerList .layerItem.ppCleanThumbRow .visibilityBtn,
   #layerList .layerItem.ppCleanThumbRow .lockBtn,

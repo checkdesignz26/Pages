@@ -227,6 +227,40 @@ test('a group\'s thumbnail previews its topmost member, not a bare generic icon'
   await expect(thumb).not.toHaveText('▣'); // ...but no longer just the bare glyph
 });
 
+// Real report, with a screenshot: a group whose topmost member is a badge/circle showed no group
+// marker at all. The corner badge sat close enough to the edge that a circular thumb's own
+// border-radius (which clips its whole box to a circle) cut most of the glyph away - confirmed
+// directly with a zoomed screenshot showing it sliced in half by the curve.
+test('the group corner badge is not clipped away on a circular (badge) thumbnail', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => { addText('label'); addBadge('oval'); });
+  await page.waitForTimeout(1800);
+
+  await clickResilient(page, page.locator('#multiSelectBtn'));
+  const checks = page.locator('#layerList .layerCheck');
+  await expect(checks).toHaveCount(2);
+  await clickResilient(page, checks.nth(0));
+  await clickResilient(page, checks.nth(1));
+  await clickResilient(page, page.locator('#groupSelectedBtn'));
+  await page.waitForTimeout(300);
+
+  const groupId = await page.evaluate(() => state.selected);
+  const thumb = page.locator(`#layerList .layerItem[data-id="${groupId}"] .ppCleanLayerThumb`);
+  await expect(thumb).toHaveClass(/badgeThumb/); // the badge was added last, so its round thumb style is what's on trial here
+  const inside = await thumb.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2, radius = r.width / 2;
+    const cs = getComputedStyle(el, '::after');
+    const badgeRight = r.right - parseFloat(cs.right);
+    const badgeBottom = r.bottom - parseFloat(cs.bottom);
+    // The farthest corner of the badge glyph's own box must land inside the circle, not past its curve.
+    const fontSize = parseFloat(cs.fontSize);
+    const cornerX = badgeRight, cornerY = badgeBottom;
+    return Math.hypot(cornerX - cx, cornerY - cy) <= radius - 1;
+  });
+  expect(inside).toBe(true);
+});
+
 // Real report: "you can't close the group layer". Two independent, unrelated bugs stacked to
 // silently swallow every tap on a group row's collapse/expand arrow (a <span class="dragGrip">,
 // not a <button>):
@@ -343,6 +377,7 @@ test('duplicating a selected group copies its member layers too, not just the in
       changedSelection: newGroupId !== oldGroupId,
       newGroupIsGroupType: layers.find((l) => l.id === newGroupId)?.type,
       newMembers: layers.filter((l) => l.groupId === newGroupId).map((l) => ({ type: l.type, x: l.x, y: l.y })),
+      newZs: layers.filter((l) => l.groupId === newGroupId || l.id === newGroupId).map((l) => l.z),
       oldMembersStillPresent: layers.filter((l) => l.groupId === oldGroupId).length,
     };
   }, beforeDup.groupId);
@@ -353,6 +388,10 @@ test('duplicating a selected group copies its member layers too, not just the in
   expect(afterDup.newGroupIsGroupType).toBe('group');
   expect(afterDup.oldMembersStillPresent).toBe(2);
   expect(afterDup.newMembers).toHaveLength(2);
+  // Real report, with a screenshot: the duplicate's own row order looked wrong in the panel -
+  // every one of its layers (both members plus the group wrapper) landed on the exact same z,
+  // an easy tie to introduce since nextZ() has to be called once per new layer.
+  expect(new Set(afterDup.newZs).size).toBe(afterDup.newZs.length);
   const newTypes = afterDup.newMembers.map((m) => m.type).sort();
   const oldTypes = beforeDup.members.map((m) => m.type).sort();
   expect(newTypes).toEqual(oldTypes);
@@ -408,6 +447,127 @@ test('duplicating a group from the canvas reuse bar also copies its member layer
   // The new group's members must actually render as nested rows in the panel, not just exist
   // in the data model.
   await expect(page.locator('#layerList .childLayerRow')).toHaveCount(4);
+});
+
+// Real report, with a screenshot: a duplicated group's row order looked wrong in the panel.
+// insertGroupBundle called nextZSafe(p) once per member, all before any of those members were
+// actually pushed onto the page - every call re-derives "current highest z + 1" from the page's
+// live layers, so with none of the new ones added yet, every member (and the group wrapper
+// itself) read the exact same stale snapshot and landed on the identical z value. The panel lists
+// layers sorted by z descending, and JS array sort is stable, so a tied z is otherwise harmless -
+// but it's still wrong: a genuine duplicate should stack immediately above its source, each of
+// its own layers at its own distinct z, the same way a freshly-grouped selection's members do.
+test('duplicating a group gives each new member (and the group itself) its own distinct z, not one shared value', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => { addText('text'); addBadge('oval'); });
+  await page.waitForTimeout(1800);
+
+  await clickResilient(page, page.locator('#multiSelectBtn'));
+  const checks = page.locator('#layerList .layerCheck');
+  await expect(checks).toHaveCount(2);
+  await clickResilient(page, checks.nth(0));
+  await clickResilient(page, checks.nth(1));
+  await clickResilient(page, page.locator('#groupSelectedBtn'));
+  await page.waitForTimeout(300);
+
+  const groupId = await page.evaluate(() => state.selected);
+  await clickResilient(page, page.locator('#ppLayerReuseBar button:has-text("duplicate")'));
+  await page.waitForTimeout(300);
+
+  const newGroupId = await page.evaluate(() => state.selected);
+  const zs = await page.evaluate((id) => {
+    const layers = current().layers.filter((l) => l.groupId === id || l.id === id);
+    return layers.map((l) => l.z);
+  }, newGroupId);
+  expect(new Set(zs).size).toBe(zs.length); // every z in the new group + its members is unique
+});
+
+// Real request, following the report above: duplicating anything should drop the copy right next
+// to its source in the list, not always jump it to the very front of the whole stack (every
+// duplicate path used nextZ()/nextZSafe() - "current highest z + 1" - unconditionally before).
+test('duplicating a plain layer that is not the topmost thing on the page lands the copy next to it, not at the front', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => {
+    ['bottom', 'middle', 'top'].forEach((name) => {
+      addText(name);
+      const l = current().layers[current().layers.length - 1];
+      l.name = name; l._manualName = true;
+    });
+  });
+  await page.waitForTimeout(1800);
+
+  const middleId = await page.evaluate(() => current().layers[1].id);
+  await clickResilient(page, page.locator(`#layerList .layerItem[data-id="${middleId}"] .ppLayerSelectZone`));
+  await page.waitForTimeout(200);
+  await clickResilient(page, page.locator('#ppLayerReuseBar button:has-text("duplicate")'));
+  await page.waitForTimeout(300);
+
+  const zs = await page.evaluate((id) => {
+    const layers = current().layers;
+    const middle = layers.find((l) => l.id === id);
+    const top = layers.find((l) => l.name === 'top');
+    const copy = layers.find((l) => l.id === state.selected);
+    return { middleZ: middle.z, topZ: top.z, copyZ: copy.z };
+  }, middleId);
+  // The copy must sit between the middle layer it came from and whatever was already above it -
+  // never past the true top of the stack.
+  expect(zs.copyZ).toBeGreaterThan(zs.middleZ);
+  expect(zs.copyZ).toBeLessThan(zs.topZ);
+});
+
+// Same requirement, for the top-toolbar's duplicateSelected() - a separate implementation from
+// the layer panel's own ppDuplicateSelectedLayer(), fixed above.
+test('duplicateSelected() also lands the copy next to its source, not at the front, for both a plain layer and a group', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => {
+    ['bottom', 'middle', 'top'].forEach((name) => {
+      addText(name);
+      const l = current().layers[current().layers.length - 1];
+      l.name = name; l._manualName = true;
+    });
+  });
+  await page.waitForTimeout(1800);
+
+  const middleId = await page.evaluate(() => current().layers[1].id);
+  await clickResilient(page, page.locator(`#layerList .layerItem[data-id="${middleId}"] .ppLayerSelectZone`));
+  await page.waitForTimeout(200);
+  await page.evaluate(() => { window.duplicateSelected(); });
+  await page.waitForTimeout(200);
+
+  const singleZs = await page.evaluate((id) => {
+    const layers = current().layers;
+    return { middleZ: layers.find((l) => l.id === id).z, topZ: layers.find((l) => l.name === 'top').z, copyZ: layers.find((l) => l.id === state.selected).z };
+  }, middleId);
+  expect(singleZs.copyZ).toBeGreaterThan(singleZs.middleZ);
+  expect(singleZs.copyZ).toBeLessThan(singleZs.topZ);
+
+  // Now group the bottom two original layers (leaving "top" ungrouped and above them) and
+  // duplicate the group - its copy (wrapper + members) must land above the group but still below
+  // "top", not jump past it to the very front.
+  await clickResilient(page, page.locator('#multiSelectBtn'));
+  await clickResilient(page, page.locator(`#layerList .layerItem[data-id="${middleId}"] .layerCheck`));
+  const bottomId = await page.evaluate(() => current().layers[0].id);
+  await clickResilient(page, page.locator(`#layerList .layerItem[data-id="${bottomId}"] .layerCheck`));
+  await clickResilient(page, page.locator('#groupSelectedBtn'));
+  await page.waitForTimeout(300);
+
+  const groupId = await page.evaluate(() => state.selected);
+  await page.evaluate(() => { window.duplicateSelected(); });
+  await page.waitForTimeout(200);
+
+  const groupZs = await page.evaluate((ids) => {
+    const layers = current().layers;
+    const newGroupId = state.selected;
+    return {
+      groupZ: layers.find((l) => l.id === ids.groupId).z,
+      topZ: layers.find((l) => l.name === 'top').z,
+      newLayerZs: layers.filter((l) => l.groupId === newGroupId || l.id === newGroupId).map((l) => l.z),
+    };
+  }, { groupId });
+  for (const z of groupZs.newLayerZs) {
+    expect(z).toBeGreaterThan(groupZs.groupZ);
+    expect(z).toBeLessThan(groupZs.topZ);
+  }
 });
 
 // Real request: a lock so a layer can't be accidentally moved while working around it on the
