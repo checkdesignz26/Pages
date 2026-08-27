@@ -68,18 +68,21 @@ test('renaming a layer through the prompt-based rename sticks and marks it manua
   expect(layer._manualName).toBe(true);
 });
 
-test('toggling wide panel mode actually grows the layer list', async ({ page }) => {
+test('toggling wide panel mode never re-caps the layer list height', async ({ page }) => {
   // pp-expandable-layers-panel-v101-css's wide-mode rule used to target `.layerList` (2 classes:
   // body.ppLayersWide .layerList), which always lost to a bare `#layerList{max-height:390px}`
   // id selector elsewhere in the file (an id beats any number of classes, regardless of source
-  // order) - toggling "wide panel" silently never changed the list's height. Retargeted to
-  // `#layerList` so it can win.
+  // order) - toggling "wide panel" silently never changed the list's height. That whole cap was
+  // later removed outright (see pp-layer-list-full-display-css, and the "with many layers, the
+  // list grows to fit them all" test above) - with enough layers, a fixed-height nested scroll
+  // container was unreachable on a touch device, the same class of bug already fixed once for
+  // the pattern/asset trays. Confirms wide mode doesn't reintroduce a cap of its own.
   const before = await page.evaluate(() => getComputedStyle(document.getElementById('layerList')).maxHeight);
   await page.evaluate(() => window.ppToggleLayersPanelWide());
   const after = await page.evaluate(() => getComputedStyle(document.getElementById('layerList')).maxHeight);
 
-  expect(before).toBe('390px');
-  expect(after).toBe('440px');
+  expect(before).toBe('none');
+  expect(after).toBe('none');
 });
 
 // Real report: the wide-panel toggle button's own visible text used to name the OTHER mode -
@@ -795,6 +798,57 @@ test.describe(() => {
     expect(result.selected).toBe(targetId);
     expect(result.order).toEqual(['two', 'one']);
   });
+});
+
+// Real report, with a screenshot: with enough layers on a page, the layer list's own top/bottom
+// rows couldn't be reached at all - scrolling inside the list just didn't work. #layerList is a
+// fixed-max-height scroll container nested INSIDE the right side panel, which is already its own
+// scroll container - the same class of bug already fixed once for the pattern/asset trays (a
+// second, smaller scroll gesture nested inside a bigger one is easy to miss, or simply doesn't
+// win the touch, on a real device). Fixed by letting the list grow to fit every layer instead of
+// capping its own height, so it scrolls as part of the panel's own scroll.
+test('with many layers, the list grows to fit them all instead of capping its own height', async ({ page }) => {
+  await page.evaluate(() => {
+    for (let i = 0; i < 20; i++) window.addText('text');
+  });
+  await expandAllBoxes(page);
+  await expect(page.locator('#layerList > *')).toHaveCount(20);
+  // A transient re-render can re-collapse the panel after the addText() loop above (the same
+  // "self-healing" reason clickResilient re-expands right before its own interaction, not just
+  // once up front) - expand again right before reading geometry off it.
+  await page.waitForTimeout(150);
+  await expandAllBoxes(page);
+
+  const info = await page.evaluate(() => {
+    const list = document.getElementById('layerList');
+    const cs = getComputedStyle(list);
+    return {
+      maxHeight: cs.maxHeight,
+      overflowY: cs.overflowY,
+      scrollHeight: list.scrollHeight,
+      clientHeight: list.clientHeight,
+    };
+  });
+  expect(info.maxHeight).toBe('none');
+  expect(info.overflowY).toBe('visible');
+  // Nothing clipped inside the list itself - all 20 rows' worth of height is fully laid out.
+  expect(info.scrollHeight).toBeLessThanOrEqual(info.clientHeight + 1);
+
+  // The very last row is reachable by scrolling the panel itself (not a nested scroll): the
+  // right panel has plenty of OTHER boxes below "layers" too, so scrolling it to its absolute
+  // max would scroll straight past the layer rows - scrollIntoView the actual row instead, the
+  // same way a user would land on it, and confirm it's then genuinely on screen (not still
+  // clipped out by a max-height/overflow of its own).
+  const reach = await page.evaluate(() => {
+    const panel = document.getElementById('layerList').closest('.side.right') || document.querySelector('.side.right');
+    const rows = document.querySelectorAll('#layerList > *');
+    const lastRow = rows[rows.length - 1];
+    lastRow.scrollIntoView({ block: 'end' });
+    const panelRect = panel.getBoundingClientRect();
+    const rowRect = lastRow.getBoundingClientRect();
+    return rowRect.bottom > panelRect.top && rowRect.top < panelRect.bottom;
+  });
+  expect(reach).toBe(true);
 });
 
 // Real report, with a project file: a badge used without any caption text exported as a plain

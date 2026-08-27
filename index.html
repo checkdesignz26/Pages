@@ -21896,3 +21896,22 @@ body.leftCollapsed.rightCollapsed .stage.pattern,body.leftCollapsed.rightCollaps
 })();
 </script>
 
+<!-- Real report, with a screenshot: with enough layers on a page, the layer list's own top/bottom
+     rows couldn't be reached - scrolling inside it just didn't work. #layerList is a scroll
+     container nested INSIDE the right side panel, which is already its own scroll container
+     (.side{overflow-y:auto}) - the exact same class of bug already fixed once for the pattern/
+     asset trays (see pp-pattern-tray-full-display-css above): on a touch device, a second,
+     smaller scroll gesture nested inside a bigger one is easy to miss or simply doesn't win the
+     touch, so content past the fixed max-height became effectively unreachable. Same fix - let
+     the list grow to fit every layer and scroll as part of the panel's own scroll instead of
+     needing a separate one of its own. Placed last so it wins every earlier max-height rule
+     (including the "wide" panel mode's own, higher-specificity one) regardless of that rule's
+     own !important, without having to hunt down and edit each one. -->
+<style id="pp-layer-list-full-display-css">
+  #layerList,
+  body.ppLayersWide #layerList{
+    max-height:none!important;
+    overflow:visible!important;
+  }
+</style>
+
