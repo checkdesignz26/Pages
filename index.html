@@ -2842,6 +2842,7 @@ el.addEventListener('pointerdown',e=>{
  if(e.target.closest && e.target.closest('.deleteMini'))return;
  if(e.pointerType==='touch' && e.isPrimary===false)return;
  if(state.handMode){return;}
+ if(typeof pinchGesture!=='undefined' && pinchGesture){return;}
  // Real request: a lock that actually stops a layer from being dragged/resized/rotated on the
  // canvas, not just a data flag - untouchable by tap here, same as the app's other "locked"
  // controls (custom mock-ups etc.); still reachable to select/unlock via its layer list row.
@@ -2889,6 +2890,22 @@ el.addEventListener('pointerdown',e=>{
 
 el.addEventListener('pointermove',e=>{
  if(!drag)return;
+ // Real report, with screenshots: pinch-zooming the canvas on iPad was also nudging/moving
+ // whichever image happened to be under one of the two fingers. touchstart/pointerdown fire
+ // per-finger, not atomically for both at once - the first finger lands and starts a normal
+ // single-finger drag right here (see the pointerdown handler above) a beat before the second
+ // finger lands and installCanvasGestures() above recognizes the pinch. Once recognized, this
+ // finger's own continuing pointermove events (fingers naturally spread apart during a pinch)
+ // easily cross DRAG_THRESHOLD and keep right on dragging the layer underneath, on top of the
+ // zoom happening at the same time. Bail out and put back whatever this gesture had already
+ // moved/resized/rotated the instant a pinch is recognized elsewhere.
+ if(typeof pinchGesture!=='undefined' && pinchGesture){
+   l.x=drag.lx;l.y=drag.ly;l.w=drag.lw;l.h=drag.lh;l.r=drag.lr;
+   applyLayerVisual(el,l);
+   hideSnapGuides(el.parentElement);
+   drag=null;
+   return;
+ }
  const rawDx=e.clientX-drag.x, rawDy=e.clientY-drag.y;
  const distance=Math.hypot(rawDx,rawDy);
  if(!drag.active){
