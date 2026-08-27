@@ -12036,7 +12036,12 @@ window.addEventListener('DOMContentLoaded',function(){
     var list=$id('layerList'); if(!list) return;
     var body=list.closest('.panelBody'); if(!body || body.querySelector('#ppLayerReuseBar')) return;
     var bar=document.createElement('div'); bar.id='ppLayerReuseBar'; bar.className='ppLayerReuseBar';
-    bar.innerHTML='<button type="button" onclick="ppDuplicateSelectedLayer()" title="Duplicate this layer">duplicate</button><button type="button" onclick="ppCopySelectedLayer()" title="Copy this layer so it can be pasted onto another page">copy</button><button type="button" class="wide" onclick="ppPasteLayerToPage()" title="Paste the copied layer onto another page">paste to page…</button><div id="ppLayerClipboardNote" class="ppLayerClipboardNote">tap a layer row to select · duplicate for same page · copy + paste to page for headers/footers</div>';
+    // Real request: "copy" and "paste to page" read as two unrelated, confusing buttons next to
+    // "duplicate" - relabeled (same functions, same behaviour) so the same-page vs. other-page
+    // split is obvious without reading the help note below: "duplicate" only ever meant same
+    // page, and "copy" only ever existed to feed "paste to page…", so naming it "copy for other
+    // page" says that up front.
+    bar.innerHTML='<button type="button" onclick="ppDuplicateSelectedLayer()" title="Duplicate this layer on the same page">duplicate</button><button type="button" onclick="ppCopySelectedLayer()" title="Copy this layer so it can be pasted onto another page">copy for<br>other page</button><button type="button" class="wide" onclick="ppPasteLayerToPage()" title="Paste the copied layer onto another page">paste to page…</button><div id="ppLayerClipboardNote" class="ppLayerClipboardNote">tap a layer row to select · duplicate = same page · copy + paste to page = another page (headers/footers)</div>';
     list.parentNode.insertBefore(bar,list.nextSibling);
     var info=body.querySelector('p.smallText');
     if(info) info.textContent='Tap a layer row to select it. Use duplicate for a quick copy, or copy + Paste to Page for repeating headers and footers.';
@@ -18025,6 +18030,12 @@ else install();
   #layerList .ppCleanLayerThumb.badgeThumb{border-radius:999px!important;background:rgba(255,255,255,.88)!important;color:#65586f!important;}
   #layerList .ppCleanLayerThumb.stripThumb::after{content:'';position:absolute;inset:3px 11px;border-radius:5px;background:rgba(255,255,255,.88);box-shadow:7px 0 0 rgba(255,255,255,.42),-7px 0 0 rgba(255,255,255,.30);z-index:1;}
   #layerList .ppCleanLayerThumb.hiddenThumb{opacity:.45;filter:grayscale(.45)}
+  /* Real report, with a screen recording: two groups sat right next to each other in the layers
+     panel, both showing the exact same generic "▣" glyph with no preview of what was actually
+     inside - no way to tell them apart at a glance. groupThumb reuses its top member's own real
+     thumbnail (see thumbFor below) and adds this small corner badge purely to still mark it as a
+     group, rather than replacing the preview with a plain icon like before. */
+  #layerList .ppCleanLayerThumb.groupThumb::after{content:'▣';position:absolute;right:2px;bottom:1px;font-size:9px;line-height:1;opacity:.85;z-index:3;text-shadow:0 1px 2px rgba(0,0,0,.65);}
   #layerList .layerItem.ppCleanThumbRow .layerName{cursor:pointer!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
   #layerList .layerItem.ppCleanThumbRow .visibilityBtn,
   #layerList .layerItem.ppCleanThumbRow .lockBtn,
@@ -18146,7 +18157,16 @@ else install();
     if(l&&l.disclosureBadge){t.classList.add('badgeThumb');t.textContent='AI';return t;}
     if(l&&(l.type==='text'||l.type==='label')){t.classList.add(l.type==='label'?'badgeThumb':'textThumb');var sp=document.createElement('span');sp.textContent=short(l.text||l.name||'T',7)||'T';t.appendChild(sp);return t;}
     if(l&&l.patternSlot){if(l.slotShape==='strip')t.classList.add('stripThumb');t.textContent=l.slotShape==='circle'?'○':'▧';return t;}
-    if(isGroup(l)){t.textContent='▣';return t;}
+    if(isGroup(l)){
+      // Real report, with a screen recording: every group showed the same bare "▣" glyph, so two
+      // groups on one page were indistinguishable in the panel. Show what's actually inside
+      // instead - the topmost member's own real thumbnail - with a small corner badge (added via
+      // CSS, see groupThumb above) to still mark it as a group.
+      var members=(typeof groupMembers==='function')?groupMembers(l.id):[];
+      var top=members.length?members.slice().sort(function(a,b){return (b.z||0)-(a.z||0);})[0]:null;
+      if(top){ var mt=thumbFor(top); mt.classList.add('groupThumb'); return mt; }
+      t.textContent='▣'; return t;
+    }
     t.textContent=short((l&&l.type)||'layer',4); return t;
   }
   // NOTE(consolidation): this used to also expose window.rowForLayer,
@@ -18370,6 +18390,15 @@ else install();
       grip.addEventListener('click',function(e){
         e.stopPropagation();
         if(group && typeof toggleGroupExpanded==='function')toggleGroupExpanded(l.id);
+        // Real report: duplicated a group and got a copy of something else instead. The
+        // collapse/expand arrow is a group row's biggest, leftmost target - a natural first tap
+        // when trying to open/select "my group" - but it only ever toggled expand state, an
+        // explicit capture-phase exclusion (v169 layer panel selection sync surgery, above) skips
+        // selecting it entirely so the toggle itself isn't hijacked. That left whatever was
+        // selected before untouched, so "duplicate" silently acted on a stale selection instead
+        // of the group the user just tapped. Selecting here too keeps every part of a group's row
+        // in sync, matching how tapping its name/thumbnail already selects it.
+        if(group && typeof window.ppSelectLayerFromRow==='function')window.ppSelectLayerFromRow(l.id);
       });
     }
 

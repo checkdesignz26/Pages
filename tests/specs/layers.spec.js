@@ -204,6 +204,29 @@ test('a second group on the same page gets a name distinct from the first, not a
   expect(groupNames[0]).not.toBe(groupNames[1]);
 });
 
+// Real report, with a screen recording: every group's row showed the exact same bare "▣" glyph
+// with no preview of its actual contents - two groups on one page were visually indistinguishable.
+// The group thumbnail now reuses its topmost member's own real thumbnail (a text layer's preview
+// shows its own text, matching thumbFor's existing per-type rendering) instead of the plain glyph.
+test('a group\'s thumbnail previews its topmost member, not a bare generic icon', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => { addText('distinctive caption'); addBadge('oval'); });
+  await page.waitForTimeout(1800);
+
+  await clickResilient(page, page.locator('#multiSelectBtn'));
+  const checks = page.locator('#layerList .layerCheck');
+  await expect(checks).toHaveCount(2);
+  await clickResilient(page, checks.nth(0));
+  await clickResilient(page, checks.nth(1));
+  await clickResilient(page, page.locator('#groupSelectedBtn'));
+  await page.waitForTimeout(300);
+
+  const groupId = await page.evaluate(() => state.selected);
+  const thumb = page.locator(`#layerList .layerItem[data-id="${groupId}"] .ppCleanLayerThumb`);
+  await expect(thumb).toHaveClass(/groupThumb/); // still marked as a group...
+  await expect(thumb).not.toHaveText('▣'); // ...but no longer just the bare glyph
+});
+
 // Real report: "you can't close the group layer". Two independent, unrelated bugs stacked to
 // silently swallow every tap on a group row's collapse/expand arrow (a <span class="dragGrip">,
 // not a <button>):
@@ -245,6 +268,41 @@ test('collapsing and expanding a group via its row arrow actually works', async 
 
   await expect(page.locator('#layerList .childLayerRow')).toHaveCount(2);
   await expect(page.locator('#layerList .layerItem.groupRow .dragGrip').first()).toHaveText('▼');
+});
+
+// Real report: grouped two layers, tapped "duplicate", and got a copy of an unrelated layer
+// instead of the group. The collapse/expand arrow is a group row's biggest, leftmost target - a
+// natural first tap when trying to open/select "my group" - but an explicit capture-phase
+// exclusion (so the toggle itself isn't hijacked into a plain row-select, see v169 layer panel
+// selection sync surgery) meant tapping only the arrow never actually selected the group, leaving
+// whatever was selected before untouched - so "duplicate" silently duplicated something else.
+test('tapping a group\'s collapse/expand arrow also selects the group, not just something tapped earlier', async ({ page }) => {
+  await expandAllBoxes(page);
+  const ids = await page.evaluate(() => {
+    addText('unrelated'); addText('member one'); addBadge('oval');
+    return current().layers.map((l) => l.id);
+  });
+  const [otherId, memberOneId, memberTwoId] = ids;
+  await page.waitForTimeout(1800);
+
+  await clickResilient(page, page.locator('#multiSelectBtn'));
+  await clickResilient(page, page.locator(`#layerList .layerItem[data-id="${memberOneId}"] .layerCheck`));
+  await clickResilient(page, page.locator(`#layerList .layerItem[data-id="${memberTwoId}"] .layerCheck`));
+  await clickResilient(page, page.locator('#groupSelectedBtn'));
+  await page.waitForTimeout(300);
+
+  // Grouping leaves the new group selected - deliberately re-select the unrelated layer to
+  // simulate the real tap sequence: select something else, then only tap the group's arrow.
+  await clickResilient(page, page.locator(`#layerList .layerItem[data-id="${otherId}"] .ppLayerSelectZone`));
+  await page.waitForTimeout(200);
+  expect(await page.evaluate(() => state.selected)).toBe(otherId);
+
+  const grip = page.locator('#layerList .layerItem.groupRow .dragGrip').first();
+  await clickResilient(page, grip);
+  await page.waitForTimeout(200);
+
+  const groupId = await page.evaluate(() => current().layers.find((l) => l.type === 'group').id);
+  expect(await page.evaluate(() => state.selected)).toBe(groupId);
 });
 
 // Real report: grouped two layers, tapped "duplicate", and the copy was invisible - nothing
