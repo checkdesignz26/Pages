@@ -80,6 +80,56 @@ test('save template also uses the Save As modal with a short default name, not a
   await page.click('#ppSaveAsCancel');
 });
 
+// Real request: "download page" and "download ZIP" always saved with a fixed name
+// ("pattern-pages-N.png" / "pattern-pages-export.zip") with no way to rename either one. Both
+// now reuse the same ppShowSaveAsDialog() modal the .ppages/.ptemplate saves already use (a
+// custom in-page dialog, not the native prompt() - a blocking native dialog mid-click can
+// invalidate the trusted user gesture the original tap established, silently dropping the
+// download that follows on iOS Safari).
+test('download page uses the Save As modal to name the PNG, no native prompt', async ({ page }) => {
+  let dialogFired = false;
+  page.on('dialog', async (d) => {
+    dialogFired = true;
+    await d.dismiss();
+  });
+
+  await page.click('header button:has-text("download page")');
+  await expect(page.locator('#ppSaveAsOverlay')).toHaveCount(1);
+  const defaultValue = await page.locator('#ppSaveAsInput').inputValue();
+  expect(defaultValue).toBe('pattern-pages-1');
+
+  await page.fill('#ppSaveAsInput', 'autumn mug listing');
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 5000 }),
+    page.click('#ppSaveAsConfirm'),
+  ]);
+
+  expect(download.suggestedFilename()).toBe('autumn mug listing.png');
+  expect(dialogFired).toBe(false);
+});
+
+test('download ZIP uses the Save As modal to name the ZIP, no native prompt', async ({ page }) => {
+  let dialogFired = false;
+  page.on('dialog', async (d) => {
+    dialogFired = true;
+    await d.dismiss();
+  });
+
+  await page.click('header button:has-text("download ZIP")');
+  await expect(page.locator('#ppSaveAsOverlay')).toHaveCount(1);
+  const defaultValue = await page.locator('#ppSaveAsInput').inputValue();
+  expect(defaultValue).toBe('pattern-pages-export');
+
+  await page.fill('#ppSaveAsInput', 'autumn mug listing set');
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 15000 }),
+    page.click('#ppSaveAsConfirm'),
+  ]);
+
+  expect(download.suggestedFilename()).toBe('autumn mug listing set.zip');
+  expect(dialogFired).toBe(false);
+});
+
 test('identical images used multiple times are deduplicated when saving, and restore correctly', async ({ page }) => {
   const result = await page.evaluate(async () => {
     function makePatternDataUrl(seed) {

@@ -1333,8 +1333,8 @@ body.autoGroupEditing .layer.collectionGrouped{
       <button onclick="deleteSelected()" title="Delete the selected layer">delete</button>
     </div>
     <div class="actionGroup primaryGroup">
-      <button class="primary" onclick="downloadCurrentPagePNG()" title="Download the current page as a PNG image">download page</button>
-      <button onclick="downloadAllPagesZip()" title="Download every page as PNG files in one ZIP">download ZIP</button>
+      <button class="primary" onclick="downloadCurrentPagePNG()" title="Download the current page as a PNG image - lets you choose the file name">download page</button>
+      <button onclick="downloadAllPagesZip()" title="Download every page as PNG files in one ZIP - lets you choose the file name">download ZIP</button>
     </div>
     <div class="actionGroup projectGroup">
       <button onclick="downloadPstudio()" title="Download your whole project as a .ppages file you can reopen later">save .ppages</button>
@@ -3356,11 +3356,25 @@ async function renderPageToCanvas(p){
 function downloadCanvas(canvas,filename){
  canvas.toBlob(blob=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)},'image/png');
 }
+// Real request: let the download be named something other than the fixed
+// "pattern-pages-N.png"/"pattern-pages-export.zip". Uses the same in-page "Save as" dialog
+// already proven for .ppages/.ptemplate saves (see ppShowSaveAsDialog and its NOTE above) rather
+// than a native prompt() - a blocking native dialog mid-click can invalidate the trusted user
+// gesture the original tap established, silently dropping the download that follows on iOS
+// Safari. The dialog's own "Save" button click is a fresh gesture instead.
 async function downloadCurrentPagePNG(){
  const p=current();
  if(!p)return;
- const c=await renderPageToCanvas(p);
- downloadCanvas(c,`pattern-pages-${state.selectedPage+1}.png`);
+ const defaultName=`pattern-pages-${state.selectedPage+1}`;
+ const useDialog=typeof window.ppShowSaveAsDialog==='function';
+ const proceed=async(rawName)=>{
+   let name=String(rawName||'').trim().replace(/[\\/:*?"<>|]/g,'').replace(/\.png$/i,'');
+   if(!name)name=defaultName;
+   const c=await renderPageToCanvas(p);
+   downloadCanvas(c,name+'.png');
+ };
+ if(useDialog) window.ppShowSaveAsDialog(defaultName,proceed);
+ else await proceed(defaultName);
 }
 function canvasToBlob(canvas){
  return new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
@@ -3988,8 +4002,8 @@ const SWATCHBOOK_DATA = [
     ["deselect", "Deselect the current layer."],
     ["duplicate", "Duplicate the selected layer."],
     ["delete", "Delete the selected layer."],
-    ["download page", "Download the current page as a PNG image."],
-    ["download ZIP", "Download every page as PNG files in one ZIP."],
+    ["download page", "Download the current page as a PNG image. A Save as dialog lets you pick the file name first."],
+    ["download ZIP", "Download every page as PNG files in one ZIP. A Save as dialog lets you pick the file name first."],
     ["save .ppages", "Download your whole project as a .ppages file you can reopen later."],
     ["load .ppages", "Open a previously saved .ppages project file."],
     ["restore autosave", "Restore the most recent automatic backup of your project."],
@@ -7319,11 +7333,23 @@ document.addEventListener('click', function(e){
     setStatus('EtsyAssistant.txt saved.');
   };
   window.downloadAllPagesZip=async function(){
-    const files=[];
-    for(let i=0;i<state.pages.length;i++){ const c=await renderPageToCanvas(state.pages[i]); const blob=await canvasToBlob(c); files.push({name:`pattern-pages-${i+1}.png`, blob}); }
-    const txt=window.currentEtsyAssistantText();
-    if(txt && !txt.includes('No Etsy Assistant text generated yet.')) files.push({name:'EtsyAssistant.txt', blob:new Blob([txt],{type:'text/plain;charset=utf-8'})});
-    const zip=await makeZip(files); const a=document.createElement('a'); a.href=URL.createObjectURL(zip); a.download='pattern-pages-export.zip'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    const defaultName='pattern-pages-export';
+    const build=async(rawName)=>{
+      let name=String(rawName||'').trim().replace(/[\\/:*?"<>|]/g,'').replace(/\.zip$/i,'');
+      if(!name)name=defaultName;
+      const files=[];
+      for(let i=0;i<state.pages.length;i++){ const c=await renderPageToCanvas(state.pages[i]); const blob=await canvasToBlob(c); files.push({name:`pattern-pages-${i+1}.png`, blob}); }
+      const txt=window.currentEtsyAssistantText();
+      if(txt && !txt.includes('No Etsy Assistant text generated yet.')) files.push({name:'EtsyAssistant.txt', blob:new Blob([txt],{type:'text/plain;charset=utf-8'})});
+      const zip=await makeZip(files); const a=document.createElement('a'); a.href=URL.createObjectURL(zip); a.download=name+'.zip'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    };
+    // Real request: let the ZIP be named something other than the fixed "pattern-pages-
+    // export.zip". Uses the same in-page "Save as" dialog already proven for .ppages/.ptemplate
+    // saves (see ppShowSaveAsDialog and its NOTE above) rather than a native prompt() - a
+    // blocking native dialog mid-click can invalidate the trusted user gesture the original tap
+    // established, silently dropping the download that follows on iOS Safari.
+    if(typeof window.ppShowSaveAsDialog==='function') window.ppShowSaveAsDialog(defaultName,build);
+    else await build(defaultName);
   };
   // NOTE(consolidation): downloadPstudio used to ask for a filename via the
   // native prompt() before triggering the download. On iOS/iPadOS Safari, a
