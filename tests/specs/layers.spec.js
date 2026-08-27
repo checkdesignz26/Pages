@@ -864,6 +864,61 @@ test.describe(() => {
     );
     expect(scrollTopAfter).toBeGreaterThan(scrollTopBefore);
   });
+
+  // Real report, with a screenshot: a translucent "ghost" copy of a dragged row stayed stuck on
+  // top of the layers panel indefinitely. The ghost is a clone appended to document.body while
+  // dragging, only ever removed once the drag's pointerup/pointercancel reaches its window
+  // listeners - but a re-render (renderLayers() rebuilds every row via innerHTML) can replace the
+  // dragged row out from under an in-progress drag. A detached element can no longer bubble its
+  // terminating pointer event up to window, so that cleanup never ran and the clone was orphaned
+  // for good. Reproduced here by starting a drag and forcing exactly that re-render mid-drag,
+  // without ever sending a pointerup/pointercancel - the fix relies on 'lostpointercapture',
+  // which the browser dispatches at document (confirmed directly - the removed element itself is
+  // no longer reachable in the event path) the moment it implicitly releases capture on removal.
+  //
+  // Uses a real (CDP-dispatched) mouse pointer rather than a JS-constructed PointerEvent, exactly
+  // as the pinch-vs-drag test above this describe block does - beginDrag calls
+  // row.setPointerCapture(e.pointerId), which the browser silently no-ops for a synthetic
+  // pointerId it never saw as an active pointer, meaning capture (and so lostpointercapture)
+  // would never really engage with a fake event.
+  test('a re-render mid-drag does not leave a stuck ghost row behind', async ({ page }) => {
+    await expandAllBoxes(page);
+    const firstId = await page.evaluate(() => {
+      addText('one');
+      addText('two');
+      return current().layers.filter((l) => l.type === 'text')[0].id;
+    });
+    await page.waitForTimeout(300);
+
+    const grip = page.locator(`#layerList .layerItem[data-id="${firstId}"] .dragGrip`);
+    let gripBox = null;
+    await expect.poll(async () => {
+      await expandAllBoxes(page);
+      await page.evaluate((id) => {
+        const r = document.querySelector(`#layerList .layerItem[data-id="${id}"]`);
+        if (r) r.scrollIntoView({ block: 'center' });
+      }, firstId);
+      gripBox = await grip.boundingBox();
+      return gripBox;
+    }, { timeout: 5000 }).not.toBeNull();
+    const gx = gripBox.x + gripBox.width / 2, gy = gripBox.y + gripBox.height / 2;
+
+    // Start the drag (grip drags begin immediately on pointerdown, no arm threshold) and confirm
+    // the ghost actually appeared, so the re-render below is genuinely interrupting a live drag.
+    await page.mouse.move(gx, gy);
+    await page.mouse.down();
+    await page.waitForTimeout(30);
+    expect(await page.evaluate(() => document.querySelectorAll('.ppLayerDragGhost').length)).toBe(1);
+
+    // The interrupting re-render - rebuilds every row, detaching the one just grabbed, without
+    // any pointerup/pointercancel ever being sent for this gesture.
+    await page.evaluate(() => window.renderLayers());
+    await page.waitForTimeout(100);
+
+    expect(await page.evaluate(() => document.querySelectorAll('.ppLayerDragGhost').length)).toBe(0);
+
+    await page.mouse.up();
+  });
 });
 
 // Real report, with a screenshot: with enough layers on a page, the layer list's own top/bottom

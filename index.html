@@ -14360,6 +14360,7 @@ window.addEventListener('DOMContentLoaded',function(){
       return row;
     }
     function beginDrag(e,row){
+      forceCleanupStaleDragVisuals(); // sweep any ghost orphaned by a previous interrupted drag
       e.preventDefault();
       e.stopPropagation();
       var rect=row.getBoundingClientRect();
@@ -14458,17 +14459,15 @@ window.addEventListener('DOMContentLoaded',function(){
         drag.target=null;
       }
     }
-    function end(e){
-      if(pending && e.pointerId===pending.pointerId) pending=null;
+    function finishDrag(commit){
       if(!drag) return;
-      e.preventDefault();
       var d=drag;
       drag=null;
       stopAutoScroll();
       clearTargets();
       if(d.row) d.row.classList.remove('ppRowDragging');
       if(d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
-      if(d.target && d.target.dataset.id && d.target.dataset.id!==d.id){
+      if(commit && d.target && d.target.dataset.id && d.target.dataset.id!==d.id){
         try{
           if(typeof reorderLayerByDrop==='function'){
             reorderLayerByDrop(d.id,d.target.dataset.id,d.mode||'all');
@@ -14477,10 +14476,29 @@ window.addEventListener('DOMContentLoaded',function(){
         }catch(err){console.error(err);}
       }
     }
+    function end(e){
+      if(pending && e.pointerId===pending.pointerId) pending=null;
+      if(!drag) return;
+      e.preventDefault();
+      finishDrag(true);
+    }
     list.addEventListener('pointerdown',start,{passive:false});
     window.addEventListener('pointermove',move,{passive:false});
     window.addEventListener('pointerup',end,{passive:false});
     window.addEventListener('pointercancel',end,{passive:false});
+    // Real report, with a screenshot: a translucent "ghost" row was stuck on top of the panel
+    // permanently. Root cause: a re-render (renderLayers()/render(), possibly triggered by the
+    // auto-scroll fix above genuinely scrolling the panel mid-drag) can rebuild #layerList's rows
+    // out from under an in-progress drag, detaching the dragged row while it still holds pointer
+    // capture. A detached element can no longer bubble its pointerup/pointercancel up to the
+    // window listeners above, so end() never ran and the ghost/state were orphaned for good.
+    // Confirmed directly: when the browser implicitly releases capture because the captured
+    // element left the DOM, it dispatches 'lostpointercapture' at document (not at the removed
+    // element, which the DOM event path can no longer reach) - listening for that here reaches
+    // this case reliably regardless of where the row ended up.
+    document.addEventListener('lostpointercapture',function(e){
+      if(drag && e.pointerId===drag.pointerId) finishDrag(false);
+    });
   }
   function markRows(){
     var list=layerList(); if(!list) return;
