@@ -798,6 +798,72 @@ test.describe(() => {
     expect(result.selected).toBe(targetId);
     expect(result.order).toEqual(['two', 'one']);
   });
+
+  // Real report, with a screen recording: dragging a layer stopped giving any drop-position
+  // feedback (the pink outline) and couldn't reach the top or bottom of a long list at all.
+  // #layerList used to be its own small scroll container - once that cap was removed (see
+  // pp-layer-list-full-display-css) so the list grows to fit every layer and scrolls as part of
+  // the right panel instead, the drag's own auto-scroll-near-the-edge logic kept scrolling
+  // list.scrollTop, which does nothing now that the list itself no longer scrolls.
+  test('dragging near the bottom edge of a long layer list auto-scrolls the panel, not the list', async ({ page }) => {
+    await expandAllBoxes(page);
+    await installTouchDragHelpers(page);
+    await page.evaluate(() => {
+      for (let i = 0; i < 25; i++) {
+        addText('row ' + i);
+        const l = current().layers[current().layers.length - 1];
+        l.name = 'row ' + i;
+        l._manualName = true;
+      }
+    });
+    await page.waitForTimeout(300);
+    await expandAllBoxes(page);
+    await page.evaluate(() => {
+      document.getElementById('layerList').closest('.side.right').scrollTop = 0;
+    });
+
+    const panelInfo = await page.evaluate(() => {
+      const panel = document.getElementById('layerList').closest('.side.right');
+      return { scrollHeight: panel.scrollHeight, clientHeight: panel.clientHeight };
+    });
+    expect(panelInfo.scrollHeight).toBeGreaterThan(panelInfo.clientHeight); // needs scrolling to reach every row
+
+    // Grab the first (topmost, already-visible) row by its grip and drag down to the bottom edge
+    // of the visible panel, then hold there - the same gesture a seller would use to drag a
+    // layer down past whatever's currently on screen. Re-expand/re-scroll and retry the
+    // bounding-box read until it survives a boot()/re-render timer race, matching the
+    // established pattern above (and in responsive-layout.spec.js) for the same class of
+    // flakiness in this app's scattered self-installing patch scripts.
+    const firstId = await page.evaluate(() => current().layers.filter((l) => l.type === 'text')[0].id);
+    const grip = page.locator(`#layerList .layerItem[data-id="${firstId}"] .dragGrip`);
+    let gripBox = null;
+    await expect.poll(async () => {
+      await expandAllBoxes(page);
+      await page.evaluate((id) => {
+        const r = document.querySelector(`#layerList .layerItem[data-id="${id}"]`);
+        if (r) r.scrollIntoView({ block: 'start' });
+      }, firstId);
+      gripBox = await grip.boundingBox();
+      return gripBox;
+    }, { timeout: 5000 }).not.toBeNull();
+    const panelBox = await page.locator('.side.right').boundingBox();
+    const gx = gripBox.x + gripBox.width / 2;
+    const edgeY = panelBox.y + panelBox.height - 25; // inside the auto-scroll zone near the bottom edge of the visible panel
+
+    // Compare the delta caused by the drag itself, not an absolute scrollTop - the poll loop
+    // above may itself have nudged the panel's scroll position while re-locating the grip.
+    const scrollTopBefore = await page.evaluate(
+      () => document.getElementById('layerList').closest('.side.right').scrollTop
+    );
+    const holdPoints = [{ x: gx, y: gripBox.y + gripBox.height / 2 }];
+    for (let i = 0; i < 20; i++) holdPoints.push({ x: gx, y: edgeY });
+    await touchDrag(page, holdPoints);
+
+    const scrollTopAfter = await page.evaluate(
+      () => document.getElementById('layerList').closest('.side.right').scrollTop
+    );
+    expect(scrollTopAfter).toBeGreaterThan(scrollTopBefore);
+  });
 });
 
 // Real report, with a screenshot: with enough layers on a page, the layer list's own top/bottom

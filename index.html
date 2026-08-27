@@ -14296,6 +14296,20 @@ window.addEventListener('DOMContentLoaded',function(){
   function layerList(){return document.getElementById('layerList');}
   function closestRow(el){return el && el.closest && el.closest('#layerList .layerItem[data-id]');}
   function clearTargets(){document.querySelectorAll('#layerList .ppDropTarget').forEach(function(r){r.classList.remove('ppDropTarget');});}
+  // Real report, with a screenshot: a "ghost" copy of a dragged row was left stuck on top of the
+  // panel, never going away. The ghost (a cloned row appended to document.body while dragging -
+  // see beginDrag below) is only ever removed by end()/cancel() running to completion; if a
+  // re-render replaces the row (or #layerList itself) out from under an in-progress drag, or the
+  // OS/browser swallows the terminating pointerup/pointercancel before it reaches window
+  // (observed after the auto-scroll fix above started genuinely scrolling the panel mid-drag,
+  // something that never happened before), that cleanup never runs and the clone is orphaned
+  // permanently. Sweeps any leftover ghost/drag-visual state before a fresh drag starts, so even
+  // if one gesture's own cleanup is missed, it never persists past the next attempt.
+  function forceCleanupStaleDragVisuals(){
+    document.querySelectorAll('.ppLayerDragGhost').forEach(function(g){ if(g.parentNode) g.parentNode.removeChild(g); });
+    document.querySelectorAll('#layerList .layerItem.ppRowDragging').forEach(function(r){ r.classList.remove('ppRowDragging'); });
+    clearTargets();
+  }
   function installLayerPanelDrag(){
     var list=layerList();
     if(!list || list.dataset.ppTouchDragInstalled==='1') return;
@@ -14357,7 +14371,7 @@ window.addEventListener('DOMContentLoaded',function(){
       document.body.appendChild(ghost);
       row.classList.add('ppRowDragging');
       try{row.setPointerCapture && row.setPointerCapture(e.pointerId);}catch(_){ }
-      drag={id:row.dataset.id,mode:row.dataset.mode||'all',row:row,ghost:ghost,dx:e.clientX-rect.left,dy:e.clientY-rect.top,pointerId:e.pointerId,target:null};
+      drag={id:row.dataset.id,mode:row.dataset.mode||'all',row:row,ghost:ghost,dx:e.clientX-rect.left,dy:e.clientY-rect.top,pointerId:e.pointerId,target:null,scroller:scrollableAncestor(list)};
       startAutoScroll();
     }
     function start(e){
@@ -14371,15 +14385,35 @@ window.addEventListener('DOMContentLoaded',function(){
       var candidate=rowBodyDragCandidate(e);
       if(candidate) pending={row:candidate,x:e.clientX,y:e.clientY,pointerId:e.pointerId};
     }
-    // Auto-scroll the layer list while dragging near its top/bottom edge -
-    // without this, a list longer than the visible panel makes it
-    // impossible to drag a layer past whatever's currently on screen.
+    // Auto-scroll while dragging near the top/bottom edge of the visible panel - without this,
+    // a list longer than the screen makes it impossible to drag a layer to/past whatever's
+    // currently off-screen.
+    //
+    // Real report, with a screen recording: dragging a layer stopped giving any drop-position
+    // feedback (the pink outline) and couldn't reach the top or bottom of a long list at all.
+    // #layerList used to be its own small scroll container (overflow:auto, capped height) - once
+    // that cap was removed (see pp-layer-list-full-display-css) so the list could grow to fit
+    // every layer and scroll as part of the right panel instead, this code kept scrolling
+    // list.scrollTop, which does nothing now that the list itself no longer scrolls, AND kept
+    // measuring the "near the edge" zone against the list's own (now much taller, mostly
+    // off-screen) full bounding box instead of the visible panel's. Scrolls whichever ancestor
+    // is actually the scroll container now, and sizes the edge zone off ITS visible bounds.
+    function scrollableAncestor(el){
+      var node=el&&el.parentElement;
+      while(node && node!==document.body){
+        var cs=getComputedStyle(node);
+        if(/(auto|scroll)/.test(cs.overflowY) && node.scrollHeight>node.clientHeight+1) return node;
+        node=node.parentElement;
+      }
+      return document.scrollingElement||document.documentElement;
+    }
     var AUTOSCROLL_ZONE=36, AUTOSCROLL_MAX_SPEED=14;
     var lastPointerY=null, autoScrollRAF=null;
     function autoScrollTick(){
       autoScrollRAF=null;
       if(!drag || lastPointerY==null) return;
-      var rect=list.getBoundingClientRect();
+      var scroller=drag.scroller||list;
+      var rect=scroller.getBoundingClientRect();
       var speed=0;
       if(lastPointerY<rect.top+AUTOSCROLL_ZONE){
         speed=-AUTOSCROLL_MAX_SPEED*(1-Math.max(0,(lastPointerY-rect.top))/AUTOSCROLL_ZONE);
@@ -14387,7 +14421,7 @@ window.addEventListener('DOMContentLoaded',function(){
         speed=AUTOSCROLL_MAX_SPEED*(1-Math.max(0,(rect.bottom-lastPointerY))/AUTOSCROLL_ZONE);
       }
       if(speed){
-        list.scrollTop+=speed;
+        scroller.scrollTop+=speed;
         autoScrollRAF=requestAnimationFrame(autoScrollTick);
       }
     }
