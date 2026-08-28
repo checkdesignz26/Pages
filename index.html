@@ -1329,7 +1329,7 @@ body.autoGroupEditing .layer.collectionGrouped{
       <button onclick="deselect()" title="Deselect the current layer">deselect</button>
     </div>
     <div class="actionGroup softGroup">
-      <button onclick="duplicateSelected()" title="Duplicate the selected layer">duplicate</button>
+      <button onclick="duplicateSelected()" title="Duplicate the selected layer, or the current page if nothing is selected">duplicate</button>
       <button onclick="deleteSelected()" title="Delete the selected layer">delete</button>
     </div>
     <div class="actionGroup primaryGroup">
@@ -4012,7 +4012,7 @@ const SWATCHBOOK_DATA = [
     ["↶ undo", "Undo the last change."],
     ["↷ redo", "Redo the last undone change."],
     ["deselect", "Deselect the current layer."],
-    ["duplicate", "Duplicate the selected layer."],
+    ["duplicate", "Duplicate the selected layer, or the current page if nothing is selected."],
     ["delete", "Delete the selected layer."],
     ["download page", "Download the current page as a PNG image. A Save as dialog lets you pick the file name first."],
     ["download ZIP", "Download every page as PNG files in one ZIP. A Save as dialog lets you pick the file name first."],
@@ -10793,7 +10793,15 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
     return out;
   }
   window.duplicateSelected=function(){
-    var l=(typeof getLayer==='function')?getLayer():null; if(!l)return;
+    var l=(typeof getLayer==='function')?getLayer():null;
+    if(!l){
+      // Real request: with no layer selected (just a page), the general "duplicate" button did
+      // nothing at all - the only way to duplicate a whole page was the small ⧉ icon on that
+      // page's own row in the page list, easy to miss. Fall back to duplicating the current page,
+      // same as that icon does, so "duplicate" always does something sensible.
+      if(typeof duplicatePage==='function' && typeof state!=='undefined' && state && typeof state.selectedPage==='number') duplicatePage(state.selectedPage);
+      return;
+    }
     try{save();}catch(e){}
     // A group is a synthetic, invisible (display:none) layer whose real content lives in
     // separate member layers tagged with a matching groupId - the plain single-layer clone

@@ -607,6 +607,36 @@ test('duplicateSelected() also lands the copy next to its source, not at the fro
   }
 });
 
+// Real request: the top-toolbar "duplicate" button only ever duplicated the selected layer -
+// with nothing selected it silently did nothing, and the only way to duplicate a whole page was
+// the small ⧉ icon on that page's own row in the page list, easy to miss. duplicateSelected() now
+// falls back to duplicating the current page (the same thing that icon does) when no layer is
+// selected, so the general "duplicate" button is never a no-op.
+test('duplicateSelected() duplicates the current page when nothing is selected', async ({ page }) => {
+  await page.evaluate(() => { addText('only layer on this page'); deselect(); });
+  await page.waitForTimeout(200);
+
+  const before = await page.evaluate(() => ({
+    numPages: state.pages.length,
+    selected: state.selected,
+    selectedPage: state.selectedPage,
+  }));
+  expect(before.selected).toBeFalsy();
+
+  await page.evaluate(() => { window.duplicateSelected(); });
+  await page.waitForTimeout(200);
+
+  const after = await page.evaluate(() => ({
+    numPages: state.pages.length,
+    selectedPage: state.selectedPage,
+    firstPageLayers: state.pages[0].layers.map((l) => l.name),
+    secondPageLayers: state.pages[1] ? state.pages[1].layers.map((l) => l.name) : null,
+  }));
+  expect(after.numPages).toBe(before.numPages + 1);
+  expect(after.selectedPage).toBe(before.selectedPage + 1);
+  expect(after.secondPageLayers).toEqual(after.firstPageLayers.map((n) => n + ' copy'));
+});
+
 // Real request: a lock so a layer can't be accidentally moved while working around it on the
 // canvas, separate from grouping. Deliberately its own new flag (l.positionLocked) rather than
 // the existing l.locked/l.lockText - those get force-cleared to false on every render() for any
