@@ -181,6 +181,79 @@ test('double-tapping text opens the floating editor, hides resize handles, and D
   expect(afterDone.hasDoneBtn).toBe(false);
 });
 
+// Real report, with a screen recording: after loading a template, double-tapping ANY text (even
+// a brand new layer, nothing to do with the template) silently did nothing at all - until a full
+// page refresh fixed it. handleTap's very first line is `if(active)return;`, and nothing outside
+// the text-editor script could ever reset `active` back to null - leaving a text editor open
+// (Done never tapped) right as a template/project load wholesale replaces state.pages left
+// `active` stuck forever, pointing at a now-detached layer, silently blocking every future
+// double-tap for the rest of the session.
+test('loading a template while the floating text editor is still open does not permanently break double-tap-to-edit', async ({ page }) => {
+  async function tap(x, y) {
+    await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      const id = window.__nextPointerId++;
+      const t = window.__mkTouch(id, x, y, el);
+      el.dispatchEvent(new PointerEvent('pointerdown', { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true, clientX: x, clientY: y }));
+      window.__fireTouch('touchstart', [t], [t], el);
+      setTimeout(() => {
+        const el2 = document.elementFromPoint(x, y);
+        el2.dispatchEvent(new PointerEvent('pointerup', { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true, clientX: x, clientY: y }));
+        window.__fireTouch('touchend', [], [t], el2);
+      }, 20);
+    }, { x, y });
+    await page.waitForTimeout(60);
+  }
+
+  await page.evaluate(() => { addText('first'); });
+  await page.evaluate(() => {
+    window.__nextPointerId = 700;
+    window.__mkTouch = (id, x, y, target) => new Touch({ identifier: id, target, clientX: x, clientY: y, pageX: x, pageY: y });
+    window.__fireTouch = (type, touches, changed, target) => {
+      target.dispatchEvent(new TouchEvent(type, { touches, targetTouches: touches, changedTouches: changed, bubbles: true, cancelable: true }));
+    };
+  });
+  const firstId = await page.evaluate(() => state.pages[0].layers[0].id);
+  const firstBox = await page.locator(`.layer[data-id="${firstId}"]`).boundingBox();
+  await tap(firstBox.x + firstBox.width / 2, firstBox.y + firstBox.height / 2);
+  await page.waitForTimeout(100);
+  await tap(firstBox.x + firstBox.width / 2, firstBox.y + firstBox.height / 2);
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => !!document.querySelector('.ppTextArea176'))).toBe(true); // editor genuinely open
+
+  // Load a template WITHOUT ever tapping Done first - the real scenario from the report.
+  await page.evaluate(() => {
+    window.__origAlert = window.alert;
+    window.alert = () => {};
+    const templateData = { app: 'Pattern Pages', kind: 'ptemplate', pages: [{ type: 'listing', w: 3000, h: 2250, layers: [
+      { id: 'img1', type: 'image', name: 'placeholder', patternSlot: true, src: null, x: 10, y: 10, w: 30, h: 30, z: 1, opacity: 1, scale: 1 },
+    ] }], selectedPage: 0 };
+    const file = new File([JSON.stringify(templateData)], 'test.ptemplate', { type: 'application/json' });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.files = dt.files;
+    return new Promise((resolve) => {
+      window.loadPatternPagesTemplate({ target: input });
+      setTimeout(() => { window.alert = window.__origAlert; resolve(); }, 300);
+    });
+  });
+  await page.waitForTimeout(200);
+
+  // Add a brand new text layer - nothing to do with the template - and try to double-tap it.
+  await page.evaluate(() => { addText('second'); });
+  await page.waitForTimeout(200);
+  const secondId = await page.evaluate(() => state.selected);
+  const secondBox = await page.locator(`.layer[data-id="${secondId}"]`).boundingBox();
+  await tap(secondBox.x + secondBox.width / 2, secondBox.y + secondBox.height / 2);
+  await page.waitForTimeout(100);
+  await tap(secondBox.x + secondBox.width / 2, secondBox.y + secondBox.height / 2);
+  await page.waitForTimeout(300);
+
+  expect(await page.evaluate(() => !!document.querySelector('.ppTextArea176'))).toBe(true);
+});
+
 test('tapping an unselected text layer once (then again quickly, out of habit) only selects it - it takes a deliberate double-tap on an already-selected layer to edit', async ({ page }) => {
   // Real report: "it still wants to edit the text with one click/tap". The tap that FIRST
   // selects a layer (transitioning it from unselected to selected) used to be eligible to arm

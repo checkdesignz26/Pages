@@ -7124,9 +7124,16 @@ document.addEventListener('click', function(e){
     data=ppExpandAssetsFromLoad(data);
     const st = (typeof state !== 'undefined' && state) ? state : (window.state || null);
     if(!data || !data.pages || !st)return false;
+    // Real report, with a screen recording: after loading a project, double-tapping ANY text
+    // (even a brand new layer) silently did nothing until a full page refresh fixed it - a text
+    // editor left open (Done never tapped) right as this wholesale-replaces state.pages leaves
+    // the editor's own "is one open" flag stuck true forever, with nothing else able to reset it.
+    if(typeof window.__ppForceCloseTextEditor==='function'){try{window.__ppForceCloseTextEditor();}catch(e){}}
     state.pages=data.pages; state.selectedPage=typeof data.selectedPage==='number'?data.selectedPage:0; state.selected=null;
     if(data.trays) state.trays=data.trays;
-    if(data.zoom) state.zoom=data.zoom;
+    // Real report, with a .ppages file: a saved zoom of 0.9999999999999998 instead of a clean 1 -
+    // rounded on load too, in case the file predates zoomPage()'s own now-rounded output.
+    if(data.zoom) state.zoom=Math.round(data.zoom*100)/100;
     if(data.customFonts && typeof window.registerCustomFont==='function'){
       Object.keys(data.customFonts).forEach(name=>window.registerCustomFont(name,data.customFonts[name]));
     }
@@ -13108,6 +13115,16 @@ window.addEventListener('DOMContentLoaded',function(){
   // whether this editor is open before doing a destructive canvas rebuild of their own - see the
   // matching guard added at that call site for why.
   window.__ppCanvasTextEditorActive=function(){return !!active;};
+  // Real report, with a screen recording: after loading a template, double-tapping ANY text (even
+  // a brand new layer, nothing to do with the template) silently did nothing at all - until a
+  // full page refresh fixed it. handleTap's very first line is `if(active)return;`, and nothing
+  // outside this script could ever reset `active` back to null - if a text editor was left open
+  // (its Done button never tapped) right as a template/project load wholesale replaced
+  // state.pages, `active` stayed permanently stuck pointing at a now-detached layer, silently
+  // blocking every future double-tap for the rest of the session. Exposed so project/template
+  // loaders can force it closed first, the same way __ppCanvasTextEditorActive above already lets
+  // them check it.
+  window.__ppForceCloseTextEditor=function(){ cleanup(false); };
 
   document.addEventListener('pointerdown',function(e){ if(!active)return; if(e.target===active.ta||e.target===active.done)return; cleanup(true); },true);
   document.addEventListener('touchstart',function(e){ if(!active)return; if(e.target===active.ta||e.target===active.done)return; cleanup(true); },true);
@@ -19116,6 +19133,12 @@ else install();
         const data=JSON.parse(e.target.result);
         if(!data.pages || !Array.isArray(data.pages)) throw new Error('no pages');
         if(typeof save==='function')save();
+        // Real report, with a screen recording: after loading a template, double-tapping ANY
+        // text (even a brand new layer, nothing to do with the template) silently did nothing
+        // until a full page refresh fixed it - a text editor left open (Done never tapped) right
+        // as this wholesale-replaces state.pages leaves the editor's own "is one open" flag stuck
+        // true forever, with nothing else able to reset it.
+        if(typeof window.__ppForceCloseTextEditor==='function'){try{window.__ppForceCloseTextEditor();}catch(err){}}
         if(data.customFonts && typeof window.registerCustomFont==='function'){
           Object.keys(data.customFonts).forEach(function(name){ window.registerCustomFont(name,data.customFonts[name]); });
         }
@@ -19271,8 +19294,15 @@ else install();
   }
   function applyProject(project){
     var st=S(); if(!st) throw new Error('Pattern Pages state is not ready yet. Please wait one second and tap load again.');
+    // Real report, with a screen recording: after loading a project, double-tapping ANY text
+    // (even a brand new layer) silently did nothing until a full page refresh fixed it - a text
+    // editor left open (Done never tapped) right as this wholesale-replaces state.pages leaves
+    // the editor's own "is one open" flag stuck true forever, with nothing else able to reset it.
+    if(typeof window.__ppForceCloseTextEditor==='function'){try{window.__ppForceCloseTextEditor();}catch(e){}}
     st.pages=project.pages; st.selectedPage=project.selectedPage; st.selected=null; st.lastDeselected=null;
-    st.trays=project.trays||st.trays||{pattern:[],asset:[]}; st.zoom=project.zoom||1;
+    // Real report, with a .ppages file: a saved zoom of 0.9999999999999998 instead of a clean 1 -
+    // rounded on load too, in case the file predates zoomPage()'s own now-rounded output.
+    st.trays=project.trays||st.trays||{pattern:[],asset:[]}; st.zoom=Math.round((project.zoom||1)*100)/100;
     if(project.customFonts && typeof window.registerCustomFont==='function'){
       Object.keys(project.customFonts).forEach(function(name){ window.registerCustomFont(name,project.customFonts[name]); });
     }
