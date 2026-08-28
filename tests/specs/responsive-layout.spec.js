@@ -231,6 +231,30 @@ test.describe('iPad (touch) layout stays exactly as before', () => {
     expect(portrait).not.toBe(landscape);
   });
 
+  // Real report, with a screen recording: every layer on the page visibly shifted with no
+  // interaction from the user at all - caught on camera at the exact moment an unrelated system
+  // notification banner appeared over Safari. A 'resize' event doesn't require the window to
+  // have actually changed size to fire, and the "never shrink" guard above only guards against
+  // measuring SMALLER than before on a real mouse/desktop - on touch it re-ran the whole
+  // force-both-panels-open reflow measurement on every single resize event, real or not, and
+  // whatever it landed on (even a value that drifted purely from that trick's own timing) stuck
+  // as gospel until the next resize. Reproduced directly: firing a resize event with the
+  // viewport genuinely unchanged still overwrote the stored width with a fresh measurement.
+  test('a resize event with the viewport genuinely unchanged does not re-measure (and drift) the stage width', async ({ page }) => {
+    await page.waitForTimeout(1000); // let every boot-time measure() call (including the 800ms one) settle first
+    await page.evaluate(() => {
+      // A sentinel value a real measurement would never produce - only an unguarded
+      // re-measurement (the bug) would overwrite it.
+      document.documentElement.style.setProperty('--pp-stable-stage-width', '424242px');
+    });
+
+    await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+    await page.waitForTimeout(200);
+
+    const stillSentinel = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--pp-stable-stage-width'));
+    expect(stillSentinel.trim()).toBe('424242px');
+  });
+
   // Real report, with a screenshot: on a real iPad the panel-collapse arrows were nearly
   // invisible against the dark theme - an earlier patch (goldenV162, "calmer panel toggles")
   // had dropped their opacity to .72 specifically to cut down on accidental taps, which also
@@ -266,6 +290,16 @@ test('icon-only controls (zoom, panel-collapse arrows, frame count stepper) have
   await expect(page.locator('#toggleRightPanel')).toHaveAttribute('title', /./);
   await expect(page.locator('button[onclick="changeFrameCount(-1)"]')).toHaveAttribute('title', /./);
   await expect(page.locator('button[onclick="changeFrameCount(1)"]')).toHaveAttribute('title', /./);
+});
+
+// Real report, with a .ppages file: a saved project's zoom came back as 0.9999999999999998
+// instead of a clean 1 - plain float addition (state.zoom + delta) on every +/- tap, with nothing
+// ever rounding the result back to a clean value, so the error compounds a little further with
+// every tap across a session and eventually saves/restores as a visibly-off zoom.
+test('zooming in and back out with the +/- buttons returns to a clean 1, not a fractional float remainder', async ({ page }) => {
+  for (let i = 0; i < 5; i++) await page.evaluate(() => window.zoomPage(0.05));
+  for (let i = 0; i < 5; i++) await page.evaluate(() => window.zoomPage(-0.05));
+  expect(await page.evaluate(() => state.zoom)).toBe(1);
 });
 
 // Real request: "I'm thinking of adding a quick explanation to each button" - a full audit pass

@@ -1394,6 +1394,48 @@ test('exporting a circular pattern slot clips the image to a circle, not a plain
   expect(pixel.center[2]).toBeLessThan(60);
 });
 
+// Real report, with a .ppages file: an "icon badge" (a dark circle with an icon image grouped on
+// top of it - the app's own convention for these, confirmed directly in the file) exported with
+// a stray "Your label" caption sitting right over it. A group is a synthetic, invisible
+// organizational layer with no content of its own - but every layer, including a group, carries
+// a leftover default text:'Your label' from creation that real content overwrites but a group
+// never does. renderPageToCanvas's type check had an `||l.text` fallback (meant to still draw a
+// plain text layer someone forgot to type 'text'/'label' onto) that matched every group too,
+// painting its own default near-white fill as a solid rectangle - with its own leftover default
+// text - directly over its real members, which the exporter had already correctly drawn beneath.
+test('exporting a group (an icon badge: circle + icon image) does not paint the group\'s own leftover default text over its members', async ({ page }) => {
+  const pixel = await page.evaluate(async () => {
+    save();
+    state.pages = [{
+      type: 'listing', w: 1000, h: 1000, layers: [
+        { id: 'circle1', type: 'label', badgeShape: 'circle', text: '', fill: '#121b30', border: '#000000', borderW: 0, x: 25, y: 25, w: 50, h: 50, r: 0, opacity: 1, scale: 1, z: 1, groupId: 'grp1' },
+        { id: 'icon1', type: 'image', src: null, x: 40, y: 40, w: 20, h: 20, r: 0, opacity: 1, scale: 1, z: 2, fit: 'contain', groupId: 'grp1' },
+        // The group wrapper: real data always leaves its default text:'Your label' + near-white
+        // fill untouched, and always sits at a HIGHER z than its own members (see
+        // groupSelectedLayers's z=...+0.5 convention) - both reproduced here.
+        { id: 'grp1', type: 'group', text: 'Your label', fill: 'rgba(255,255,255,.92)', x: 25, y: 25, w: 50, h: 50, r: 0, opacity: 1, scale: 1, z: 3, fontSize: 36, color: '#555555', font: 'system-ui', textAlign: 'center' },
+      ],
+    }];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+
+    const p = state.pages[0];
+    const canvas = await window.renderPageToCanvas(p);
+    const ctx = canvas.getContext('2d');
+    // The circle spans a 500x500 box centred at (500,500) - (500,260) sits inside its ellipse
+    // (240px from centre, under its 250px radius) but outside the icon image (400-600 box) - the
+    // spot the group's own stray rectangle would paint over if this bug were still present.
+    return Array.from(ctx.getImageData(500, 260, 1, 1).data);
+  });
+
+  // Still the circle's own dark navy fill - a group-drawn near-white rectangle over it would
+  // have pushed every channel far higher.
+  expect(pixel[0]).toBeLessThan(60);
+  expect(pixel[1]).toBeLessThan(60);
+  expect(pixel[2]).toBeLessThan(80);
+});
+
 // Real report: "blank page", sitting in "extra design elements" right next to buttons that ADD
 // things, read as adding a new blank page - it actually wipes every layer off the CURRENT page,
 // and did so with no confirmation at all, unlike the comparably destructive deletePage()'s

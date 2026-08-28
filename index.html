@@ -3308,7 +3308,12 @@ function toggleHandedMode(){
   const ws=$('workspace'); if(ws){ ws.scrollLeft=0; }
   setTimeout(()=>renderPages(),30);
 }
-function zoomPage(delta){state.zoom=Math.max(0.75,Math.min(1.25,state.zoom+delta));renderPages()}
+// Real report, with a .ppages file: a saved project's zoom came back as
+// 0.9999999999999998 instead of a clean 1 - harmless on its own at that many nines, but every
+// +/- tap adds a plain float delta on top of whatever's already there, so the error compounds
+// over a session and eventually saves/restores as a visibly-off zoom. Rounded to the nearest
+// hundredth (identical to the 0.05 step size in every zoom control) after every change.
+function zoomPage(delta){state.zoom=Math.round(Math.max(0.75,Math.min(1.25,state.zoom+delta))*100)/100;renderPages()}
 
 function drawRoundedRectPath(ctx,x,y,w,h,r){const rr=Math.min(r,w/2,h/2);ctx.beginPath();ctx.moveTo(x+rr,y);ctx.lineTo(x+w-rr,y);ctx.quadraticCurveTo(x+w,y,x+w,y+rr);ctx.lineTo(x+w,y+h-rr);ctx.quadraticCurveTo(x+w,y+h,x+w-rr,y+h);ctx.lineTo(x+rr,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-rr);ctx.lineTo(x,y+rr);ctx.quadraticCurveTo(x,y,x+rr,y);ctx.closePath();}
 function waitForImage(src){
@@ -19311,7 +19316,20 @@ else install();
     var visualW=(stage&&stage.clientWidth)||620; var fontScale=Math.max(1,p.w/visualW);
     var layers=(p.layers||[]).slice().sort(function(a,b){return (a.z||0)-(b.z||0)});
     for(var i=0;i<layers.length;i++){
-      var l=layers[i]; ctx.save(); ctx.globalAlpha=l.opacity==null?1:l.opacity;
+      var l=layers[i];
+      // Real report, with a .ppages file: an exported icon badge (a circle + icon image grouped
+      // together) showed a stray "Your label" caption sitting right on top of it. A group is a
+      // synthetic, invisible organizational layer - renderLayer() already skips drawing it
+      // entirely live (it has no visual box of its own; only its members are drawn) - but this
+      // exporter's own type check, `['text','label',...].includes(l.type)||l.text`, had an
+      // `||l.text` fallback meant to still draw a plain text layer someone forgot to type
+      // 'text'/'label' onto. Every layer (including a group) carries a leftover default
+      // text:'Your label' from new layer creation that real content overwrites but a group never
+      // does, since it has no content of its own - so that fallback matched every group too,
+      // painting its default fill as a solid rectangle with its own leftover default text
+      // directly over its real members, which had already been correctly drawn just beneath it.
+      if(typeof isGroupLayer==='function' && isGroupLayer(l)) continue;
+      ctx.save(); ctx.globalAlpha=l.opacity==null?1:l.opacity;
       var x=l.x/100*p.w, y=l.y/100*p.h, w=l.w/100*p.w, h=l.h/100*p.h;
       ctx.translate(x+w/2,y+h/2); ctx.rotate((l.r||0)*Math.PI/180); ctx.scale(l.disclosureBadge?1:(l.scale||1),l.disclosureBadge?1:(l.scale||1));
       if(l.src){try{
@@ -21978,7 +21996,25 @@ body.leftCollapsed.rightCollapsed .stage.pattern,body.leftCollapsed.rightCollaps
       }
     }
   }
-  window.addEventListener('resize',measure);
+  // Real report, with a screen recording: everything on the page visibly shifted/rescaled with
+  // no actual interaction from the user - caught on camera at the exact moment an unrelated
+  // system notification banner appeared over Safari. A `resize` event doesn't require the
+  // window to have actually changed size to fire - and on touch, the "never shrink" guard above
+  // only protects against measuring SMALLER than before, not against re-measuring at all: any
+  // resize firing (a notification banner, another resize listener elsewhere in the app - and
+  // there are several - reacting to its own change and perturbing layout, etc.) while nothing
+  // about the real viewport changed still re-runs the whole force-both-panels-open reflow and
+  // can land on a subtly different width purely from that trick's own timing, which then sticks
+  // as gospel until the next resize. Skip the re-measurement entirely when window.innerWidth
+  // itself hasn't actually changed - the one thing that's true for every genuine resize/rotation
+  // and false for a same-size event firing for some unrelated reason.
+  var lastInnerWidthForMeasure=window.innerWidth;
+  function measureOnResize(){
+    if(window.innerWidth===lastInnerWidthForMeasure) return;
+    lastInnerWidthForMeasure=window.innerWidth;
+    measure();
+  }
+  window.addEventListener('resize',measureOnResize);
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',measure);
   else measure();
   setTimeout(measure,150);
