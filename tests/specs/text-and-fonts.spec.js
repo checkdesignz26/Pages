@@ -685,6 +685,70 @@ test('the floating text editor stays open - an unrelated pointerup listener does
   expect(state.layerIsEditing).toBe(true);
 });
 
+test('double-tapping a text layer that is a member of a group opens the floating editor', async ({ page }) => {
+  // Real report: "the text editor is not popping up after tapping". A text/label layer that's a
+  // member of a manual group could never open its double-tap editor at all, on real hardware -
+  // three separate bugs stacked on top of each other:
+  // 1. A selected group's own .manualGroupOverlay div sits on top of every member with
+  //    pointer-events:auto and a very high z-index, so a tap's e.target was always the overlay,
+  //    never the text/label layer underneath - textNodeFromEvent's closest() search could never
+  //    find it. Fixed with an elementsFromPoint fallback (which, unlike event targeting, ignores
+  //    pointer-events and returns the full geometric stack at the tap's coordinates).
+  // 2. Even once that resolved to the right layer, a group member never carries the '.selected'
+  //    CSS class itself (only the group's own overlay does), so the "was this already selected
+  //    before this tap" check was always false for a grouped member - no tap could ever arm a
+  //    double-tap. Fixed by also treating a member of the currently-selected group as selected.
+  // 3. The group overlay's own pointerup handler called the destructive renderPages() (tearing
+  //    down and rebuilding the whole stage) unconditionally on every tap, including a plain,
+  //    zero-movement one - by the time the tap's own touchend arrived, its target was already
+  //    detached, so pp-text-v176-js's touchend-based double-tap detector never saw it. Fixed by
+  //    only doing that rebuild after an actual drag/resize. An attempted middle-ground fix (redraw
+  //    just the overlay in place on a plain tap, instead of the whole page) turned out to be the
+  //    same bug in miniature: a real touch's touchend is implicitly targeted at whatever element
+  //    touchstart fired on, and removing+recreating the overlay itself - the tap's own target -
+  //    during that same gesture left the touch with nowhere left to deliver its touchend. A plain
+  //    tap on the overlay now leaves it completely untouched.
+  //
+  // Real CDP-level touch dispatch (not hand-built DOM events), same as the "tapping an unselected
+  // text layer" test above - it goes through the actual browser input pipeline, so pointerdown
+  // carries a genuinely active pointer (setPointerCapture-eligible) exactly like a real device
+  // tap. This matters here specifically: a hand-built PointerEvent has no real active pointer for
+  // the overlay's setPointerCapture() call to capture, which throws and (incidentally) skips the
+  // overlay's own e.stopPropagation()/preventDefault() - masking bug 3 above. Only real touch
+  // dispatch reproduces it.
+  const ids = await page.evaluate(() => {
+    save();
+    addText('group text');
+    const t1 = current().layers[current().layers.length - 1];
+    addBadge('oval');
+    const t2 = current().layers[current().layers.length - 1];
+    state.layerMultiSelect = true;
+    state.selectedLayerIds = [t1.id, t2.id];
+    state.selected = t1.id;
+    window.groupSelectedLayers();
+    render();
+    return { textId: t1.id };
+  });
+  await page.waitForTimeout(300);
+
+  const box = await page.locator(`.layer[data-id="${ids.textId}"]`).boundingBox();
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+
+  expect(await page.evaluate(() => !!document.querySelector('.manualGroupOverlay'))).toBe(true);
+
+  async function tap(x, y) {
+    await page.touchscreen.tap(x, y);
+    await page.waitForTimeout(60);
+  }
+
+  await tap(cx, cy);
+  await page.waitForTimeout(100);
+  await tap(cx, cy);
+  await page.waitForTimeout(300);
+
+  expect(await page.evaluate(() => !!document.querySelector('.ppTextArea176'))).toBe(true);
+});
+
 // Real report, with a screenshot: on Windows Chrome, opening the font dropdown showed almost
 // every option blank/invisible - only the one row under the mouse/keyboard highlight (native
 // blue background) was readable. <option> has no colour of its own, so it inherited the

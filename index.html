@@ -2551,18 +2551,20 @@ function renderManualGroupOverlay(stage,pi){
  const stageRect=stage.getBoundingClientRect();
  const overlayPxW=b.w/100*stageRect.width, overlayPxH=b.h/100*stageRect.height;
  overlay.classList.toggle('ppTinyGroupOverlay', overlayPxW<44 || overlayPxH<44);
- let drag=null;
+ let drag=null, dragMoved=false;
  overlay.addEventListener('pointerdown',e=>{
    if(state.handMode)return;
    if(g.positionLocked)return;
    save();
    const rect=stage.getBoundingClientRect();
    drag={x:e.clientX,y:e.clientY,rect,snap:makeGroupSnapshot(g.id),resize:!!(e.target.closest&&e.target.closest('.manualGroupHandle'))};
+   dragMoved=false;
    overlay.setPointerCapture(e.pointerId);
    e.preventDefault();e.stopPropagation();
  },{passive:false});
  overlay.addEventListener('pointermove',e=>{
    if(!drag)return;
+   dragMoved=true;
    const dx=(e.clientX-drag.x)/drag.rect.width*100;
    const dy=(e.clientY-drag.y)/drag.rect.height*100;
    if(drag.resize)applyGroupResize(g.id,drag.snap,dx,dy);else applyGroupMove(g.id,drag.snap,dx,dy);
@@ -2574,7 +2576,25 @@ function renderManualGroupOverlay(stage,pi){
  overlay.addEventListener('pointerup',e=>{
    drag=null;
    try{overlay.releasePointerCapture(e.pointerId)}catch(err){}
-   renderPages();renderLayers();syncControls();try{if(typeof autosaveSoon==='function')autosaveSoon();}catch(e){}
+   // Real report: "the text editor is not popping up after tapping" - a text/label layer that's
+   // a member of a group could never open its double-tap editor, even after textNodeFromEvent and
+   // the selection check above were both taught to look underneath the group's overlay. This ran
+   // unconditionally on every pointerup here, including a plain, zero-movement tap that never
+   // actually moved or resized anything - renderPages() tears down and rebuilds the entire stage
+   // DOM (including the very overlay/member elements this pointerup just fired on), so by the
+   // time the tap's own touchend arrives a moment later, its original target has already been
+   // detached from the document and the event has nowhere left to bubble to - silently killing
+   // pp-text-v176-js's document-level touchend listener (and anything else listening for it) for
+   // that tap, on every single tap anywhere on a selected group, not just ones meant to edit text.
+   // Only rebuild when something actually moved or resized, matching every other drag handler in
+   // this file, which already skip their own no-op-tap re-renders the same way. A plain tap does
+   // nothing here at all now, even re-drawing just this overlay in place turned out to be its own
+   // version of the same bug: a real touch's touchend is implicitly targeted at whatever element
+   // touchstart fired on, and removing+recreating the overlay element itself (this pointerup's own
+   // target) during that same gesture left the touch with nowhere left to deliver its touchend,
+   // exactly like the original full-page-rebuild bug this comment used to describe. The overlay
+   // already looks and behaves correctly with no touch at all - there is nothing left to redraw.
+   if(dragMoved){ renderPages();renderLayers();syncControls();try{if(typeof autosaveSoon==='function')autosaveSoon();}catch(e){} }
    e.preventDefault();e.stopPropagation();
  },{passive:false});
 }
@@ -13103,7 +13123,31 @@ window.addEventListener('DOMContentLoaded',function(){
     // afterward (preventDefault doesn't stop propagation), so the layer got deleted out from
     // under an editor that had just opened for it.
     if(t.closest('.deleteMini,.handle,.rotateHandle,.resizeHint'))return null;
-    return t.closest('.stage .layer.text,.stage .layer.label');
+    var direct=t.closest('.stage .layer.text,.stage .layer.label');
+    if(direct)return direct;
+    // Real report: "the text editor is not popping up after tapping" - a text/label layer that's
+    // a member of a manual group never opened its double-tap editor at all. A selected group's
+    // own overlay (.manualGroupOverlay, needed so a plain tap/drag can move or resize the whole
+    // group as one) sits on top of every member with pointer-events:auto and a very high z-index
+    // - so a real tap's own e.target is the overlay div itself, never the text layer underneath
+    // it, and closest() above can never find it no matter how the tap is dispatched. Falls back
+    // to checking every element actually stacked at the tap's own coordinates
+    // (elementsFromPoint, which - unlike event targeting - ignores pointer-events and returns the
+    // full geometric stack), so a text member under a group's overlay still resolves for
+    // double-tap-to-edit purposes without changing how the overlay itself handles drag/resize.
+    if(t.closest('.manualGroupOverlay')){
+      var touch=e.changedTouches&&e.changedTouches[0];
+      var px=e.clientX!=null?e.clientX:(touch?touch.clientX:null);
+      var py=e.clientY!=null?e.clientY:(touch?touch.clientY:null);
+      if(px!=null&&py!=null&&document.elementsFromPoint){
+        var stack=document.elementsFromPoint(px,py);
+        for(var i=0;i<stack.length;i++){
+          var m=stack[i].closest&&stack[i].closest('.stage .layer.text,.stage .layer.label');
+          if(m)return m;
+        }
+      }
+    }
+    return null;
   }
   // Real report: tapping a text layer once to select it, then tapping again shortly after
   // (a natural "did that register?" reflex, or aiming for a nearby control) opened the floating
@@ -13120,11 +13164,32 @@ window.addEventListener('DOMContentLoaded',function(){
   // code paths (e.g. the currently-live addText()) visually mark a layer selected by adding the
   // class directly without state.selected ever actually being set to match, so the class is the
   // more reliable "is this really shown as selected right now" signal.
+  // Real report: "the text editor is not popping up after tapping" - even once a group member's
+  // own tap correctly resolves to its text/label layer (see textNodeFromEvent above), a member of
+  // an already-selected group never carries the '.selected' class itself - only the group's own
+  // overlay shows as selected, never the individual members inside it (see renderLayer's own
+  // className line: state.selected holds the GROUP's id while it's selected, never a member's) -
+  // so wasSelected was always false for a grouped member and every tap kept getting treated as
+  // the tap that "first selects" it, never eligible to arm a double-tap. A member whose own
+  // group is the current selection is exactly as "already selected" as a directly-selected plain
+  // layer showing the '.selected' class - both mean the same thing: what you just tapped was
+  // already showing as selected before this gesture began.
+  function nodeAlreadySelected(node){
+    if(!node)return false;
+    if(node.classList.contains('selected'))return true;
+    try{
+      var st=(typeof state!=='undefined'&&state)?state:window.state;
+      var p=(typeof current==='function')?current():null;
+      var l=p&&p.layers&&p.layers.find(function(o){return o.id===(node.dataset&&node.dataset.id);});
+      if(l&&l.groupId&&st&&st.selected===l.groupId)return true;
+    }catch(e){}
+    return false;
+  }
   var preTapSelect={id:null,wasSelected:false};
   document.addEventListener('pointerdown',function(e){
     var node=textNodeFromEvent(e); if(!node){ preTapSelect.id=null; return; }
     preTapSelect.id=node.dataset&&node.dataset.id;
-    preTapSelect.wasSelected=node.classList.contains('selected');
+    preTapSelect.wasSelected=nodeAlreadySelected(node);
   },true);
   function handleTap(e){
     if(active)return;
