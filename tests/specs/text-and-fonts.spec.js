@@ -468,9 +468,12 @@ test('Lora and Liberation Sans are embedded, actually load, and are wired into t
 // bold, which looks weak and barely different from the regular weight. Swapped in Google's actual
 // variable Inter file (weight axis 100-900) under the same 'Inter' family, so font-weight:900
 // now resolves to Inter's own real Black weight instead of a synthetic fatten - and added a new
-// always-heavy 'Inter Extra Bold' family (pinned to the variable font's 800 instance, the same
-// trick League Spartan already uses to always render bold-looking) as its own selectable option
-// for an even heavier look without needing the bold toggle at all.
+// always-heavy 'Inter Extra Bold' family (pinned to the variable font's 900/Black instance, the
+// same trick League Spartan already uses to always render bold-looking) as its own selectable
+// option for a heavy look without needing the bold toggle at all. Pinned at 900 rather than the
+// in-between 800 (ExtraBold) after a follow-up report: toggling "bold" on plain Inter reaches
+// 900 too, and an 800 Extra Bold face was actually LESS bold than that - the opposite of what its
+// name promised. 900 is the variable font's own ceiling, so this is as heavy as either can go.
 test('Inter has a real (not synthetic) bold weight, and Inter Extra Bold is its own selectable, always-heavy font', async ({ page }) => {
   const result = await page.evaluate(async () => {
     await document.fonts.load('500 16px "Inter"');
@@ -512,6 +515,9 @@ test('Inter has a real (not synthetic) bold weight, and Inter Extra Bold is its 
   // generous margin also catches a regression back to the old static file.
   expect(result.inkBold).toBeGreaterThan(result.inkNormal * 1.2);
   expect(result.inkExtraBold).toBeGreaterThan(result.inkNormal * 1.2);
+  // Real follow-up report: "Inter actually looks bolder than Inter Extra Bold" - Extra Bold must
+  // never render lighter than Inter's own bold toggle, or its name is a lie.
+  expect(result.inkExtraBold).toBeGreaterThanOrEqual(result.inkBold);
 });
 
 test('a native page zoom (double-tap slipping past prevention, or an unblockable iOS pinch) gets snapped back to 1x automatically', async ({ page }) => {
