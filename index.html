@@ -22210,3 +22210,39 @@ body.leftCollapsed.rightCollapsed .stage.pattern,body.leftCollapsed.rightCollaps
 })();
 </script>
 
+<script id="pp-heal-orphaned-group-refs">
+// Real report, with a screenshot and a saved .ppages file: deleted a custom mock-up's background
+// photo (a group member alongside its pattern overlay) and the pattern - still fully intact in
+// the layer data - became permanently stuck on the canvas with no way to select or delete it. Its
+// groupId pointed at a group layer that no longer existed anywhere on the page (confirmed
+// directly in the saved file - the exact deletion path that drops a group without also clearing
+// its survivors' groupId wasn't pinned down, but this exact state is definitely reachable).
+// renderLayers()'s own row-building loop unconditionally skips any layer with a groupId set,
+// trusting its parent group's row to display it instead - an orphaned reference like this one
+// just vanishes from the panel forever while still rendering normally on the canvas, since nothing
+// in the canvas-rendering path checks groupId at all. Placed last (after every other
+// window.render/renderPages reassignment in this file) so it wraps whichever version is actually
+// live, and clears any groupId that no longer resolves to a real group before every render -
+// healing that layer back into an ordinary, selectable, deletable one immediately.
+(function(){
+  function healOrphanedGroupRefs(){
+    try{
+      (state&&state.pages||[]).forEach(function(p){
+        if(!p||!Array.isArray(p.layers))return;
+        var validGroupIds={};
+        p.layers.forEach(function(l){ if(l&&l.type==='group')validGroupIds[l.id]=true; });
+        p.layers.forEach(function(l){ if(l&&l.groupId&&!validGroupIds[l.groupId])delete l.groupId; });
+      });
+    }catch(e){}
+  }
+  var oldRender=window.render;
+  if(typeof oldRender==='function'){
+    window.render=function(){ healOrphanedGroupRefs(); return oldRender.apply(this,arguments); };
+  }
+  var oldRenderPages=window.renderPages;
+  if(typeof oldRenderPages==='function'){
+    window.renderPages=function(){ healOrphanedGroupRefs(); return oldRenderPages.apply(this,arguments); };
+  }
+})();
+</script>
+

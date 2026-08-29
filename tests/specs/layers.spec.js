@@ -860,6 +860,42 @@ test('resizing a group non-uniformly keeps every member\'s own box aspect ratio,
   expect(after).toBeCloseTo(before, 5);
 });
 
+// Real report, with a screenshot and a saved .ppages file: deleted a custom mock-up's background
+// photo (a group member alongside its pattern overlay) and the pattern - still fully intact in the
+// layer data - became permanently stuck on the canvas with no way to select or delete it. Its
+// groupId pointed at a group layer that no longer existed anywhere on the page (confirmed directly
+// in the saved file). renderLayers()'s own row-building loop unconditionally skips any layer with
+// a groupId set, trusting its parent group's row to display it instead - an orphaned reference
+// like this one just vanishes from the panel forever while still rendering normally on the canvas,
+// since nothing in the canvas-rendering path checks groupId at all.
+test('a layer whose group no longer exists heals back into an ordinary, deletable layer', async ({ page }) => {
+  const patternId = await page.evaluate(() => {
+    save();
+    // Exactly the shape found in the real broken file: a customMockup layer with a groupId
+    // pointing at a group that was never actually added to this page's layers.
+    const pattern = Object.assign(
+      layer('image', { name: 'custom mock-up pattern area', fit: 'contain', customMockup: true, customMockupLive: true }),
+      { x: 30, y: 35, w: 40, h: 45, z: 1, groupId: 'l_does_not_exist' }
+    );
+    current().layers.push(pattern);
+    render();
+    return pattern.id;
+  });
+  await page.waitForTimeout(200);
+
+  await expect(page.locator(`.layerItem[data-id="${patternId}"]`)).toHaveCount(1);
+  expect(await page.evaluate((id) => !current().layers.find((l) => l.id === id).groupId, patternId)).toBe(true);
+
+  page.on('dialog', (d) => d.accept());
+  await page.evaluate((id) => {
+    document.querySelector(`.layerItem[data-id="${id}"] .deleteLayerBtn`).click();
+  }, patternId);
+  await page.waitForTimeout(200);
+
+  expect(await page.evaluate(() => current().layers.length)).toBe(0);
+  expect(await page.evaluate(() => document.querySelectorAll('.stage .layer').length)).toBe(0);
+});
+
 // Real report: a small badge became nearly impossible to just drag and move - almost any tap
 // landed on a resize handle instead, moving/resizing it unintentionally. Confirmed directly by
 // sampling elementFromPoint() across a shrunk badge's whole box: even its dead center resolved to
