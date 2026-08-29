@@ -461,6 +461,59 @@ test('Lora and Liberation Sans are embedded, actually load, and are wired into t
   }
 });
 
+// Real report: "add inter font family like extra bold and bold it isn't distinctive enough".
+// The embedded Inter file turned out to be a static, single-weight (400/Regular) font - toggling
+// "bold" on Inter text asked for font-weight:900 (see toggleBold()/l.bold throughout this file),
+// but with no real bold outlines available the browser could only fake it with synthetic/faux
+// bold, which looks weak and barely different from the regular weight. Swapped in Google's actual
+// variable Inter file (weight axis 100-900) under the same 'Inter' family, so font-weight:900
+// now resolves to Inter's own real Black weight instead of a synthetic fatten - and added a new
+// always-heavy 'Inter Extra Bold' family (pinned to the variable font's 800 instance, the same
+// trick League Spartan already uses to always render bold-looking) as its own selectable option
+// for an even heavier look without needing the bold toggle at all.
+test('Inter has a real (not synthetic) bold weight, and Inter Extra Bold is its own selectable, always-heavy font', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    await document.fonts.load('500 16px "Inter"');
+    await document.fonts.load('900 16px "Inter"');
+    await document.fonts.load('16px "Inter Extra Bold"');
+
+    function inkCount(family, weight) {
+      const c = document.createElement('canvas'); c.width = 300; c.height = 60;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 300, 60);
+      ctx.fillStyle = '#000';
+      ctx.font = `${weight} 40px "${family}"`;
+      ctx.fillText('Bold Weight', 10, 40);
+      const data = ctx.getImageData(0, 0, 300, 60).data;
+      let count = 0;
+      for (let i = 0; i < data.length; i += 4) if (data[i] < 200) count++;
+      return count;
+    }
+
+    return {
+      hasOption: [...document.getElementById('fontFamily').options].some((o) => o.value === 'Inter Extra Bold'),
+      normalLoaded: document.fonts.check('500 16px "Inter"'),
+      boldLoaded: document.fonts.check('900 16px "Inter"'),
+      extraBoldLoaded: document.fonts.check('16px "Inter Extra Bold"'),
+      // Same weight (500) requested from Inter vs Inter Extra Bold must look different - Extra
+      // Bold ignores the requested weight and always renders its own pinned heavy instance.
+      inkNormal: inkCount('Inter', '500'),
+      inkBold: inkCount('Inter', '900'),
+      inkExtraBold: inkCount('Inter Extra Bold', '500'),
+    };
+  });
+
+  expect(result.hasOption, 'Inter Extra Bold listed in the font dropdown').toBe(true);
+  expect(result.normalLoaded).toBe(true);
+  expect(result.boldLoaded).toBe(true);
+  expect(result.extraBoldLoaded).toBe(true);
+  // A real bold weight has noticeably more ink than regular - a synthetic/faux bold (what a
+  // single-weight static font falls back to) is only marginally thicker than this, so a
+  // generous margin also catches a regression back to the old static file.
+  expect(result.inkBold).toBeGreaterThan(result.inkNormal * 1.2);
+  expect(result.inkExtraBold).toBeGreaterThan(result.inkNormal * 1.2);
+});
+
 test('a native page zoom (double-tap slipping past prevention, or an unblockable iOS pinch) gets snapped back to 1x automatically', async ({ page }) => {
   // Real report + screen recording: double-tapping a text layer to edit it sometimes left the
   // whole app - header, canvas AND both side panels - stuck visibly zoomed in, with the text
