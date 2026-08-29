@@ -12513,6 +12513,43 @@ window.addEventListener('DOMContentLoaded',function(){
     const el=document.querySelector('.layer[data-id="'+l.id+'"]');
     if(el)el.classList.add('customMockupEditing');
   };
+  // Real report: "it creates a blank mock-up without the pattern". Traced from the user's own
+  // .ppages save - the mock-up creation pipeline itself was working correctly (bg/mask/pattern
+  // all present, correctly cropped and composited), but the tray item selected as "pattern" was
+  // an uploaded photo that's essentially a single flat colour with no visible texture at all
+  // (std. deviation of ~0.04 out of 255 across the whole image) - multiplying that onto the
+  // mock-up background looks indistinguishable from no pattern at all. Nothing told the user
+  // their selection had no visible design before spending the "create mock-up" tap on it. Sample
+  // the pattern for real contrast first and ask before proceeding, so a mis-tapped or genuinely
+  // texture-less thumbnail (easy to mistake for another at the tray's small size) doesn't
+  // silently produce a mock-up that looks broken.
+  async function patternLooksBlank(src){
+    try{
+      const img=await image(src);
+      // Sampled at 128x128 (not shrunk further) and by standard deviation, not min/max range -
+      // a naive small downsample (e.g. 32x32) blurs away enough of a real but soft/subtle
+      // pattern's own texture to read as flat too, and a min/max range is thrown off by a single
+      // stray bright/dark pixel (JPEG noise) in an otherwise genuinely blank photo. Checked per
+      // channel, not on the RGB average - two very differently-coloured but equally bright
+      // regions (e.g. a red/blue pattern) can average out to a constant "brightness" while still
+      // being an obviously visible pattern in any one channel.
+      const s=128;
+      const c=document.createElement('canvas'); c.width=s; c.height=s;
+      const ctx=c.getContext('2d',{willReadFrequently:true});
+      ctx.drawImage(img,0,0,s,s);
+      const d=ctx.getImageData(0,0,s,s).data;
+      const n=s*s;
+      let sumR=0,sumG=0,sumB=0;
+      for(let i=0;i<d.length;i+=4){ sumR+=d[i]; sumG+=d[i+1]; sumB+=d[i+2]; }
+      const meanR=sumR/n, meanG=sumG/n, meanB=sumB/n;
+      let varR=0,varG=0,varB=0;
+      for(let i=0;i<d.length;i+=4){
+        varR+=(d[i]-meanR)*(d[i]-meanR); varG+=(d[i+1]-meanG)*(d[i+1]-meanG); varB+=(d[i+2]-meanB)*(d[i+2]-meanB);
+      }
+      const stdR=Math.sqrt(varR/n), stdG=Math.sqrt(varG/n), stdB=Math.sqrt(varB/n);
+      return stdR<1 && stdG<1 && stdB<1;
+    }catch(e){ return false; }
+  }
   async function createClean(e){
     if(e){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
     if(cage.busy){ status('already creating a mock-up…'); return false; }
@@ -12524,6 +12561,10 @@ window.addEventListener('DOMContentLoaded',function(){
       if(!rec.mask){ alert('Upload a white mask first.'); return false; }
       try{ if(typeof save==='function')save(); }catch(e){}
       if(rec.pattern){
+        if(await patternLooksBlank(rec.pattern)){
+          const proceed=confirm('The selected pattern looks like a plain, solid colour with no visible design - the mock-up will likely come out looking blank. Create it anyway?\n\nTap Cancel to pick a different pattern from the tray first.');
+          if(!proceed){ status('mock-up cancelled - pick a pattern with a visible design'); return false; }
+        }
         status('creating mock-up…'); const r=await renderCropped(rec); buildPage(r); redraw(); status('mock-up created ✨');
       }else{
         // No pattern picked yet - place a plain white cutout of the mask's shape on the

@@ -9,6 +9,18 @@ const TINY_PNG = Buffer.from(
   'base64'
 );
 
+// Real report, with a screenshot and the user's own .ppages save: a photo they'd selected as
+// their "pattern" turned out to be almost a single flat colour with no visible texture at all -
+// createClean() now warns (via confirm()) before composing a mock-up from a pattern that looks
+// like a solid colour (see patternLooksBlank in pp-v163-custom-mockup-paparazzi-crop-cage). A
+// single-pixel PNG stretched to fill a box is, by definition, exactly that - tests exercising the
+// real "create mock-up" button need an actual multi-colour pattern so they don't trip that new
+// confirmation prompt (which, with no dialog handler, Playwright auto-dismisses as a cancel).
+const REAL_PATTERN_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAHUlEQVR4nE3GMQEAAAzDIPwrm6vsLReCnHZh1uw8898TEcsAjQcAAAAASUVORK5CYII=',
+  'base64'
+);
+
 test('uploading a background + real alpha mask creates a custom mock-up layer', async ({ page }) => {
   await expandAllBoxes(page);
 
@@ -24,7 +36,7 @@ test('uploading a background + real alpha mask creates a custom mock-up layer', 
 
   // Composing a mock-up also needs a pattern selected in the tray to fill the masked area.
   const patternInput = page.locator('input[onchange*="loadTray"][onchange*="pattern"]');
-  await patternInput.setInputFiles({ name: 'pat.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await patternInput.setInputFiles({ name: 'pat.png', mimeType: 'image/png', buffer: REAL_PATTERN_PNG });
 
   await clickResilient(page, btn);
   await expect
@@ -768,6 +780,12 @@ test('creating a mock-up with no pattern selected places a plain white mask-shap
 test('exporting a page with a live custom mock-up multiplies the pattern over the mock-up photo, matching how it looks live', async ({ page }) => {
   await expandAllBoxes(page);
 
+  // A deliberately flat, single-colour "pattern" below (so the exported pixel is an exact,
+  // predictable multiply of two known flat colours) is exactly what patternLooksBlank's new
+  // confirmation prompt is designed to catch - accept it here rather than switching to a varied
+  // pattern, which would break the exact pixel-match assertion this test relies on.
+  page.on('dialog', (d) => d.accept());
+
   const bgColor = [200, 120, 40];
   const patternColor = [80, 180, 60];
 
@@ -840,4 +858,52 @@ test('exporting a page with a live custom mock-up multiplies the pattern over th
   }
   const distanceFromFlat = Math.hypot(pixel[0] - flatPatternOnly[0], pixel[1] - flatPatternOnly[1], pixel[2] - flatPatternOnly[2]);
   expect(distanceFromFlat).toBeGreaterThan(20);
+});
+
+// Real report, with a screenshot and the user's own .ppages save: "it creates a blank mock-up
+// without the pattern". Traced to the pattern they'd selected in the tray, a phone photo that
+// turned out to be almost a single flat colour with no visible texture at all - the mock-up
+// pipeline itself worked correctly (bg/mask/pattern all composited as asked), but multiplying a
+// near-blank "pattern" onto the photo looks indistinguishable from no pattern at all, and nothing
+// warned the user their selection had no visible design before they spent the "create mock-up"
+// tap on it. createClean() now samples the selected pattern for real colour variance first and
+// confirms before proceeding if it looks like a solid colour.
+test('creating a mock-up with a near-blank (solid-colour) pattern warns before proceeding', async ({ page }) => {
+  await expandAllBoxes(page);
+
+  const bgInput = page.locator('#customMockupBgInput');
+  const maskInput = page.locator('#customMockupMaskInput');
+  const patternInput = page.locator('input[onchange*="loadTray"][onchange*="pattern"]');
+  const btn = page.locator('#createCustomMockupBtnV163');
+
+  await bgInput.setInputFiles({ name: 'bg.png', mimeType: 'image/png', buffer: TINY_PNG });
+  await maskInput.setInputFiles({ name: 'mask.png', mimeType: 'image/png', buffer: TINY_PNG });
+  // TINY_PNG is a single stretched pixel - by definition a solid colour with zero variance,
+  // matching the real report's near-featureless photo closely enough to trigger the same check.
+  await patternInput.setInputFiles({ name: 'pat.png', mimeType: 'image/png', buffer: TINY_PNG });
+
+  const dialogs = [];
+  page.on('dialog', async (d) => { dialogs.push(d.message()); await d.dismiss(); });
+
+  await clickResilient(page, btn);
+  await expect.poll(() => dialogs.length, { timeout: 5000 }).toBeGreaterThan(0);
+  expect(dialogs[0]).toMatch(/solid colour/i);
+
+  // Cancelling the warning must not leave a half-created mock-up behind.
+  const hasCustomMockupLayer = await page.evaluate(() =>
+    state.pages.some((p) => (p.layers || []).some((l) => l.customMockup || l.customMockupCropped))
+  );
+  expect(hasCustomMockupLayer).toBe(false);
+
+  // Accepting it anyway still creates the mock-up - it's a warning, not a hard block.
+  page.removeAllListeners('dialog');
+  page.on('dialog', (d) => d.accept());
+  await page.waitForTimeout(700); // clear the busy-flag reset from the cancelled attempt above
+  await clickResilient(page, btn);
+  await expect
+    .poll(
+      () => page.evaluate(() => state.pages.some((p) => (p.layers || []).some((l) => l.customMockup))),
+      { timeout: 5000 }
+    )
+    .toBe(true);
 });
