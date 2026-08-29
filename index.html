@@ -2162,14 +2162,27 @@ function applyGroupResize(groupId,snap,dx,dy){
   const p=current();
   const b=snap.bounds;if(!b)return;
   const newW=Math.max(5,b.w+dx), newH=Math.max(5,b.h+dy);
-  const sx=newW/Math.max(1,b.w), sy=newH/Math.max(1,b.h);
-  snap.items.forEach(s=>{
-    const l=p.layers.find(o=>o.id===s.id);
+  // Real report, with a screenshot: grouped a custom mock-up's photo with its pattern overlay (a
+  // tight crop positioned to line up exactly with the mug in that photo) to resize them together
+  // and make room for some text - after a free (independent width/height) resize, the pattern no
+  // longer covered the mug. Every member here does scale by the same per-axis factor, which keeps
+  // their positions correctly aligned relative to each other - but the pattern overlay draws with
+  // object-fit:contain using its own image's original aspect ratio, and stretching width and
+  // height by different amounts changes the box's aspect ratio out from under it, letterboxing
+  // the pattern inside a box it no longer fully fills. Deriving one uniform (aspect-locked) scale
+  // from the diagonal, instead of independent sx/sy, keeps every member's own box aspect ratio
+  // identical to before, so a fit:contain image inside it always still fills it completely - the
+  // same guarantee a plain, ungrouped mock-up already has via its own dedicated recrop-on-adjust
+  // path (updateClean()), which this generic drag-resize never went through in the first place.
+  const scale=Math.max(0.05, Math.hypot(newW,newH)/Math.max(1,Math.hypot(b.w,b.h)));
+  const sx=scale, sy=scale;
+  snap.items.forEach(item=>{
+    const l=p.layers.find(o=>o.id===item.id);
     if(!l)return;
-    l.x=b.x+(s.x-b.x)*sx;
-    l.y=b.y+(s.y-b.y)*sy;
-    l.w=Math.max(2,s.w*sx);
-    l.h=Math.max(2,s.h*sy);
+    l.x=b.x+(item.x-b.x)*sx;
+    l.y=b.y+(item.y-b.y)*sy;
+    l.w=Math.max(2,item.w*sx);
+    l.h=Math.max(2,item.h*sy);
   });
   const g=p.layers.find(o=>o.id===groupId);
   if(g)updateGroupLayerBounds(g);

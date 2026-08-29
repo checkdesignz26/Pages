@@ -814,6 +814,52 @@ test('a tiny group still has a safe area to drag-move, not just its resize handl
   }
 });
 
+// Real report, with screenshots: grouped a custom mock-up's photo with its pattern overlay (a
+// tight crop positioned/sized to line up exactly with the mug in that photo) to resize them
+// together and make room for some text - after dragging the group's resize handle, the pattern
+// no longer covered the mug. applyGroupResize scales every member by the same per-axis factor,
+// which does keep their positions correctly aligned relative to each other - but the pattern
+// overlay draws with object-fit:contain using its own image's original aspect ratio, and a free
+// (independent width/height) resize changes the box's aspect ratio out from under it, letterboxing
+// the pattern inside a box it no longer fully fills. A plain, ungrouped mock-up never hits this,
+// since it always goes through its own dedicated recrop-on-adjust path (updateClean()) instead of
+// this generic drag-resize.
+test('resizing a group non-uniformly keeps every member\'s own box aspect ratio, so a fit:contain image never gets letterboxed', async ({ page }) => {
+  const groupId = await page.evaluate(() => {
+    save();
+    const photo = Object.assign(layer('image', { name: 'Image', fit: 'cover' }), { x: 0, y: 0, w: 100, h: 100, z: 1 });
+    const pattern = Object.assign(layer('image', { name: 'custom mock-up pattern area', fit: 'contain', customMockup: true }),
+      { x: 31.79, y: 36.29, w: 43.95, h: 49.80, z: 2 });
+    current().layers.push(photo, pattern);
+    state.layerMultiSelect = true;
+    state.selectedLayerIds = [photo.id, pattern.id];
+    state.selected = photo.id;
+    window.groupSelectedLayers();
+    const g = current().layers.find((l) => l.type === 'group');
+    window.__ppTestPatternId = pattern.id;
+    return g.id;
+  });
+  await page.waitForTimeout(200);
+
+  const before = await page.evaluate((id) => {
+    const l = current().layers.find((x) => x.id === window.__ppTestPatternId);
+    return l.w / l.h;
+  }, groupId);
+
+  // A non-uniform resize: shrink width a lot, height only a little.
+  await page.evaluate((gid) => {
+    const snap = makeGroupSnapshot(gid);
+    applyGroupResize(gid, snap, -30, -10);
+  }, groupId);
+
+  const after = await page.evaluate(() => {
+    const l = current().layers.find((x) => x.id === window.__ppTestPatternId);
+    return l.w / l.h;
+  });
+
+  expect(after).toBeCloseTo(before, 5);
+});
+
 // Real report: a small badge became nearly impossible to just drag and move - almost any tap
 // landed on a resize handle instead, moving/resizing it unintentionally. Confirmed directly by
 // sampling elementFromPoint() across a shrunk badge's whole box: even its dead center resolved to
