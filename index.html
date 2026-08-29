@@ -3472,7 +3472,16 @@ function installCanvasGestures(){
     if(pinchGesture && e.touches.length===2){
       const d=distBetweenTouches(e.touches);
       if(Math.abs(d-pinchGesture.startDist)>14) twoFingerMoved=true;
-      const next=Math.max(0.55, Math.min(1.8, pinchGesture.startZoom * (d / Math.max(1,pinchGesture.startDist))));
+      // Real report: "auto save doesn't render the pages properly, still doing the shrink
+      // stuff" - a pinch could zoom out to 0.55, well past the 0.75 floor the +/- buttons
+      // enforce (zoomPage's own clamp is [0.75,1.25]), and an unrounded float like that saves
+      // into autosave/restoreAutoSave exactly as-is. Reopening the project later (or just
+      // accepting the crash-recovery prompt) then restores that same drastically-shrunk zoom,
+      // which read as autosave itself being broken - it was faithfully restoring a zoom level
+      // only a pinch could ever reach in the first place. Match zoomPage()'s own clamp and
+      // rounding so pinch can never leave the page more shrunk than the buttons ever could, and
+      // can't drift to an unrounded float either.
+      const next=Math.round(Math.max(0.75, Math.min(1.25, pinchGesture.startZoom * (d / Math.max(1,pinchGesture.startDist))))*100)/100;
       if(Math.abs(next-state.zoom)>.01){state.zoom=next;renderPages();}
       e.preventDefault();
     }

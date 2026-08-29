@@ -96,6 +96,29 @@ test('pinch-to-zoom still works when the pinch starts on the page itself', async
   expect(zoomAfter).toBeGreaterThan(zoomBefore);
 });
 
+// Real report: "auto save doesn't render the pages properly, still doing the shrink stuff." A
+// generous pinch-in could zoom out to 0.55 - well past the 0.75 floor the +/- buttons enforce
+// (zoomPage()'s own clamp is [0.75,1.25]) - and that drastically-shrunk zoom then saved into
+// autosave exactly as-is. Reopening the project later (or just accepting the crash-recovery
+// prompt) restored that same shrunk zoom, which read as autosave itself being broken - it was
+// faithfully restoring a zoom level only a pinch could ever reach in the first place.
+test('pinch-to-zoom cannot shrink the page further than the +/- buttons ever could', async ({ page }) => {
+  await installTouchHelpers(page);
+  const { cx, cy } = await stageCentre(page);
+  // A big pinch-in: fingers start 150px apart and end up only 30px apart.
+  await pinch(page, cx, cy, 150, 30);
+  await page.waitForTimeout(150);
+  const zoomAfterPinch = await page.evaluate(() => state.zoom);
+
+  const buttonFloor = await page.evaluate(() => {
+    state.zoom = 1;
+    for (let i = 0; i < 20; i++) window.zoomPage(-0.05);
+    return state.zoom;
+  });
+
+  expect(zoomAfterPinch).toBeGreaterThanOrEqual(buttonFloor);
+});
+
 // Real report, with screenshots: pinch-zooming the canvas also nudged whichever image happened
 // to be under one of the two fingers. touchstart/pointerdown fire per-finger, not atomically for
 // both fingers at once - on a real device, the first finger lands and starts an ordinary
