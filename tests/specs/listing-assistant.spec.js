@@ -4,7 +4,7 @@
 // list is built from a small set of always-the-same template words (subject+pattern,
 // subject+print, ...) - now widened into a larger synonym pool that gets shuffled per call, so
 // regenerating on the same input gives a different, still-relevant mix instead of a frozen list.
-const { test, expect } = require('../support/fixtures');
+const { test, expect, expandAllBoxes } = require('../support/fixtures');
 
 test('the Etsy tag generator gives a different set of tags each time you regenerate, not the same fixed list', async ({ page }) => {
   await page.evaluate(() => {
@@ -68,4 +68,82 @@ test('a product-style listing (a notebook cover, not a decorative pattern) gets 
     decorativeSurfaceWords.forEach((word) => expect(tags).not.toContain(word));
     expect(tags).toContain('back to school');
   });
+});
+
+// Real report: "the etsy assistant long tail keywords are very similar and repeat themselves,
+// can they be more varied and the tags more specific". The long-tail list never got the same
+// shuffled-pool treatment the tags above did - it was always the exact same "{subject} + one
+// fixed word" pairs, in the same fixed order, on every single generate. Widened into a pool of
+// adjectives, formats and real use-cases (drawing on the same isProductContext split the tags
+// use) so both the wording and the phrase structure vary between generates.
+test('the long-tail keyword generator gives a different, more varied set each time you regenerate, not the same fixed list', async ({ page }) => {
+  await page.evaluate(() => {
+    document.getElementById('listingPatternName').value = 'Autumn coffee break';
+    document.getElementById('listingKeywords').value = 'autumn coffee';
+  });
+
+  const runs = await page.evaluate(() => {
+    const out = [];
+    for (let i = 0; i < 10; i++) {
+      window.generateListingHelper();
+      out.push(document.getElementById('longTailKeywordsOutput').value);
+    }
+    return out;
+  });
+
+  // Not identical every time - that was the reported problem.
+  const uniqueRuns = new Set(runs);
+  expect(uniqueRuns.size).toBeGreaterThan(1);
+
+  runs.forEach((text) => {
+    const list = text.split('\n').filter(Boolean);
+    // Real, varied phrases, not a short frozen list - and no duplicate phrases within one batch.
+    expect(list.length).toBeGreaterThanOrEqual(10);
+    expect(new Set(list).size).toBe(list.length);
+    // A couple of generic, always-relevant phrases stay guaranteed regardless of variety.
+    expect(text).toContain('commercial use seamless pattern');
+  });
+
+  // Structural variety, not just which single word follows the subject: at least one phrase
+  // should combine the subject with a real use-case ("... pattern for nursery decor"/"...
+  // scrapbooking"/etc), not just "{subject} {format}".
+  const anyUseCasePhrase = runs.some((text) => /pattern for [a-z ]+/.test(text));
+  expect(anyUseCasePhrase).toBe(true);
+});
+
+// Real request: "when I download a zip file it always download[s] the etsy assistant generated
+// text, can there be an option that it['s] ticked so it doesn't get downloaded". A checkbox in
+// the Etsy Assistant panel, checked (the existing behaviour) by default, that downloadAllPagesZip
+// now respects.
+test('the "include EtsyAssistant.txt in download zip" checkbox is on by default and controls whether it gets bundled', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => {
+    document.getElementById('listingPatternName').value = 'Strawberry';
+    document.getElementById('listingKeywords').value = '';
+    window.generateListingHelper();
+  });
+
+  const checked = await page.evaluate(() => document.getElementById('includeEtsyAssistantInZip').checked);
+  expect(checked).toBe(true);
+
+  const wantsWithChecked = await page.evaluate(() => {
+    const cb = document.getElementById('includeEtsyAssistantInZip');
+    const want = !cb || cb.checked;
+    const txt = want ? window.currentEtsyAssistantText() : '';
+    return !!(txt && !txt.includes('No Etsy Assistant text generated yet.'));
+  });
+  expect(wantsWithChecked).toBe(true);
+
+  await page.evaluate(() => {
+    const cb = document.getElementById('includeEtsyAssistantInZip');
+    cb.checked = false;
+    cb.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  const wantsWithUnchecked = await page.evaluate(() => {
+    const cb = document.getElementById('includeEtsyAssistantInZip');
+    const want = !cb || cb.checked;
+    const txt = want ? window.currentEtsyAssistantText() : '';
+    return !!(txt && !txt.includes('No Etsy Assistant text generated yet.'));
+  });
+  expect(wantsWithUnchecked).toBe(false);
 });

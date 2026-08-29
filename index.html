@@ -1449,6 +1449,7 @@ body.autoGroupEditing .layer.collectionGrouped{
   <textarea id="listingKeywords" placeholder="e.g. strawberries, summer fruit, cottagecore, seamless pattern"></textarea>
   <div class="grid2"><button class="primary" onclick="generateListingHelper()" title="Generate tags, keywords and title ideas from your pattern name">generate Etsy ideas</button><button onclick="clearListingHelper()" title="Clear all generated Etsy listing suggestions">clear</button></div>
   <button class="full" onclick="downloadEtsyAssistantTxt()" title="Download all the generated suggestions as a text file">save EtsyAssistant.txt</button>
+  <label class="smallText" style="display:flex;align-items:center;gap:6px;margin-top:6px;"><input id="includeEtsyAssistantInZip" type="checkbox" checked title="When on, download zip also includes EtsyAssistant.txt alongside the page PNGs"> include EtsyAssistant.txt in "download zip"</label>
   <div class="helperOutputTitle"><strong>etsy tags</strong><button onclick="copyListingOutput('etsyTagsOutput')" title="Copy the generated Etsy tags to your clipboard">copy</button></div>
   <textarea id="etsyTagsOutput" class="output" readonly placeholder="13 Etsy-friendly tag ideas will appear here. Suggestions only — no ranking promises."></textarea>
   <div class="helperOutputTitle"><strong>long-tail keywords</strong><button onclick="copyListingOutput('longTailKeywordsOutput')" title="Copy the generated long-tail keywords to your clipboard">copy</button></div>
@@ -6928,6 +6929,13 @@ document.addEventListener('click', function(e){
     const productExtras=['cover design','template','printable','digital download','stationery','cover art'];
     const subjectFormatPool=['print','paper','fabric','repeat'].concat(isProductContext?productExtras:decorativeExtras);
     ['pattern','seamless'].concat(shuffled(subjectFormatPool).slice(0,4)).forEach(f=>pushPair(subject,f));
+    // Real request, from the same beta tester who asked for tag variety above: "the tags [could
+    // be] more specific". A plain "{subject} pattern" or "{subject} print" tag is exactly what
+    // every other seller with the same subject is already using - a couple of true 3-word
+    // compound tags (style + subject + format) up front are meaningfully more specific/long-tail
+    // without losing the always-relevant plain pair above.
+    const styleAdjPool=['hand drawn','colourful','whimsical','cute','minimalist','vintage','modern','rustic','watercolor','delicate'];
+    shuffled(styleAdjPool).slice(0,2).forEach(adj=>push(adj+' '+subject+' pattern'));
     if(mood && mood!==subject){
       const moodFormatPool=['pattern','print','paper','fabric'].concat(isProductContext?['template','printable']:['wallpaper','clipart']);
       shuffled(moodFormatPool).slice(0,3).forEach(f=>pushPair(mood,f));
@@ -6944,20 +6952,27 @@ document.addEventListener('click', function(e){
     genericAlways.concat(shuffled(genericPool).slice(0,5)).forEach(push);
     const etsyTags=uniqueTags(tagIdeas);
 
+    // Real request: "the etsy assistant long tail keywords are very similar and repeat
+    // themselves, can they be more varied". The old list was always the exact same handful of
+    // "{subject} + {one fixed word}" pairs, in the same fixed order, every single time - the same
+    // repetitiveness the tag pool above already got fixed for with a shuffled synonym pool.
+    // Building from a much wider pool of adjectives, formats and real use-cases (drawing on
+    // isProductContext the same way the tags above do) and shuffling which ones get picked means
+    // both the wording AND the phrase structure vary between generates, not just which single
+    // word follows the subject.
+    const usecasePool=isProductContext
+      ? ['planner stickers','notebook covers','stationery sets','card making','journaling supplies','gift tags']
+      : ['nursery decor','wallpaper design','fabric printing','gift wrap','scrapbooking','wall art','home decor'];
+    const formatPool=['seamless pattern','repeat pattern','digital paper','fabric print','surface pattern design','print on demand design'];
     const longTailSeeds=[];
     const longPush=(phrase)=>{ if(phrase) longTailSeeds.push(phrase); };
-    longPush(subject+' seamless pattern');
-    longPush(subject+' repeat pattern');
-    longPush(subject+' digital paper');
-    longPush(subject+' fabric print');
-    longPush(subject+' surface pattern design');
-    longPush('hand drawn '+subject+' pattern');
-    longPush('colourful '+subject+' pattern');
+    shuffled(formatPool).slice(0,4).forEach(f=>longPush(subject+' '+f));
+    shuffled(styleAdjPool).slice(0,3).forEach(adj=>longPush(adj+' '+subject+' pattern'));
+    shuffled(usecasePool).slice(0,3).forEach(u=>longPush(subject+' pattern for '+u));
     if(mood && mood!==subject){
-      longPush(mood+' seamless pattern');
-      longPush(mood+' repeat pattern');
-      longPush(mood+' fabric print');
-      longPush(mood+' digital paper');
+      longPush(shuffled(styleAdjPool)[0]+' '+mood+' pattern');
+      longPush(mood+' '+shuffled(formatPool)[0]);
+      longPush(mood+' pattern for '+shuffled(usecasePool)[0]);
     }
     if(hasAny(['fruit','strawberry','berry','pineapple','cherry'])){
       longPush('summer fruit seamless pattern');
@@ -7380,7 +7395,11 @@ document.addEventListener('click', function(e){
       if(!name)name=defaultName;
       const files=[];
       for(let i=0;i<state.pages.length;i++){ const c=await renderPageToCanvas(state.pages[i]); const blob=await canvasToBlob(c); files.push({name:`pattern-pages-${i+1}.png`, blob}); }
-      const txt=window.currentEtsyAssistantText();
+      // Real request: "download zip always downloads the etsy assistant generated text, can
+      // there be an option that it's ticked so it doesn't get downloaded" - opt-out checkbox in
+      // the Etsy Assistant panel, checked (current behaviour) by default.
+      const includeEtsyAssistant=safe$('includeEtsyAssistantInZip'); const wantEtsyAssistant=!includeEtsyAssistant||includeEtsyAssistant.checked;
+      const txt=wantEtsyAssistant?window.currentEtsyAssistantText():'';
       if(txt && !txt.includes('No Etsy Assistant text generated yet.')) files.push({name:'EtsyAssistant.txt', blob:new Blob([txt],{type:'text/plain;charset=utf-8'})});
       const zip=await makeZip(files); const a=document.createElement('a'); a.href=URL.createObjectURL(zip); a.download=name+'.zip'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
     };
