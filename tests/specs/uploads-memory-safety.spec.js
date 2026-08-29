@@ -487,6 +487,56 @@ test('the parked-page preview draws a text layer\'s actual caption, not the capt
   expect(calls.some((t) => t.includes('Etsy Listing'))).toBe(true);
 });
 
+test('the parked-page preview wraps a multi-line text layer onto several lines, instead of squishing it onto one', async ({ page }) => {
+  // Real report, with a screenshot: a page with a bulleted feature list (each bullet its own
+  // '\n'-separated line, same as makeBulletList produces) came back from the parked-page
+  // preview with every bullet crammed onto a single line, visibly squeezed to fit and
+  // overlapping the layer drawn below it - customers seeing the app mid-scroll would think
+  // their page was broken. Root cause: the preview's text branch drew the whole caption with
+  // one fillText(text.slice(0,60), x, y, maxWidth) call - a maxWidth on fillText squeezes an
+  // over-wide line horizontally, it does not wrap it onto more lines, and the 60-character
+  // slice silently dropped anything past it. Fixed to word-wrap each real line onto as many
+  // lines as the box can show, same as the live page's own wrapped text.
+  await page.evaluate(() => {
+    window.__ppFillTextCalls = [];
+    const proto = CanvasRenderingContext2D.prototype;
+    if (!proto.__ppOrigFillText) {
+      proto.__ppOrigFillText = proto.fillText;
+      proto.fillText = function (text, ...rest) {
+        window.__ppFillTextCalls.push(text);
+        return proto.__ppOrigFillText.call(this, text, ...rest);
+      };
+    }
+  });
+
+  const bullets = ['• Etsy Listing', '• Social Media Posts', '• PDF Documents', '• Pattern Showcases'];
+  await page.evaluate((bulletLines) => {
+    save();
+    state.pages = [
+      { type: 'listing', w: 3000, h: 2250, layers: [
+        { id: 'l1', type: 'text', name: 'features', text: bulletLines.join('\n'), x: 10, y: 10, w: 60, h: 30, z: 1, opacity: 1, r: 0, fontSize: 32, color: '#111111', textAlign: 'left' },
+      ] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+    ];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+  }, bullets);
+
+  await expect(page.locator('.stage[data-page="0"] .layer.text')).toHaveCount(1);
+  await page.evaluate(() => { window.__ppFillTextCalls.length = 0; state.selectedPage = 2; state.selected = null; render(); });
+
+  await expect(page.locator('.stage[data-page="0"] .pp95ParkedPreviewImg')).toHaveCount(1, { timeout: 5000 });
+
+  const calls = await page.evaluate(() => window.__ppFillTextCalls);
+  // Every bullet drawn as its own line - not one call with several bullets glued together.
+  expect(calls.length).toBeGreaterThanOrEqual(bullets.length);
+  calls.forEach((text) => { expect((text.match(/•/g) || []).length).toBeLessThanOrEqual(1); });
+  // Nothing silently dropped, including the last bullet the old 60-character slice used to cut.
+  bullets.forEach((bullet) => { expect(calls.some((t) => t.includes(bullet.replace('• ', '')))).toBe(true); });
+});
+
 test('the parked-page preview clips a circular pattern slot to a circle, instead of drawing its square bounding box', async ({ page }) => {
   // Real bug (screenshot): a "pattern tile square" page has a big round pattern-fill slot in
   // the middle (a type:'card' patternSlot layer with slotShape:'circle', styled entirely via

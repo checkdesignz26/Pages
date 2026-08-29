@@ -17517,13 +17517,51 @@ else install();
         // (just CSS-hidden when not selected), so textContent silently concatenated all of
         // that UI chrome onto the actual text in every cached preview. Read the caption
         // element's own text instead, same as the style lookup right above already does.
-        const text=(textEl.textContent||'').trim();
-        if(text){
+        const text=(textEl.textContent||'').replace(/\r/g,'');
+        if(text.trim()){
           ctx.fillStyle=styleSrc.color||'#333';
           let fs=parseFloat(styleSrc.fontSize)*k; if(!fs||fs<4) fs=Math.max(6,h*0.35);
           ctx.font=fs+'px '+(styleSrc.fontFamily||'sans-serif');
-          ctx.textAlign='center'; ctx.textBaseline='middle';
-          try{ ctx.fillText(text.slice(0,60), x+w/2, y+h/2, w); }catch(e){}
+          let lh=parseFloat(styleSrc.lineHeight);
+          lh=(!lh||isNaN(lh))?fs*1.2:lh*k;
+          // Real report, with a screenshot: a page full of multi-line text (a bulleted feature
+          // list, a wrapped paragraph) came back from the parked-page preview squished onto one
+          // line and overlapping whatever sat below it - a single fillText call with a maxWidth
+          // doesn't wrap text onto more lines, it horizontally squeezes the one line to fit
+          // instead, and truncating at 60 characters silently dropped whatever came after. Word-
+          // wrap each explicit line break in the source text (bullet/numbered list items are
+          // real '\n'-separated lines - see makeBulletList/makeNumberedList) to the box's own
+          // width, capped to as many lines as the box can actually show, so the preview looks
+          // like a smaller version of the real page instead of a garbled placeholder.
+          const align=styleSrc.textAlign;
+          ctx.textAlign=(align==='left'||align==='start')?'left':(align==='right'||align==='end')?'right':'center';
+          ctx.textBaseline='alphabetic';
+          const anchorX=ctx.textAlign==='left'?x+2:(ctx.textAlign==='right'?x+w-2:x+w/2);
+          const maxLineW=Math.max(1,w-4);
+          const lines=[];
+          text.split('\n').forEach(function(para){
+            const words=para.split(/\s+/).filter(Boolean);
+            if(!words.length){ lines.push(''); return; }
+            let cur='';
+            words.forEach(function(word){
+              const test=cur?cur+' '+word:word;
+              if(cur&&ctx.measureText(test).width>maxLineW){ lines.push(cur); cur=word; }
+              else cur=test;
+            });
+            if(cur) lines.push(cur);
+          });
+          const maxLines=Math.max(1,Math.floor(h/lh));
+          const shown=lines.slice(0,maxLines);
+          if(shown.length<lines.length&&shown.length){
+            let last=shown[shown.length-1];
+            while(last&&ctx.measureText(last+'…').width>maxLineW) last=last.slice(0,-1);
+            shown[shown.length-1]=last+'…';
+          }
+          const blockH=shown.length*lh;
+          const startY=y+h/2-blockH/2+lh*0.8;
+          shown.forEach(function(line,i){
+            try{ ctx.fillText(line, anchorX, startY+i*lh); }catch(e){}
+          });
         }
         if(clipped) ctx.restore();
       }
