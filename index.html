@@ -22158,3 +22158,33 @@ body.leftCollapsed.rightCollapsed .stage.pattern,body.leftCollapsed.rightCollaps
   }
 </style>
 
+<script id="pp-group-overlay-survives-zoom">
+// Real report, with a screen recording: a selected group's outline (and the pattern-tray "grouped
+// stash" outline) visibly vanished and then snapped back into place every time the +/- zoom
+// buttons (or a pinch-zoom) were used, looking like the image had shifted. Both overlays are
+// separate <div>s appended on top of the real layers by renderManualGroupOverlay/
+// renderAutoGroupOverlay - renderPages() rebuilds the whole page from scratch on every zoom
+// change, wiping those divs along with everything else. The only thing that ever redrew them was
+// a document-wide click/pointerup listener elsewhere in this file that waits 60ms before doing so
+// (so a plain layer click's own render lands first) - a zoom tap's click does eventually reach
+// that listener too, but only after a visible gap where the box is just gone. Placed last (after
+// every other window.renderPages reassignment in this file) so it wraps whichever version is
+// actually live, and redraws both overlays synchronously, in the same tick as the render itself -
+// whether that render came from a zoom, a pinch, or anything else - so there's nothing left to
+// wait 60ms for.
+(function(){
+  var oldRenderPages=window.renderPages;
+  if(typeof oldRenderPages!=='function') return;
+  window.renderPages=function(){
+    var out=oldRenderPages.apply(this,arguments);
+    try{
+      document.querySelectorAll('.stage').forEach(function(stage,idx){
+        if(typeof renderManualGroupOverlay==='function') renderManualGroupOverlay(stage,idx);
+        if(typeof renderAutoGroupOverlay==='function') renderAutoGroupOverlay(stage,idx);
+      });
+    }catch(e){}
+    return out;
+  };
+})();
+</script>
+

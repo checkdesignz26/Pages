@@ -175,6 +175,41 @@ test('pinch-to-zoom does not also drag the layer under one of the fingers', asyn
   await page.evaluate(() => window.__fireTouch('touchend', [], [window.__tA, window.__tB], document.body));
 });
 
+// Real report, with a screen recording: a selected group's outline visibly vanished and then
+// snapped back into place every time the +/- zoom buttons were tapped, looking like the image
+// had shifted. The overlay is a separate <div> appended on top of the real layers by
+// renderManualGroupOverlay - renderPages() (which zoomPage() calls on every zoom step) rebuilds
+// the whole page from scratch, wiping that div along with everything else. The only thing that
+// ever redrew it was a document-wide click/pointerup listener elsewhere in the app that waits
+// 60ms before doing so, so there was a real, visible gap on every single zoom tap where the
+// group's outline was just gone.
+test('a selected group\'s outline survives a zoom step without ever disappearing', async ({ page }) => {
+  await page.evaluate(() => {
+    save();
+    addText('text');
+    addBadge('oval');
+    const ids = current().layers.map((l) => l.id);
+    state.layerMultiSelect = true;
+    state.selectedLayerIds = ids;
+    state.selected = ids[0];
+    window.groupSelectedLayers();
+    const g = current().layers.find((l) => l.type === 'group');
+    state.selected = g.id;
+    render();
+  });
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => !!document.querySelector('.manualGroupOverlay'))).toBe(true);
+
+  // Dispatched directly (not via page.click, whose actionability checks and event round-trip
+  // eat into the very 60ms gap this test exists to catch) and checked with a plain, non-retrying
+  // page.evaluate() straight after - expect(locator).toHaveCount() polls for up to its whole
+  // default timeout and would still pass even if the overlay disappeared for a while first.
+  await page.evaluate(() => {
+    document.querySelector('button[onclick*="zoomPage(0.05)"]').click();
+  });
+  expect(await page.evaluate(() => !!document.querySelector('.manualGroupOverlay'))).toBe(true);
+});
+
 test('three-finger tap undoes, three-finger double-tap redoes', async ({ page }) => {
   await installTouchHelpers(page);
   const { cx, cy } = await stageCentre(page);
