@@ -1115,14 +1115,15 @@ test('the "drag corner to resize" hint no longer covers small selected layers of
 // already worked), deferred behind a small movement threshold so a plain tap there still just
 // selects the layer as before, instead of ever being mistaken for a drag.
 test.describe(() => {
-  // A plain page.mouse drag doesn't distinguish the fix from the bug here: rows also carry
-  // draggable="true" for native HTML5 drag-and-drop (dragstart/dragover/drop, wired further down
-  // in rowForLayerV170), and a mouse drag from anywhere on the row already invokes that native
-  // path regardless of this patch. Native drag-and-drop doesn't reliably arm from a real
-  // touchscreen swipe the way it does from a mouse, though - which is exactly why
-  // pp-layer-panel-touch-drag-patch exists, and exactly why its own grip-only hit-testing was the
-  // actual bug for the iPad user who reported this. So this needs real touch + pointer dispatch,
-  // not a mouse drag, to actually exercise (and tell apart) the code path in question.
+  // Historical note: rows used to also carry draggable="true" for a second, older native HTML5
+  // drag-and-drop implementation (dragstart/dragover/drop, wired in rowForLayerV170), left over
+  // from before pp-layer-panel-touch-drag-patch was written - a plain page.mouse drag on an
+  // unpatched row got hijacked by that native path instead of exercising this one at all (see the
+  // "not hijacked by the browser's own native drag-and-drop" test further down, which covers that
+  // directly with a real mouse pointer now that draggable is unconditionally false). Kept using
+  // real touch + pointer dispatch here regardless: an actual touchscreen fires touch and pointer
+  // events together in a specific order a mouse never produces, and this describe block's tests
+  // are specifically about that ordering and the arm-threshold/auto-scroll logic built for it.
   test.use({ hasTouch: true });
 
   async function installTouchDragHelpers(page) {
@@ -1321,6 +1322,81 @@ test.describe(() => {
       () => document.getElementById('layerList').closest('.side.right').scrollTop
     );
     expect(scrollTopAfter).toBeGreaterThan(scrollTopBefore);
+  });
+
+  // Real report, with a screen recording: dragging a layer row by grabbing its body (not the tiny
+  // grip icon) started fine - the ghost appeared - then froze in place for several seconds before
+  // the drag silently gave up with the row back where it started, no reorder applied. Root cause:
+  // every row was also marked draggable="true" and wired up with a second, older, native HTML5
+  // drag-and-drop implementation (dragstart/dragover/drop), left over from before this pointer-
+  // based drag script was written specifically because native drag-and-drop is unreliable on
+  // touch. With both live at once, any pointer the browser is willing to treat as a native drag
+  // trigger (a mouse or trackpad pointer, e.g. an iPad used with a Magic Keyboard, in addition to
+  // whatever touch cases the browser itself decides to support) fires 'dragstart' - and cancels
+  // the in-flight pointer sequence via 'pointercancel' right out from under this code - handing
+  // the gesture to native drag-and-drop instead, which then never completes a same-page drop, so
+  // it just sits frozen until the browser gives up and reverts it. Confirmed directly: a real
+  // (CDP-dispatched) mouse-pointer drag on an unpatched row fired 'dragstart' immediately on
+  // crossing the arm threshold. draggable is unconditionally false now, so only this script's own
+  // pointer-based reordering can ever run.
+  test('dragging a layer row by its body is not hijacked by the browser\'s own native drag-and-drop', async ({ page }) => {
+    const ids = await page.evaluate(() => {
+      addText('one'); addText('two'); addText('three');
+      return current().layers.filter((l) => l.type === 'text').map((l) => l.id);
+    });
+    // Well past this app's ~150ms-1.6s window of self-installing patch-script boot timers (see
+    // playwright.config.js) - starting the drag while one of those is still due to fire is its
+    // own separate source of flakiness, unrelated to the native-drag-and-drop bug under test here.
+    await page.waitForTimeout(1800);
+    await expandAllBoxes(page);
+
+    await expect(page.locator('#layerList .layerItem[data-id]')).toHaveCount(3);
+    // The rows themselves must never be native-draggable - that's the whole bug: this attribute
+    // being "true" is what let the browser treat the gesture below as a native drag instead. Not
+    // asserting the exact value: rowForLayerV170 no longer sets it at all, and markRows() (which
+    // does stamp it "false") stops being reachable once installRenderLayers's own from-scratch
+    // window.renderLayers - a later, unrelated patch that replaces the whole chain rather than
+    // extending it - takes over a few hundred ms after load. Either way the attribute never
+    // becomes the literal string "true" again, and a plain <div> left with no draggable attribute
+    // at all defaults to the same non-draggable behaviour, so the real invariant is just that.
+    for (const id of ids) {
+      expect(await page.locator(`#layerList .layerItem[data-id="${id}"]`).getAttribute('draggable')).not.toBe('true');
+    }
+
+    const sawNativeDrag = await page.evaluate(() => {
+      window.__sawDragstart = false;
+      document.addEventListener('dragstart', () => { window.__sawDragstart = true; }, { once: true });
+      return true;
+    });
+    expect(sawNativeDrag).toBe(true);
+
+    // ids[0] ("one") sorts to the bottom (lowest z) and ids[2] ("three") to the top (highest z) -
+    // grab the bottom row by its body (not the grip) and drag it above the top row, exactly the
+    // upward reorder-by-body gesture from the report, driven by a real mouse pointer so native
+    // drag-and-drop gets a genuine chance to engage, the same way the mid-drag re-render test
+    // below does.
+    const bottomRow = page.locator(`#layerList .layerItem[data-id="${ids[0]}"]`);
+    const topRow = page.locator(`#layerList .layerItem[data-id="${ids[2]}"]`);
+    const bottomBox = await bottomRow.boundingBox();
+    const topBox = await topRow.boundingBox();
+    const startX = bottomBox.x + bottomBox.width / 2, startY = bottomBox.y + bottomBox.height / 2;
+    const endX = topBox.x + topBox.width / 2, endY = topBox.y + topBox.height / 2;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX, startY - 15, { steps: 3 }); // cross the arm threshold
+    await page.waitForTimeout(50);
+    // The drag must survive to this point as OUR pointer-based drag, not get silently handed off.
+    await expect(page.locator('.ppLayerDragGhost')).toHaveCount(1);
+    await page.mouse.move(endX, endY, { steps: 5 });
+    await page.waitForTimeout(50);
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+
+    expect(await page.evaluate(() => window.__sawDragstart)).toBe(false);
+    await expect(page.locator('.ppLayerDragGhost')).toHaveCount(0);
+    const order = await page.evaluate(() => current().layers.slice().sort((a, b) => (b.z || 0) - (a.z || 0)).map((l) => l.id));
+    expect(order.indexOf(ids[0])).toBeLessThan(order.indexOf(ids[2]));
   });
 
   // Real report, with a screenshot: a translucent "ghost" copy of a dragged row stayed stuck on

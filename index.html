@@ -14775,7 +14775,16 @@ window.addEventListener('DOMContentLoaded',function(){
     var list=layerList(); if(!list) return;
     list.querySelectorAll('.layerItem[data-id]').forEach(function(row){
       var isGroup=row.classList.contains('groupRow');
-      row.setAttribute('draggable', isGroup?'false':'true');
+      // Real report, with a screen recording: dragging a row started fine, then the ghost froze
+      // for several seconds before the drag silently gave up with no reorder applied. This used
+      // to mark every non-group row draggable="true" here, re-enabling the browser's own native
+      // HTML5 drag-and-drop on top of the pointer-based drag this whole script implements - on a
+      // device where a touch gesture is recognised as a native drag trigger, the browser fires
+      // its own 'dragstart' (and cancels the in-flight pointer sequence via 'pointercancel')
+      // right out from under this code, handing the gesture to native DnD - which then never
+      // completes a drop on touch, so it just sits frozen until the OS gives up and reverts it.
+      // Always false now: this script is the only reorder mechanism these rows need.
+      row.setAttribute('draggable','false');
       if(isGroup) return; // its grip is the collapse toggle, not a reorder handle - leave its own title alone
       var grip=row.querySelector('.dragGrip');
       if(grip){ grip.title='drag to reorder layer'; grip.setAttribute('aria-label','drag to reorder layer'); }
@@ -18685,7 +18694,19 @@ else install();
     var checkedForGroup=Array.isArray(s.selectedLayerIds) && s.selectedLayerIds.indexOf(l.id)>=0;
     var row=document.createElement('div');
     row.className='layerItem ppCleanThumbRow '+(!l.customMockup&&l.id===s.selected?'active ':'')+(l.hidden?'isHidden ':'')+(group?'groupRow ':'')+(l.customMockup?'customMockupRow ':'')+(checkedForGroup?'multiChecked ':'')+(l.positionLocked?'rowLocked ':'');
-    row.dataset.id=l.id; row.dataset.mode=mode; row.draggable=!group;
+    row.dataset.id=l.id; row.dataset.mode=mode;
+    // Real report, with a screen recording: dragging a layer row started fine, then the "ghost"
+    // froze in place for several seconds before the drag just gave up with no reorder applied.
+    // Root cause: this row was ALSO marked draggable=true and wired up with native HTML5
+    // drag-and-drop (dragstart/dragover/drop below), left over from before
+    // pp-layer-panel-touch-drag-patch's pointer-based drag was built - that patch exists
+    // specifically because native drag-and-drop is unreliable on touch. With both systems live
+    // at once, a touch gesture the browser recognises as a native drag fires 'dragstart' (and
+    // cancels the in-flight pointer sequence via 'pointercancel') right out from under the
+    // pointer-based drag, handing the gesture to native DnD instead - which then never
+    // completes a drop on a touch device, so it just sits frozen until the OS gives up and
+    // reverts it. draggable is always false here now; the pointer-based patch is the only
+    // reorder mechanism these rows need.
 
     // Real request: group/select multiple layers so a badge and its label can be moved together
     // instead of separately - toggleLayerMultiSelect()/groupSelectedLayers() already existed
@@ -18786,12 +18807,6 @@ else install();
       window.ppSelectLayerFromRow(l.id);
     });
 
-    if(!group){
-      row.addEventListener('dragstart',function(e){row.classList.add('dragging');try{e.dataTransfer.setData('text/plain',JSON.stringify({id:l.id,mode:mode}));}catch(_){} });
-      row.addEventListener('dragend',function(){row.classList.remove('dragging');});
-      row.addEventListener('dragover',function(e){e.preventDefault();});
-      row.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();try{var data=JSON.parse(e.dataTransfer.getData('text/plain')); if(typeof reorderLayerByDrop==='function')reorderLayerByDrop(data.id,l.id,mode);}catch(err){} });
-    }
     return row;
   }
   rowForLayerV170.__ppV170=true;
