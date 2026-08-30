@@ -239,6 +239,73 @@ test('a page that has never been rendered still gets a preview via background wa
   expect(leftoverHolders).toBe(0);
 });
 
+// Real report: "auto save is still rendering the pages not properly... all images get shifted" -
+// happening specifically right after the app reloads and restores a project (an iPad
+// backgrounding/reloading the tab, then the autosave restore running). window.renderPages's own
+// wrap caches a snapshot for any page index that was hot on the PREVIOUS call but isn't anymore,
+// reading state.pages[pi] for the page object to key the cache with - but it does this BEFORE the
+// real renderPages() rebuilds the DOM, so it's still looking at the OLD DOM from the render
+// before this one. Across ordinary edits that's fine (same project, same array, indices mean the
+// same page render to render) - but a wholesale project replacement (restore/load) swaps
+// state.pages for an entirely different array in the same tick, so "index 0 was hot, now isn't"
+// ended up caching the OLD (blank, single-page default) DOM that used to be at that index, keyed
+// against the BRAND NEW page object now sitting at the same index - the real restored page's
+// parked preview got permanently stuck blank. Fixed by detecting the array reference itself
+// changing and skipping that stale diff in that case, covering every replacement site (restore,
+// load, undo past a load) at the one place they all funnel through, rather than patching each
+// call site individually.
+test('restoring a whole project does not leave the page that used to be hot with a stale blank preview', async ({ page }) => {
+  // Start out exactly like a fresh app load: one empty default page, hot and selected - this is
+  // what seeds the "index 0 was hot" tracking that the real bug then carried across the replace.
+  await page.evaluate(() => {
+    state.pages = [{ type: 'listing', w: 3000, h: 2250, layers: [] }];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+  });
+  await page.waitForTimeout(200);
+
+  // Wholesale-replace state.pages with a brand new array (a different project, as a real
+  // restore/load would) whose own page 0 has real content, and select a page far enough away
+  // that page 0 immediately parks.
+  await page.evaluate((src) => {
+    state.pages = [
+      { type: 'listing', w: 3000, h: 2250, layers: [
+        { id: 'h', type: 'text', name: 'headline', text: 'Restored headline', x: 5, y: 5, w: 90, h: 12, z: 1, opacity: 1, r: 0, fontSize: 60, color: '#111111', textAlign: 'center' },
+        { id: 'img', type: 'image', name: 'photo', src, x: 20, y: 25, w: 60, h: 55, z: 2, opacity: 1, r: 0, fit: 'contain' },
+      ] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+      { type: 'listing', w: 3000, h: 2250, layers: [] },
+    ];
+    state.selectedPage = 3;
+    state.selected = null;
+    render();
+  }, PNG_1PX);
+
+  const previewImg = page.locator('.stage[data-page="0"] .pp95ParkedPreviewImg');
+  await expect(previewImg).toHaveCount(1, { timeout: 5000 });
+
+  // A stale cache from the old default page would still be a *valid* jpeg data URL - only a
+  // pixel check tells a real snapshot of the headline/photo apart from a blank white one.
+  const hasRealContent = await previewImg.evaluate((img) => new Promise((resolve) => {
+    const check = () => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const data = ctx.getImageData(0, 0, c.width, c.height).data;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] < 240 || data[i + 1] < 240 || data[i + 2] < 240) { resolve(true); return; }
+      }
+      resolve(false);
+    };
+    if (img.complete && img.naturalWidth) check();
+    else img.addEventListener('load', check, { once: true });
+  }));
+  expect(hasRealContent).toBe(true);
+});
+
 // Real report, with a screen recording and the user's actual project file: a custom mock-up's
 // parked preview came out visibly warped - the photo's proportions stretched, the pattern band
 // squeezed into the wrong place - even though the live page looked correct. warmOne()'s

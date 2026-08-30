@@ -17437,6 +17437,7 @@ else install();
   const warmQueue=[];
   let warmTimer=null;
   let prevHot=new Set();
+  let prevPagesArray=null;
 
   function clipRoundedBox(ctx, x, y, w, h, radiusStr, k){
     if(!radiusStr) return false;
@@ -17768,9 +17769,26 @@ else install();
   const oldRenderPages=window.renderPages;
   window.renderPages=function(){
     const wrap=document.getElementById('pageWrap');
+    // Real report: "auto save is still rendering the pages not properly... all images get
+    // shifted" - happening specifically right after the app reloads and restores a project (an
+    // iPad backgrounding/reloading the tab, then the autosave/quick-load/crash-recovery restore
+    // running). The block just below caches a snapshot for any page INDEX that was hot on the
+    // PREVIOUS call but isn't anymore, reading state.pages[pi] for the page object to key the
+    // cache with - but it runs before oldRenderPages() rebuilds the DOM, so it's still looking at
+    // the OLD DOM from the render before this one. That's fine across ordinary edits (same
+    // project, same array, indices mean the same thing render to render) - but a wholesale
+    // project replacement (restore/load/undo past a load) swaps state.pages for an entirely
+    // different array in the same tick, so "index 0 was hot, now isn't" ends up caching the OLD
+    // (often blank/default) DOM that used to be at that index, keyed against the BRAND NEW page
+    // object now sitting at the same index - a real page's parked preview gets permanently stuck
+    // showing a stale, usually-blank snapshot of whatever page used to occupy its slot. Detecting
+    // the array itself changing (not just its contents) and skipping the diff in that case is the
+    // one signal that reliably covers every current and future replacement site, rather than
+    // hunting down and patching each place state.pages is reassigned individually.
+    const pagesChanged=state.pages!==prevPagesArray;
     const hotNow=new Set();
     (state.pages||[]).forEach(function(p,pi){ if(Math.abs(pi-state.selectedPage)<=VISIBLE_RADIUS) hotNow.add(pi); });
-    if(wrap){
+    if(wrap && !pagesChanged){
       prevHot.forEach(function(pi){
         if(hotNow.has(pi)) return;
         const p=state.pages[pi]; if(!p) return;
@@ -17780,6 +17798,7 @@ else install();
     }
     const result=oldRenderPages.apply(this,arguments);
     prevHot=hotNow;
+    prevPagesArray=state.pages;
     renderParkedPreviewsNow();
     return result;
   };
