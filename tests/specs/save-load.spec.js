@@ -253,6 +253,53 @@ test('loading a fresh .ppages project file restores its pages and layers', async
   expect(result.firstLayerName).toBe('loaded text');
 });
 
+// Real report, with a .ppages file and a screen recording: reopening a project saved while
+// zoomed in (e.g. 1.25x, well within zoomPage()'s own [0.75,1.25] clamp - not a bad/extreme
+// value) restored that same zoom, applied live as a CSS transform:scale on the .stage element.
+// The surrounding workspace layout is sized for zoom=1 and never grows to accommodate a
+// scaled-up stage, so the zoomed stage overflows its container and its left/bottom portion ends
+// up hidden behind the fixed side panel - a bullet list missing its first few words, badge icons
+// squeezed against the very bottom edge, while content further from the left edge (a title, a
+// centred image) still looked fine, making it easy to miss until pointed at directly. Zoom is a
+// live viewing preference, not part of the design - a (re)loaded project should always start
+// at 1x, not whatever zoom the last session happened to leave it on.
+test('loading a project saved at a non-default zoom does not carry that zoom over (it stays 1x)', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const projectJson = JSON.stringify({
+      app: 'Pattern Pages',
+      pages: [{ type: 'listing', w: 3000, h: 2250, layers: [{ id: 'l1', type: 'text', text: 'hi', name: 'hi', x: 10, y: 10, w: 40, h: 20, z: 1 }] }],
+      selectedPage: 0,
+      trays: { pattern: [], asset: [] },
+      zoom: 1.25,
+    });
+    const file = new File([projectJson], 'zoomed.ppages', { type: 'application/octet-stream' });
+    await new Promise((resolve) => {
+      window.loadPstudioFile({ target: { files: [file], value: '' } });
+      setTimeout(resolve, 500);
+    });
+    return { zoom: state.zoom };
+  });
+
+  expect(result.zoom).toBe(1);
+});
+
+test('restoring an auto-save taken at a non-default zoom does not carry that zoom over either', async ({ page }) => {
+  await page.evaluate(() => { addText('text'); state.zoom = 0.8; });
+
+  await page.evaluate(async () => {
+    await new Promise((resolve) => {
+      const ok = window.saveAutoSaveNow(true);
+      if (!ok) return resolve();
+      setTimeout(resolve, 300);
+    });
+  });
+
+  await page.evaluate(() => { state.zoom = 1.1; }); // simulate a fresh session before restoring
+
+  await page.evaluate(() => window.restoreAutoSave());
+  await expect.poll(() => page.evaluate(() => state.zoom)).toBe(1);
+});
+
 test('quick save overwrites the same in-browser slot instead of creating new downloads', async ({ page }) => {
   // A web page can never overwrite an arbitrary file on disk (a real browser security boundary),
   // so every "save .ppages" is necessarily a new download - the request behind quick save was

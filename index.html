@@ -7224,9 +7224,16 @@ document.addEventListener('click', function(e){
     if(typeof window.__ppForceCloseTextEditor==='function'){try{window.__ppForceCloseTextEditor();}catch(e){}}
     state.pages=data.pages; state.selectedPage=typeof data.selectedPage==='number'?data.selectedPage:0; state.selected=null;
     if(data.trays) state.trays=data.trays;
-    // Real report, with a .ppages file: a saved zoom of 0.9999999999999998 instead of a clean 1 -
-    // rounded on load too, in case the file predates zoomPage()'s own now-rounded output.
-    if(data.zoom) state.zoom=Math.round(data.zoom*100)/100;
+    // Real report, with a .ppages file and a screen recording: reopening a project saved while
+    // zoomed in (e.g. 1.25x) restored that same zoom - applied live as a CSS transform:scale on
+    // the stage - but the surrounding workspace layout is sized for zoom=1 and never grows to
+    // fit a scaled-up stage, so the zoomed stage overflows and its left/bottom edges end up
+    // hidden behind the fixed side panel. Confirmed directly: forcing zoom back to 1 after
+    // loading this exact project fixed the layout instantly, with every layer back where it
+    // should be. Zoom is how the CURRENT viewer wants to look at the canvas right now, not part
+    // of the design - always start a (re)loaded project at 1x, same as opening any other
+    // design tool's file never starts you at whatever zoom you left it on.
+    state.zoom=1;
     if(data.customFonts && typeof window.registerCustomFont==='function'){
       Object.keys(data.customFonts).forEach(name=>window.registerCustomFont(name,data.customFonts[name]));
     }
@@ -19563,9 +19570,17 @@ else install();
     // the editor's own "is one open" flag stuck true forever, with nothing else able to reset it.
     if(typeof window.__ppForceCloseTextEditor==='function'){try{window.__ppForceCloseTextEditor();}catch(e){}}
     st.pages=project.pages; st.selectedPage=project.selectedPage; st.selected=null; st.lastDeselected=null;
-    // Real report, with a .ppages file: a saved zoom of 0.9999999999999998 instead of a clean 1 -
-    // rounded on load too, in case the file predates zoomPage()'s own now-rounded output.
-    st.trays=project.trays||st.trays||{pattern:[],asset:[]}; st.zoom=Math.round((project.zoom||1)*100)/100;
+    // Real report, with a .ppages file and a screen recording: reopening a project saved while
+    // zoomed in (e.g. 1.25x) restored that same zoom - applied live as a CSS transform:scale on
+    // the stage - but the surrounding workspace layout is sized for zoom=1 and never grows to
+    // fit a scaled-up stage, so the zoomed stage overflows and its left/bottom edges end up
+    // hidden behind the fixed side panel (a bullet list missing its first few words, badge icons
+    // squeezed against the bottom edge). Confirmed directly: forcing zoom back to 1 after loading
+    // this exact project fixed the layout instantly, with every layer back where it should be.
+    // Zoom is how the CURRENT viewer wants to look at the canvas right now, not part of the
+    // design - always start a (re)loaded project at 1x, same as opening any other design tool's
+    // file never starts you at whatever zoom you left it on.
+    st.trays=project.trays||st.trays||{pattern:[],asset:[]}; st.zoom=1;
     if(project.customFonts && typeof window.registerCustomFont==='function'){
       Object.keys(project.customFonts).forEach(function(name){ window.registerCustomFont(name,project.customFonts[name]); });
     }
