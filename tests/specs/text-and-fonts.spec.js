@@ -783,3 +783,46 @@ test('a text layer\'s delete "x" button has a hover tooltip', async ({ page }) =
   const layerId = await page.evaluate(() => state.pages[0].layers[0].id);
   await expect(page.locator(`.layer[data-id="${layerId}"] .deleteMini`)).toHaveAttribute('title', /./);
 });
+
+// Real beta-tester feedback: "the font size has actually [a] number... like this it would be
+// easier to choose the same font size for each caption" - the font-size control was a bare
+// slider with no visible value, so matching several captions to one exact size meant eyeballing
+// handle position. #fontSizeNumber is a small editable point-size field beside the slider that
+// stays in sync with it both ways.
+test('the font size number field mirrors the slider and vice versa, and clamps out-of-range input', async ({ page }) => {
+  await page.evaluate(() => {
+    addText('hello');
+    current().layers[0].fontSize = 47;
+    render();
+  });
+  await page.click('.stage .layer.text');
+  await page.evaluate(() => document.querySelectorAll('.box.collapsed').forEach((b) => b.classList.remove('collapsed')));
+
+  await expect(page.locator('#fontSizeNumber')).toHaveValue('47');
+
+  await page.evaluate(() => {
+    const el = document.getElementById('fontSize');
+    el.value = 90;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(page.locator('#fontSizeNumber')).toHaveValue('90');
+  expect(await page.evaluate(() => current().layers[0].fontSize)).toBe(90);
+
+  await page.evaluate(() => {
+    const el = document.getElementById('fontSizeNumber');
+    el.value = '65';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(page.locator('#fontSize')).toHaveValue('65');
+  expect(await page.evaluate(() => current().layers[0].fontSize)).toBe(65);
+
+  // Slider max is 130 - typing past it should clamp, not just pass the raw value through.
+  await page.evaluate(() => {
+    const el = document.getElementById('fontSizeNumber');
+    el.value = '999';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(page.locator('#fontSizeNumber')).toHaveValue('130');
+  await expect(page.locator('#fontSize')).toHaveValue('130');
+  expect(await page.evaluate(() => current().layers[0].fontSize)).toBe(130);
+});
