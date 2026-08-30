@@ -3101,6 +3101,20 @@ function reorderLayerByDrop(dragId,targetId,mode='all'){
  let from=pool.findIndex(l=>l.id===dragId), to=pool.findIndex(l=>l.id===targetId);
  if(from<0||to<0)return;
  save();
+ // Real report: "I still can't drag a layer out of a group to another position" - the drag itself
+ // (ghost, drop-target highlight, even the z-order change below) always worked; this just never
+ // touched groupId, so a dragged member kept belonging to its original group no matter where its
+ // new z-order put it - renderLayers() only ever shows a member nested under its own group,
+ // regardless of z, so it silently snapped right back to looking untouched on the very next
+ // render. Dropping a group member onto anything that isn't a fellow member of that same group
+ // (an ungrouped layer, a different group, or the group's own row) now actually leaves the group;
+ // dropping it on a fellow member still just reorders within the group, as before.
+ const dragged=pool[from], target=pool[to];
+ if(dragged.groupId && dragged.groupId!==target.groupId){
+   const oldGroupId=dragged.groupId;
+   delete dragged.groupId;
+   if(groupMembers(oldGroupId).length===0) p.layers=p.layers.filter(l=>l.id!==oldGroupId);
+ }
  const [moved]=pool.splice(from,1);
  pool.splice(to,0,moved);
  const max=pool.length;

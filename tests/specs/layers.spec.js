@@ -1453,6 +1453,96 @@ test.describe(() => {
 
     await page.mouse.up();
   });
+
+  // Real report: "I still can't drag a layer out of a group to another position." The drag itself
+  // (ghost, drop-target highlight, even the z-order change) always worked fine - reorderLayerByDrop
+  // just never touched groupId, so a dragged member kept belonging to its original group no matter
+  // where its new z-order put it. renderLayers() only ever draws a member nested under its own
+  // group, regardless of z, so on the very next render it silently snapped right back to looking
+  // exactly like before the drag - reading as "the drag didn't do anything."
+  test('dragging a group member onto an ungrouped layer actually removes it from the group', async ({ page }) => {
+    const ids = await page.evaluate(() => {
+      addText('member one');
+      addText('member two');
+      addText('outside layer');
+      const [m1, m2, outside] = current().layers.filter((l) => l.type === 'text');
+      state.selectedLayerIds = [m1.id, m2.id];
+      state.layerMultiSelect = true;
+      groupSelectedLayers();
+      state.layerMultiSelect = false;
+      render();
+      const group = current().layers.find((l) => l.type === 'group');
+      return { m1: m1.id, m2: m2.id, outside: outside.id, group: group.id };
+    });
+    await page.waitForTimeout(1800); // let the layer-panel boot()/re-render timers settle first
+    await expandAllBoxes(page);
+
+    const memberZone = page.locator(`#layerList .layerItem[data-id="${ids.m1}"] .ppLayerSelectZone`);
+    const outsideRow = page.locator(`#layerList .layerItem[data-id="${ids.outside}"]`);
+    const memberBox = await memberZone.boundingBox();
+    const outsideBox = await outsideRow.boundingBox();
+    const startX = memberBox.x + memberBox.width / 2, startY = memberBox.y + memberBox.height / 2;
+    const endX = outsideBox.x + outsideBox.width / 2, endY = outsideBox.y + outsideBox.height / 2;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX, startY - 15, { steps: 3 }); // cross the arm threshold
+    await page.waitForTimeout(50);
+    await expect(page.locator('.ppLayerDragGhost')).toHaveCount(1);
+    await page.mouse.move(endX, endY, { steps: 10 });
+    await page.waitForTimeout(50);
+    // The report's own complaint: this highlight ("a line") should appear over a valid drop target.
+    await expect(outsideRow).toHaveClass(/ppDropTarget/);
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+
+    const after = await page.evaluate((ids) => {
+      const p = current();
+      const m1 = p.layers.find((l) => l.id === ids.m1);
+      const m2 = p.layers.find((l) => l.id === ids.m2);
+      return { m1groupId: m1.groupId, m2groupId: m2.groupId, groupStillExists: p.layers.some((l) => l.id === ids.group) };
+    }, ids);
+    expect(after.m1groupId).toBeUndefined();
+    // The other member is untouched - only the dragged layer left the group.
+    expect(after.m2groupId).toBe(ids.group);
+    expect(after.groupStillExists).toBe(true);
+  });
+
+  test('dragging the last member out of a group removes the now-empty group too', async ({ page }) => {
+    const ids = await page.evaluate(() => {
+      addText('member one');
+      addText('member two');
+      addText('outside layer');
+      const [m1, m2, outside] = current().layers.filter((l) => l.type === 'text');
+      state.selectedLayerIds = [m1.id, m2.id];
+      state.layerMultiSelect = true;
+      groupSelectedLayers();
+      state.layerMultiSelect = false;
+      render();
+      const group = current().layers.find((l) => l.type === 'group');
+      return { m1: m1.id, m2: m2.id, outside: outside.id, group: group.id };
+    });
+
+    // First member out - the group survives with its one remaining member (already covered end to
+    // end via a real drag in the test above; driven directly here to focus on the second removal).
+    await page.evaluate((ids) => { reorderLayerByDrop(ids.m1, ids.outside, 'all'); }, ids);
+    expect(await page.evaluate((ids) => current().layers.some((l) => l.id === ids.group), ids)).toBe(true);
+
+    // Second (and now last) member out - nothing left to justify the group existing.
+    await page.evaluate((ids) => { reorderLayerByDrop(ids.m2, ids.outside, 'all'); }, ids);
+
+    const after = await page.evaluate((ids) => {
+      const p = current();
+      return {
+        m1groupId: p.layers.find((l) => l.id === ids.m1).groupId,
+        m2groupId: p.layers.find((l) => l.id === ids.m2).groupId,
+        groupStillExists: p.layers.some((l) => l.id === ids.group),
+      };
+    }, ids);
+    expect(after.m1groupId).toBeUndefined();
+    expect(after.m2groupId).toBeUndefined();
+    expect(after.groupStillExists).toBe(false);
+  });
 });
 
 // Real report, with a screenshot: with enough layers on a page, the layer list's own top/bottom
