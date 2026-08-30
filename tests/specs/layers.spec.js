@@ -1684,26 +1684,25 @@ test('exporting a group (an icon badge: circle + icon image) does not paint the 
 // Real report, with a .ppages file and screenshots: an exported page's text came out much bigger
 // than it looked on the canvas - a title overlapping its own subtitle, short bullet items each
 // wrapping onto two lines and spilling into a photo layer beside them. Root cause: layer font
-// sizes are fixed CSS px, authored against the on-screen .stage element's normal width, so
+// sizes are fixed CSS px, authored against the on-screen .stage element's width, so
 // renderPageToCanvas scales them up to full export resolution by pageWidthPx/onScreenWidthPx -
-// but it measured that on-screen width LIVE (stage.clientWidth) at the moment of export, and that
-// width is deliberately allowed to shrink well below its normal ~620-680px cap (a narrower
-// browser window, side panels open, a real device in a cramped layout - see
-// pp-stage-stable-width-js). A momentarily narrow reading inflated every text layer's font size
-// in the export while image/box positions - sized purely from page-relative percentages - stayed
-// correctly proportioned, exactly matching the reported mismatch. Reproduced directly with the
-// user's own project file: the same page exported completely differently depending only on how
-// wide the browser happened to be at that moment. Fixed by scaling against each .stage variant's
-// own fixed, hardcoded width cap (see referenceStageWidth) instead of a live measurement, so the
-// export no longer depends on the current window/panel/device state at all.
-test('exporting a page looks the same regardless of how wide the browser window happens to be', async ({ page }) => {
+// but it measured that on-screen width by reading stage.clientWidth LIVE at export time, which is
+// fragile in two different ways (see referenceStageWidth's own comment for the full history):
+// a plain live read can land on the wrong moment or even the wrong .stage element (an off-screen
+// parked-page warm-up clone also carries the .stage class), and a first attempted fix (a fixed
+// per-type constant) then disagreed with a real device where pp-stage-stable-width-js had
+// legitimately pinned every .stage to a narrower shared reference than that constant assumed -
+// a second real report, with screenshots, caught exactly that disagreement. The fix that actually
+// holds: read the same --pp-stable-stage-width custom property every .stage on screen is already
+// pinned to, so the export can never disagree with whatever the live canvas currently shows.
+test('exporting a page matches the live canvas\'s current text wrapping, not a fixed assumption', async ({ page }) => {
   await page.evaluate(() => {
     state.pages = [{
       type: 'listing', w: 3000, h: 2250, layers: [{
-        id: 'bullets', type: 'text', name: 'bullets',
-        text: '• Etsy Listing \n• Social Media Posts \n• PDF Documents\n• Pattern Showcases',
-        x: 8, y: 22, w: 42, h: 40, z: 1, opacity: 1, r: 0,
-        fontSize: 15, color: '#555555', textAlign: 'left', font: 'Lora', lineHeight: 1.57,
+        id: 'bullet1', type: 'text', name: 'bullet',
+        text: 'Social Media Posts',
+        x: 5, y: 40, w: 40, h: 30, z: 1, opacity: 1, r: 0,
+        fontSize: 15, color: '#111111', textAlign: 'left', font: 'Georgia', lineHeight: 1.05,
       }],
     }];
     state.selectedPage = 0;
@@ -1712,19 +1711,44 @@ test('exporting a page looks the same regardless of how wide the browser window 
   });
   await page.waitForTimeout(300);
 
-  // Narrow first, then wide - pp-stage-stable-width-js only ever grows its cached reference for a
-  // mouse/desktop pointer (this fixture's default), so measuring narrow-then-wide guarantees the
-  // second measurement is a genuine, unblocked resize rather than one silently ignored for being
-  // smaller than the first.
-  await page.setViewportSize({ width: 340, height: 900 });
-  await page.waitForTimeout(300);
-  const narrowDataUrl = await page.evaluate(async () => (await window.renderPageToCanvas(current())).toDataURL());
+  // Rather than fight the real (timing-sensitive) measurement heuristics in a headless browser,
+  // set the exact same variable pp-stage-stable-width-js itself would cache, directly - this is
+  // the one value every .stage on screen actually renders against, real device or not.
+  async function paintedTextHeight(refWidth) {
+    return page.evaluate(async (refWidth) => {
+      document.documentElement.style.setProperty('--pp-stable-stage-width', refWidth + 'px');
+      const p = current();
+      const canvas = await renderPageToCanvas(p);
+      const ctx = canvas.getContext('2d');
+      const boxX0 = Math.round(0.05 * p.w) + 5, boxX1 = Math.round(0.45 * p.w) - 5;
+      const boxY0 = Math.round(0.40 * p.h), boxY1 = Math.round(0.70 * p.h);
+      const w = boxX1 - boxX0, h = boxY1 - boxY0;
+      const imgData = ctx.getImageData(boxX0, boxY0, w, h);
+      let top = null, bottom = null;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          if (imgData.data[idx] < 200 || imgData.data[idx + 1] < 200 || imgData.data[idx + 2] < 200) {
+            if (top === null) top = y;
+            bottom = y;
+            break;
+          }
+        }
+      }
+      return top === null ? 0 : bottom - top;
+    }, refWidth);
+  }
 
-  await page.setViewportSize({ width: 1400, height: 1000 });
-  await page.waitForTimeout(300);
-  const wideDataUrl = await page.evaluate(async () => (await window.renderPageToCanvas(current())).toDataURL());
+  // At a normal, roomy reference width the phrase fits on one line - a short painted height.
+  const wideHeight = await paintedTextHeight(620);
+  // At a much narrower reference (a real device with panels open, say) the SAME phrase no longer
+  // fits and wraps onto two lines - several times taller. The export must track this change, not
+  // stay pinned to whatever a fixed assumption would have produced.
+  const narrowHeight = await paintedTextHeight(300);
 
-  expect(narrowDataUrl).toBe(wideDataUrl);
+  expect(wideHeight).toBeGreaterThan(20);
+  expect(wideHeight).toBeLessThan(120); // one line only
+  expect(narrowHeight).toBeGreaterThan(wideHeight * 2); // wrapped onto (at least) a second line
 });
 
 // Real report: "blank page", sitting in "extra design elements" right next to buttons that ADD

@@ -19592,25 +19592,39 @@ else install();
   // canvas - a title overlapping its own subtitle, short bullet items each wrapping onto two
   // lines and spilling into the photo beside them. Root cause: layer font sizes are fixed CSS px
   // (see the .stage width note above - pp-stage-stable-size-text-fix), authored against the
-  // .stage element's "normal" on-screen width, so this exporter scales them up by
-  // pageWidthPx/visualOnScreenWidthPx to reach the full export resolution. It measured that
-  // on-screen width LIVE (stage.clientWidth) at export time - but that same element's width is
-  // deliberately allowed to shrink below its normal cap (side panels open, a narrow window, a
-  // real device in a cramped layout - see pp-stage-stable-width-js measuring "both panels forced
-  // open" and, on touch, never refusing to shrink further). Confirmed directly: rendering the
-  // exact same page at a narrower browser width measured a smaller stage.clientWidth and produced
-  // a visibly larger, badly-wrapped export, while the canvas itself still looked fine (its own
-  // on-screen proportions shrink together, live) - only the export's separate font-scale
-  // calculation went by that momentary reading instead of the size fonts were actually designed
-  // for. Every .stage variant has its own fixed, hardcoded cap (see the .stage/.stage.pattern/
-  // .stage.social/.stage.mockup width rules above) - using that same constant here, based purely
-  // on this page's own type/dimensions, makes the export's scaling deterministic and immune to
-  // whatever the live window/panel/device state happens to be at the moment of export.
+  // .stage element's on-screen width, so this exporter scales them up by
+  // pageWidthPx/onScreenWidthPx to reach the full export resolution. It measured that on-screen
+  // width by reading stage.clientWidth LIVE at export time - fragile in two different ways.
+  //
+  // First attempt at a fix used each .stage variant's own hardcoded CSS cap (620/560/520/680)
+  // instead of a live read, on the theory that font sizes were authored against that fixed
+  // reference - that made the export deterministic, but a second real report (with screenshots)
+  // showed it now DISAGREED with the live canvas on a real device: pp-stage-stable-size-text-fix
+  // pins every .stage (regardless of type - listing/pattern/social/mockup all key off the exact
+  // same --pp-stable-stage-width custom property, not their own separate caps) to whatever
+  // pp-stage-stable-width-js's own "both side panels forced open" measurement produced for THIS
+  // device - which is free to be genuinely narrower than the hardcoded caps on a real tablet/
+  // phone (touch is deliberately allowed to shrink; only a desktop mouse pointer is held to
+  // "never shrink"). A fixed constant was simply wrong for any device where that's the case.
+  //
+  // The two reports pull in opposite directions unless the export uses the exact same governing
+  // value the live canvas itself is pinned to, rather than re-deriving or guessing at it two
+  // different ways: read --pp-stable-stage-width directly off <html>. It's a single cached
+  // number, immune to which specific .stage element a live clientWidth read happens to land on
+  // (an off-screen parked-page warm-up clone also carries the .stage class) and to any mid-
+  // transition layout timing - and it's identical to what every .stage on screen is actually
+  // using right now, so the export can never disagree with what the canvas shows.
   function referenceStageWidth(p){
-    if(p.type==='pattern') return 560;
-    if(p.type==='mockup') return 680;
-    if(p.w===p.h) return 520;
-    return 620;
+    var cap=p.type==='pattern'?560:p.type==='mockup'?680:(p.w===p.h?520:620);
+    try{
+      var raw=getComputedStyle(document.documentElement).getPropertyValue('--pp-stable-stage-width');
+      var px=parseFloat(raw);
+      if(px>50) return px;
+    }catch(e){}
+    // Before pp-stage-stable-width-js has measured anything yet (or if it's unavailable) - matches
+    // its own fallback formula, still capped by this page type's own maximum.
+    var vw=(typeof window!=='undefined'&&window.innerWidth)||1200;
+    return Math.max(50,Math.min(vw-400,cap));
   }
   window.renderPageToCanvas=async function(p){
     var canvas=document.createElement('canvas'); canvas.width=p.w; canvas.height=p.h; var ctx=canvas.getContext('2d');
