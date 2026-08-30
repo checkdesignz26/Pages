@@ -902,6 +902,21 @@ test('aligning a group member centres it within its own group, not the whole pag
   expect(result.iconY).toBeGreaterThan(60);
 });
 
+// Real report: "not sure where to go for the alignment of the group, is that in the text panel?"
+// - the panel holding the buttons the test above exercises turned out to be permanently
+// display:none, left over from an old "FLASH MOP UX SIMPLIFICATION... hide the heavy alignment
+// toolbox/panel for launch" pass, predating group-relative alignment being worth surfacing at
+// all. Restored the same way the text panel was after being caught by that same broad hide rule
+// (a later, more specific #alignPanel{display:block!important} rule) - functionally correct
+// alignment logic is useless if nobody can ever find the buttons that trigger it.
+test('the alignment panel is visible, not left permanently hidden by an old simplification pass', async ({ page }) => {
+  const display = await page.evaluate(() => {
+    const el = document.getElementById('alignPanel');
+    return el && getComputedStyle(el).display;
+  });
+  expect(display).not.toBe('none');
+});
+
 // Real report, with a screenshot and a saved .ppages file: deleted a custom mock-up's background
 // photo (a group member alongside its pattern overlay) and the pattern - still fully intact in the
 // layer data - became permanently stuck on the canvas with no way to select or delete it. Its
