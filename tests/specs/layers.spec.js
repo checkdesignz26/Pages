@@ -1681,6 +1681,52 @@ test('exporting a group (an icon badge: circle + icon image) does not paint the 
   expect(pixel[2]).toBeLessThan(80);
 });
 
+// Real report, with a .ppages file and screenshots: an exported page's text came out much bigger
+// than it looked on the canvas - a title overlapping its own subtitle, short bullet items each
+// wrapping onto two lines and spilling into a photo layer beside them. Root cause: layer font
+// sizes are fixed CSS px, authored against the on-screen .stage element's normal width, so
+// renderPageToCanvas scales them up to full export resolution by pageWidthPx/onScreenWidthPx -
+// but it measured that on-screen width LIVE (stage.clientWidth) at the moment of export, and that
+// width is deliberately allowed to shrink well below its normal ~620-680px cap (a narrower
+// browser window, side panels open, a real device in a cramped layout - see
+// pp-stage-stable-width-js). A momentarily narrow reading inflated every text layer's font size
+// in the export while image/box positions - sized purely from page-relative percentages - stayed
+// correctly proportioned, exactly matching the reported mismatch. Reproduced directly with the
+// user's own project file: the same page exported completely differently depending only on how
+// wide the browser happened to be at that moment. Fixed by scaling against each .stage variant's
+// own fixed, hardcoded width cap (see referenceStageWidth) instead of a live measurement, so the
+// export no longer depends on the current window/panel/device state at all.
+test('exporting a page looks the same regardless of how wide the browser window happens to be', async ({ page }) => {
+  await page.evaluate(() => {
+    state.pages = [{
+      type: 'listing', w: 3000, h: 2250, layers: [{
+        id: 'bullets', type: 'text', name: 'bullets',
+        text: '• Etsy Listing \n• Social Media Posts \n• PDF Documents\n• Pattern Showcases',
+        x: 8, y: 22, w: 42, h: 40, z: 1, opacity: 1, r: 0,
+        fontSize: 15, color: '#555555', textAlign: 'left', font: 'Lora', lineHeight: 1.57,
+      }],
+    }];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+  });
+  await page.waitForTimeout(300);
+
+  // Narrow first, then wide - pp-stage-stable-width-js only ever grows its cached reference for a
+  // mouse/desktop pointer (this fixture's default), so measuring narrow-then-wide guarantees the
+  // second measurement is a genuine, unblocked resize rather than one silently ignored for being
+  // smaller than the first.
+  await page.setViewportSize({ width: 340, height: 900 });
+  await page.waitForTimeout(300);
+  const narrowDataUrl = await page.evaluate(async () => (await window.renderPageToCanvas(current())).toDataURL());
+
+  await page.setViewportSize({ width: 1400, height: 1000 });
+  await page.waitForTimeout(300);
+  const wideDataUrl = await page.evaluate(async () => (await window.renderPageToCanvas(current())).toDataURL());
+
+  expect(narrowDataUrl).toBe(wideDataUrl);
+});
+
 // Real report: "blank page", sitting in "extra design elements" right next to buttons that ADD
 // things, read as adding a new blank page - it actually wipes every layer off the CURRENT page,
 // and did so with no confirmation at all, unlike the comparably destructive deletePage()'s

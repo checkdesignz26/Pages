@@ -19588,11 +19588,34 @@ else install();
   function wrapLines(ctx,text,maxW){
     var out=[]; String(text||'').split(/\n/).forEach(function(para){var line=''; para.split(/\s+/).forEach(function(word){var test=line?line+' '+word:word; if(ctx.measureText(test).width>maxW && line){out.push(line); line=word;} else line=test;}); out.push(line);}); return out;
   }
+  // Real report, with screenshots: an exported page's text came out much bigger than on the
+  // canvas - a title overlapping its own subtitle, short bullet items each wrapping onto two
+  // lines and spilling into the photo beside them. Root cause: layer font sizes are fixed CSS px
+  // (see the .stage width note above - pp-stage-stable-size-text-fix), authored against the
+  // .stage element's "normal" on-screen width, so this exporter scales them up by
+  // pageWidthPx/visualOnScreenWidthPx to reach the full export resolution. It measured that
+  // on-screen width LIVE (stage.clientWidth) at export time - but that same element's width is
+  // deliberately allowed to shrink below its normal cap (side panels open, a narrow window, a
+  // real device in a cramped layout - see pp-stage-stable-width-js measuring "both panels forced
+  // open" and, on touch, never refusing to shrink further). Confirmed directly: rendering the
+  // exact same page at a narrower browser width measured a smaller stage.clientWidth and produced
+  // a visibly larger, badly-wrapped export, while the canvas itself still looked fine (its own
+  // on-screen proportions shrink together, live) - only the export's separate font-scale
+  // calculation went by that momentary reading instead of the size fonts were actually designed
+  // for. Every .stage variant has its own fixed, hardcoded cap (see the .stage/.stage.pattern/
+  // .stage.social/.stage.mockup width rules above) - using that same constant here, based purely
+  // on this page's own type/dimensions, makes the export's scaling deterministic and immune to
+  // whatever the live window/panel/device state happens to be at the moment of export.
+  function referenceStageWidth(p){
+    if(p.type==='pattern') return 560;
+    if(p.type==='mockup') return 680;
+    if(p.w===p.h) return 520;
+    return 620;
+  }
   window.renderPageToCanvas=async function(p){
     var canvas=document.createElement('canvas'); canvas.width=p.w; canvas.height=p.h; var ctx=canvas.getContext('2d');
     ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,p.w,p.h);
-    var stage=document.querySelectorAll('.stage')[S()&&S().selectedPage || 0];
-    var visualW=(stage&&stage.clientWidth)||620; var fontScale=Math.max(1,p.w/visualW);
+    var visualW=referenceStageWidth(p); var fontScale=Math.max(1,p.w/visualW);
     var layers=(p.layers||[]).slice().sort(function(a,b){return (a.z||0)-(b.z||0)});
     for(var i=0;i<layers.length;i++){
       var l=layers[i];
