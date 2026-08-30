@@ -860,6 +860,48 @@ test('resizing a group non-uniformly keeps every member\'s own box aspect ratio,
   expect(after).toBeCloseTo(before, 5);
 });
 
+// Real report: "can we have an align within the group feature, I am trying to align my icons in
+// the badge circle but it doesn't really work" - a screenshot showed a badge (a circle shape +
+// icon image, grouped) with the icon sitting off-centre inside the circle. alignSelected always
+// aligned against the whole 0-100 page, since a group member's x/y are page-relative percentages
+// exactly like any other layer's - centring a small icon "worked" in the sense that it moved, just
+// to the middle of the entire page instead of the middle of its own small badge, which reads as
+// the align buttons doing nothing useful for anything grouped. Fixed to align against the group's
+// own bounding box (groupBounds - the union of its members' positions) whenever the selected
+// layer is a group member.
+test('aligning a group member centres it within its own group, not the whole page', async ({ page }) => {
+  const ids = await page.evaluate(() => {
+    save();
+    const circle = Object.assign(layer('label', { name: 'circle', badgeShape: 'circle' }), { x: 10, y: 65, w: 20, h: 15, z: 1 });
+    const icon = Object.assign(layer('image', { name: 'icon', fit: 'contain' }), { x: 11, y: 66, w: 5, h: 5, z: 2 });
+    current().layers.push(circle, icon);
+    state.layerMultiSelect = true;
+    state.selectedLayerIds = [circle.id, icon.id];
+    state.selected = circle.id;
+    window.groupSelectedLayers();
+    return { circleId: circle.id, iconId: icon.id };
+  });
+
+  const result = await page.evaluate(({ circleId, iconId }) => {
+    const circle = current().layers.find((l) => l.id === circleId);
+    // Select the icon specifically, as if its own row was tapped in the layer list.
+    state.selected = iconId;
+    window.alignSelected('centerBoth');
+    const icon = current().layers.find((l) => l.id === iconId);
+    return {
+      iconX: icon.x, iconY: icon.y,
+      expectedX: circle.x + (circle.w - icon.w) / 2,
+      expectedY: circle.y + (circle.h - icon.h) / 2,
+    };
+  }, ids);
+
+  expect(result.iconX).toBeCloseTo(result.expectedX, 5);
+  expect(result.iconY).toBeCloseTo(result.expectedY, 5);
+  // Not a coincidental match with page-centre (50-ish) - the badge sits far from the page centre.
+  expect(result.iconX).toBeLessThan(30);
+  expect(result.iconY).toBeGreaterThan(60);
+});
+
 // Real report, with a screenshot and a saved .ppages file: deleted a custom mock-up's background
 // photo (a group member alongside its pattern overlay) and the pattern - still fully intact in the
 // layer data - became permanently stuck on the canvas with no way to select or delete it. Its
