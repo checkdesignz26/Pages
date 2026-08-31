@@ -3191,7 +3191,15 @@ function syncControls(){
  $('textValue').value=l.disclosureBadge?'AI Generated':(l.text||'');
  $('fontFamily').value=[...$('fontFamily').options].some(o=>o.value===l.font)?l.font:'system-ui';$('fontSize').value=l.fontSize||36;if($('fontSizeNumber'))$('fontSizeNumber').value=l.fontSize||36;$('textColor').value=toHex(l.color||'#111111');$('textShadow').value=l.textShadow||0;$('textGlow').value=l.textGlow||0;$('textStroke').value=l.textStroke||0;$('effectColor').value=toHex(l.effectColor||'#ffffff');
  if($('lineHeight'))$('lineHeight').value=Math.round((l.lineHeight||1.05)*100);if($('letterSpacing'))$('letterSpacing').value=l.letterSpacing||0;if($('textPadding'))$('textPadding').value=l.textPadding==null?10:l.textPadding;$('fillColor').value=toHex(l.fill==='transparent'?'#ffffff':l.fill||'#ffffff');$('borderColor').value=toHex(l.border||'#111111');$('borderWidth').value=l.borderW||0;
- ['textValue','fontFamily','fontSize','lineHeight','letterSpacing','textPadding','textColor','textShadow','textGlow','textStroke','effectColor','fillColor','borderColor','borderWidth'].forEach(id=>{if($(id))$(id).disabled=!!l.disclosureBadge});
+ // Real beta-tester feedback: "for images. It shouldn't show a font size?" - selecting an image
+ // left the text panel's font/spacing/effects fields enabled and showing a bogus default (36pt,
+ // since images have no fontSize of their own), which reads as the app applying text settings to
+ // a picture. Fill/border stay enabled for shape layers too (rectangle/square/circle really do
+ // have a fill and border, same as text/label), just not the font-only fields.
+ const hasText=['text','label'].includes(l.type);
+ const hasFillBorder=['text','label','rectangle','square','circle'].includes(l.type);
+ ['textValue','fontFamily','fontSize','fontSizeNumber','lineHeight','letterSpacing','textPadding','textColor','textShadow','textGlow','textStroke','effectColor'].forEach(id=>{if($(id))$(id).disabled=!!l.disclosureBadge||!hasText});
+ ['fillColor','borderColor','borderWidth'].forEach(id=>{if($(id))$(id).disabled=!!l.disclosureBadge||!hasFillBorder});
 }
 function applyControls(){
  let l=getLayer();

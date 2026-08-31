@@ -826,3 +826,36 @@ test('the font size number field mirrors the slider and vice versa, and clamps o
   await expect(page.locator('#fontSize')).toHaveValue('130');
   expect(await page.evaluate(() => current().layers[0].fontSize)).toBe(130);
 });
+
+// Real beta-tester feedback, spotted right after the font-size number above made the field more
+// noticeable: "for images. It shouldn't show a font size?" - selecting an image left the text
+// panel's font/spacing/effects fields enabled and showing a bogus default (36pt, since images
+// have no fontSize of their own). They should disable for anything that isn't real text, while
+// fill/border stay enabled for shape layers (rectangle/square/circle) which do have their own
+// fill and border, same as text/label.
+test('the text panel\'s font fields disable for non-text layers, and fill/border stay live for shapes', async ({ page }) => {
+  const result = await page.evaluate(() => {
+    save();
+    const img = layer('image', { name: 'img', src: null, x: 5, y: 5, w: 30, h: 30, z: nextZ() });
+    const rect = layer('rectangle', { name: 'rect', x: 40, y: 5, w: 30, h: 30, z: nextZ(), fill: '#ff0000', border: '#000000', borderW: 2 });
+    const txt = layer('text', { name: 'txt', text: 'hi', x: 5, y: 40, w: 30, h: 10, z: nextZ(), fontSize: 40 });
+    current().layers.push(img, rect, txt);
+
+    function check(id) {
+      state.selected = id;
+      syncControls();
+      return {
+        fontSize: document.getElementById('fontSize').disabled,
+        fontSizeNumber: document.getElementById('fontSizeNumber').disabled,
+        fillColor: document.getElementById('fillColor').disabled,
+        borderColor: document.getElementById('borderColor').disabled,
+        borderWidth: document.getElementById('borderWidth').disabled,
+      };
+    }
+    return { image: check(img.id), rectangle: check(rect.id), text: check(txt.id) };
+  });
+
+  expect(result.image).toEqual({ fontSize: true, fontSizeNumber: true, fillColor: true, borderColor: true, borderWidth: true });
+  expect(result.rectangle).toEqual({ fontSize: true, fontSizeNumber: true, fillColor: false, borderColor: false, borderWidth: false });
+  expect(result.text).toEqual({ fontSize: false, fontSizeNumber: false, fillColor: false, borderColor: false, borderWidth: false });
+});
