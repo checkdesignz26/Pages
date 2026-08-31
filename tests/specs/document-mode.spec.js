@@ -890,6 +890,56 @@ test('pasting an image copied from another app (raw image bytes on the clipboard
   expect(check.imgHeight).toBeLessThan(check.editorHeight * 0.5);
 });
 
+// A second real .ppages file from the same reporter - this time saved on their actual device,
+// iPad Safari, after both fixes above had already shipped - showed the overflow was STILL
+// happening. Its saved docHtml had the image wrapped in a <div>, not a <p>. The app never calls
+// document.execCommand('defaultParagraphSeparator', ...), so it inherits whatever the browser
+// defaults a paragraph split to - Chromium (what this suite runs in) defaults to 'p', but
+// WebKit defaults to 'div', so any real paragraph break typed on an iPad produces <div>
+// wrappers instead. Force that same separator here so this reproduces the exact wrapper shape
+// the real file had, rather than the 'p' shape this suite would otherwise only ever exercise.
+test('inserting an image still lands constrained even when the surrounding paragraphs are <div>-based (WebKit default) rather than <p>-based', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.waitForTimeout(1800);
+
+  await page.evaluate(() => {
+    // Chromium's own execCommand('insertParagraph') keeps using <p> regardless of
+    // defaultParagraphSeparator, so build the WebKit-shaped paragraph directly instead - what
+    // matters for reproducing the real bug is only that the editor's sole paragraph is a <div>
+    // before the image gets inserted, not how that div got authored. Mirrors the real file's
+    // page verbatim: its whole page-2 content opened with "<div><img ...".
+    const ed = document.querySelector('.documentEditor[data-page-index="0"]');
+    ed.innerHTML = '<div><br></div>';
+  });
+  await page.click('.documentEditor');
+  const wrapperTag = await page.evaluate(() => document.querySelector('.documentEditor[data-page-index="0"]').lastElementChild.tagName);
+  expect(wrapperTag).toBe('DIV');
+
+  const dataUrl = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 1200; c.height = 1200;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#333'; ctx.fillRect(0, 0, 1200, 1200);
+    return c.toDataURL('image/png');
+  });
+  const pngBuffer = Buffer.from(dataUrl.split(',')[1], 'base64');
+  await page.setInputFiles('#ppDocImageInput', { name: 'logo.png', mimeType: 'image/png', buffer: pngBuffer });
+  await page.waitForSelector('.documentEditor img');
+  await page.waitForTimeout(400);
+
+  const result = await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor[data-page-index="0"]');
+    const img = ed.querySelector('img');
+    return {
+      imgIsDirectChildOfEditor: img.parentElement === ed,
+      imgHeight: img.getBoundingClientRect().height,
+      editorHeight: ed.clientHeight,
+    };
+  });
+  expect(result.imgIsDirectChildOfEditor).toBe(true);
+  expect(result.imgHeight).toBeLessThan(result.editorHeight * 0.5);
+});
+
 // Real report, with screenshots: a selected image's purple outline stayed stuck permanently -
 // visibly "framed" and un-draggable - no matter how many times it was tapped away from
 // afterward. Root cause: .ppDocImgSelected lives directly on the live <img> node, and a

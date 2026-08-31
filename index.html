@@ -17045,12 +17045,32 @@ else install();
   // (see the "paste" listener in upgrade()). A real report confirmed the same oversized-image
   // overflow still happened via paste even after this was first fixed only for the "add image"
   // button - same bug, same fix, needed at every place that ever runs this insertHTML.
+  //
+  // A second real .ppages file confirmed the fix still wasn't firing on the reporter's actual
+  // device (iPad Safari) even though it worked in every (Chromium-based) test: the wrapper the
+  // cursor lands in there wasn't a <p> at all but a <div> - the app never sets
+  // document.execCommand('defaultParagraphSeparator',...), so it inherits the browser's own
+  // default, and WebKit's default separator is 'div', not 'p'. Same auto-height-ancestor bug,
+  // just a different tag name, so this now hoists out of either. The one thing this must never
+  // hoist out of is .documentEditor itself (also a <div>, and also always its own image's
+  // grandparent-or-closer once a page has nothing else on it) - replacing that would rip the
+  // whole contentEditable root out of the page, so contentEditable is checked to rule it out.
+  //
+  // <p> and <div> also normalize this insertion differently, and the check has to allow for
+  // both shapes: a <p> can't validly nest another <p>, so the browser splits it - the trailing
+  // "<p><br></p>" this always inserts after the image lands as a new SIBLING, leaving the
+  // original <p> holding only the image. A <div> has no such restriction, so that same trailing
+  // paragraph lands INSIDE it, alongside the image - confirmed in that second real file, whose
+  // saved HTML was "<div><img ...><p><br></p></div>". So this can't require the image to be the
+  // wrapper's only child; it only requires the image to be the wrapper's only genuine content.
   window.ppHoistLoneDocImage=function(img){
     if(!img)return;
     const parent=img.parentElement;
-    if(parent&&parent.tagName==='P'&&parent.children.length===1&&parent.firstElementChild===img&&!(parent.textContent||'').trim()){
-      parent.replaceWith(img);
-    }
+    if(!parent||(parent.tagName!=='P'&&parent.tagName!=='DIV')||parent.contentEditable==='true')return;
+    if(parent.querySelectorAll('img').length!==1)return;
+    if((parent.textContent||'').trim())return;
+    parent.insertAdjacentElement('beforebegin',img);
+    if(!parent.firstElementChild&&!(parent.textContent||'').trim())parent.remove();
   };
   window.ppDocInsertImage=function(input){const file=input.files&&input.files[0];if(!file)return;const ed=selectedEditor();if(!ed)return;const r=new FileReader();r.onload=()=>{
     ed.focus();
