@@ -19765,10 +19765,33 @@ else install();
           ctx.fillStyle=l.color||'#111111'; ctx.textAlign=l.textAlign||'center'; ctx.textBaseline='middle';
           ctx.font=(l.italic?'italic ':'')+(l.bold?'900':'500')+' '+fs+'px '+(l.font||'Georgia');
           ctx.shadowColor=l.effectColor||'#ffffff'; ctx.shadowBlur=(l.textGlow||0)*fontScale; ctx.shadowOffsetX=(l.textShadow||0)?2*fontScale:0; ctx.shadowOffsetY=(l.textShadow||0)?3*fontScale:0;
-          var pad=(l.textPadding||10)*fontScale, tx=(l.textAlign==='left')?(-w/2+pad):((l.textAlign==='right')?(w/2-pad):0);
+          // Real report, with the actual downloaded file: text that fit its box comfortably live
+          // wrapped so aggressively in the export that it spilled clean through the box's own
+          // border line. Root cause: the live box's own padding (see wireControls()'s CSS, further
+          // up) is `(textPadding/55)em` of horizontal room - relative to the layer's own,
+          // UNscaled fontSize - but this exporter was reserving `textPadding*fontScale` instead,
+          // a completely different formula that happens to roughly agree for a wide box at a
+          // modest fontScale, then badly over-reserves space (eating away the actual wrap width)
+          // for a narrower box or a bigger fontScale - exactly where a real device's stage ends up
+          // once pp-stage-stable-width-js pins it to something touch is free to shrink. Matching
+          // the live formula (scaled by fontScale the same way fs already is) keeps the export's
+          // wrap width - and therefore its line count - in step with what the box actually shows.
+          var pad=(l.textPadding!=null?l.textPadding:10)/55*fs, tx=(l.textAlign==='left')?(-w/2+pad):((l.textAlign==='right')?(w/2-pad):0);
           var lines=wrapLines(ctx,text,Math.max(10,w-pad*2)); var start=-(lines.length-1)*lh/2;
+          // Same real report: even after the padding fix above keeps the wrap width itself in
+          // step with the live box, more text than a SHORT box can vertically fit is still a real,
+          // ordinary situation (a long caption in a small box) - live's .shapeText box has
+          // overflow:hidden, so the extra lines are simply invisibly cropped at the box's own
+          // edge, never drawn past it. This canvas draw had no equivalent clip at all, so the
+          // same overflow that's silently invisible live painted straight through - and past -
+          // the box's own border in the export. Clipping to the box's own rect (in the already-
+          // translated/rotated/scaled local space every other draw call here uses) matches that
+          // exact live cropping instead of leaving text free to spill anywhere on the canvas.
+          ctx.save();
+          ctx.beginPath(); ctx.rect(-w/2,-h/2,w,h); ctx.clip();
           if(l.textStroke){ctx.lineWidth=l.textStroke*2*fontScale; ctx.strokeStyle=l.effectColor||'#ffffff'; lines.forEach(function(line,idx){ctx.strokeText(line,tx,start+idx*lh,w-pad*2);});}
           lines.forEach(function(line,idx){ctx.fillText(line,tx,start+idx*lh,w-pad*2);});
+          ctx.restore();
         }
       }else{ctx.fillStyle='#ffffff';ctx.fillRect(-w/2,-h/2,w,h);}
       ctx.restore();

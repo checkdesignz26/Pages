@@ -1995,6 +1995,96 @@ test('the "no colour" swatch buttons keep their own light background and diagona
   expect(style.borderRadius).toBe('50%'); // a circle, not the generic button's rounded rectangle
 });
 
+// Real report, with the actual downloaded file: a bordered text box that looked fine live exported
+// with its text spilling clean through the border line. Two real, separate bugs stacked here:
+// 1) the exporter reserved textPadding*fontScale of horizontal room for wrapping, instead of live's
+//    own (textPadding/55)em-of-the-layer's-own-fontSize formula - a much bigger, wrong number that
+//    ate into the wrap width and could force extra line-wraps a live box never has.
+// 2) live's .shapeText box has overflow:hidden, so a caption too long for a short box is simply,
+//    invisibly cropped there - this canvas draw had no equivalent clip, so the exact same overflow
+//    that's invisible live painted straight past the box's own border in the export.
+test('exported text wraps at the same width as the live box, and overflow is clipped to the box instead of spilling past its border', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    save();
+    const l = layer('text', {
+      name: 'short bordered box',
+      text: 'Create your own templates ,save them just replace your pattern -Save time , design more -',
+      x: 20, y: 40, w: 30, h: 6, z: nextZ(),
+      fill: 'transparent', border: '#111111', borderW: 3,
+      font: 'Georgia', fontSize: 20, color: '#555555', lineHeight: 1.05, textAlign: 'center', textPadding: 10,
+    });
+    current().layers.push(l);
+    const p = current();
+    const canvas = await renderPageToCanvas(p);
+    const ctx = canvas.getContext('2d');
+    const boxX0 = Math.round((l.x / 100) * p.w), boxX1 = Math.round(((l.x + l.w) / 100) * p.w);
+    const boxY0 = Math.round((l.y / 100) * p.h), boxY1 = Math.round(((l.y + l.h) / 100) * p.h);
+
+    function hasDarkPixel(x0, x1, y0, y1) {
+      const w = x1 - x0, h = y1 - y0;
+      if (w <= 0 || h <= 0) return false;
+      const data = ctx.getImageData(x0, y0, w, h).data;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] < 200 && data[i + 3] > 50) return true; // a dark, visible pixel
+      }
+      return false;
+    }
+    // A band well above the box, and well below it - text overflowing the box vertically would
+    // land here. The border itself sits right at boxY0/boxY1, so these bands start a few px
+    // further out to avoid catching the border stroke itself, only real spilled text.
+    const above = hasDarkPixel(boxX0, boxX1, Math.max(0, boxY0 - 60), boxY0 - 8);
+    const below = hasDarkPixel(boxX0, boxX1, boxY1 + 8, Math.min(p.h, boxY1 + 60));
+    const insideHasText = hasDarkPixel(boxX0 + 10, boxX1 - 10, boxY0 + 6, boxY1 - 6);
+    return { above, below, insideHasText };
+  });
+
+  expect(result.above).toBe(false);
+  expect(result.below).toBe(false);
+  expect(result.insideHasText).toBe(true); // sanity check: text still actually renders
+});
+
+// Same real report - the padding-formula half of it in isolation: a box just wide enough for a
+// phrase to fit on one line live should still fit on one line in the export, not wrap onto a
+// second line just because the exporter was reserving the wrong (much bigger) amount of padding.
+test('exported text padding matches the live box\'s own formula, not a much larger stand-in that forces extra wrapping', async ({ page }) => {
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--pp-stable-stage-width', '600px');
+    window.__ppMeasureStableStageWidth = function(){}; // freeze it so the forced value sticks
+    save();
+    const l = layer('text', {
+      name: 'padding check',
+      text: 'just replace your pattern and save your time',
+      x: 5, y: 25, w: 37.27, h: 40, z: nextZ(),
+      fill: 'transparent', font: 'Georgia', fontSize: 12, color: '#555555', textAlign: 'center', textPadding: 10,
+    });
+    current().layers.push(l);
+  });
+
+  const paintedHeight = await page.evaluate(async () => {
+    const p = current();
+    const canvas = await renderPageToCanvas(p);
+    const ctx = canvas.getContext('2d');
+    const boxX0 = Math.round((0.05) * p.w), boxX1 = Math.round((0.05 + 0.3727) * p.w);
+    const boxY0 = Math.round(0.25 * p.h), boxY1 = Math.round(0.65 * p.h);
+    const w = boxX1 - boxX0, h = boxY1 - boxY0;
+    const imgData = ctx.getImageData(boxX0, boxY0, w, h);
+    let top = null, bottom = null;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = (y * w + x) * 4;
+        if (imgData.data[idx] < 200) { if (top === null) top = y; bottom = y; break; }
+      }
+    }
+    return top === null ? 0 : bottom - top;
+  });
+
+  // At this fontScale the wrong (old) padding formula was roughly 5x bigger than the correct one -
+  // enough to force this short phrase onto two lines. With the fix it stays on one, a short
+  // painted height, matching what the live box (whose own padding is genuinely this small) shows.
+  expect(paintedHeight).toBeGreaterThan(5);
+  expect(paintedHeight).toBeLessThan(60);
+});
+
 // Real report: "blank page", sitting in "extra design elements" right next to buttons that ADD
 // things, read as adding a new blank page - it actually wipes every layer off the CURRENT page,
 // and did so with no confirmation at all, unlike the comparably destructive deletePage()'s
