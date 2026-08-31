@@ -1668,6 +1668,70 @@ test('typing content back out of an overflowed page that empties the next page r
   expect(after.pageBlockCount).toBe(after.pageCount);
 });
 
+// Real crash, confirmed with an actual .ppages file: loading a project could throw "Cannot read
+// properties of undefined (reading 'layers')" out of updateAllGroupBounds moments after load -
+// alongside pages visibly reflowing wrong and one page appearing to have nothing on it. Root
+// cause: pullBack's own cleanup splices the now-emptied next page out of pages() (a few lines
+// above), which shifts every later page's index down by one, but never told state.selectedPage -
+// if it was pointing at that removed page (or any page after it, e.g. a third page further into
+// the document, exactly like the real file's third, image-heavy page), it kept pointing at the
+// OLD index. Once that's past the end of the shrunk array, current() (state.pages[selectedPage])
+// returns undefined, and every render() from then on - which a page load triggers plenty of -
+// throws the instant anything touches current().layers.
+test('a page removed by pullBack does not leave state.selectedPage pointing at the wrong (or a now-missing) page', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.waitForTimeout(300);
+
+  // Page 0 overflows by exactly one page (same fill-to-boundary technique as the test above).
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor');
+    ed.innerHTML = '<h1>Title</h1>';
+    let i = 0;
+    while (ed.scrollHeight <= ed.clientHeight + 2 && i < 400) {
+      const p = document.createElement('p');
+      p.textContent = `Paragraph number ${i} filler text to take up space on the page.`;
+      ed.appendChild(p);
+      i++;
+    }
+    ed.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForFunction(() => state.pages.length === 2, null, { timeout: 5000 });
+  await page.waitForTimeout(300);
+
+  // A third page further into the document - like the real file's image page - that the user is
+  // currently looking at while page 1 (ahead of it) is about to get pulled back into page 0 and
+  // removed.
+  await page.evaluate(() => { window.addDocumentLitePage(1); state.selectedPage = 2; });
+  await page.waitForTimeout(200);
+
+  const pageErrors = [];
+  page.on('pageerror', (e) => pageErrors.push(String(e)));
+
+  // Trim page 0 down to almost nothing, freeing up enough room to pull all of page 1's content
+  // back in and empty it out - removing it from pages() and shifting the third page from index 2
+  // down to index 1.
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor[data-page-index="0"]');
+    ed.innerHTML = '<h1>Title</h1><p>Paragraph number 0 filler text to take up space on the page.</p>';
+    ed.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForFunction(() => state.pages.length === 2, null, { timeout: 5000 });
+  await page.waitForTimeout(300);
+
+  const after = await page.evaluate(() => ({
+    pageCount: state.pages.length,
+    selectedPage: state.selectedPage,
+    currentIsDefined: typeof current() !== 'undefined',
+  }));
+
+  expect(pageErrors).toEqual([]);
+  expect(after.pageCount).toBe(2);
+  // The third page shifted from index 2 to index 1 - selectedPage should follow it there, not
+  // stay stuck at the old (now out-of-range) index 2.
+  expect(after.selectedPage).toBe(1);
+  expect(after.currentIsDefined).toBe(true);
+});
+
 // Real bug, confirmed from a saved user file: a heading that had its font size nudged a few
 // times ended up 12 levels deep in nested <span style="font-size:..."> wrappers - applyCss()
 // (used for font size, letter spacing, and line height) wrapped the selection in a brand new

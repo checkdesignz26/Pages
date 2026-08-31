@@ -16904,6 +16904,17 @@ else install();
         // moveOverflow's own deferred render()+caret-restore pattern - deferred so this
         // finishes updating pages()/np first, and caret-restored since the user may still be
         // actively typing in `editor` when a page they're not even looking at empties out.
+        //
+        // Real crash, confirmed with a .ppages file: loading a project could throw
+        // "Cannot read properties of undefined (reading 'layers')" out of updateAllGroupBounds
+        // moments after load, sometimes alongside pages visibly merging/reflowing wrong.
+        // Splicing a page out of pages() shifts every later index down by one, but nothing here
+        // ever told state.selectedPage - if it was pointing at this now-removed page (or any
+        // page after it), it kept pointing at the OLD index, which either lands on the wrong
+        // page or, once selectedPage runs past the shrunk array's end, makes current() return
+        // undefined - exactly what every one of the many render()s a page load triggers assumes
+        // never happens.
+        if(state.selectedPage>=ni) state.selectedPage=Math.max(0,state.selectedPage-1);
         pages().splice(ni,1);
         const restoreInfo=captureCaretForRestore(editor);
         // render() (see the note where window.render gets wrapped, above) schedules its OWN
