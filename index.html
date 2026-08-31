@@ -17282,7 +17282,18 @@ else install();
       if(/^\s+$/.test(tok.text)&&!line.length)continue;
       line.push(tok);lineWidth+=tw;
     }
-    await flush();
+    // Real report, with a screenshot: every paragraph in the exported PDF had a much bigger gap
+    // after it than the live editor shows - roughly double, for any paragraph ending the way
+    // real typed content commonly does (a trailing <br>, e.g. from pressing Enter without more
+    // text following - <div><span>...</span><br></div> was the norm in the reporter's actual
+    // saved file). A trailing <br> becomes a {brk:true} token, and the loop above already calls
+    // flush() for it - which finishes that line and advances y by one lineHeight, whether or not
+    // there was any pending text to draw. This unconditional flush() used to run again right
+    // after the loop regardless, adding a SECOND lineHeight for the exact same trailing break -
+    // only skip it when the last token already was a brk (nothing pending left to flush); a block
+    // ending in real text (no trailing break) still needs this to draw its final unflushed line,
+    // and a wholly empty block (no text, no <br> at all) still needs it for its own blank line.
+    if(!(tokens.length&&tokens[tokens.length-1].brk))await flush();
     return y+lineHeight*0.3;
   }
   async function ppRasterizeDocPage(innerHtml,w,h,pageNum){

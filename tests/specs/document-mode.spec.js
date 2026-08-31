@@ -2547,3 +2547,34 @@ test('the PDF does not drop a line of text that ended up as a bare, unwrapped te
   expect(joined).toContain('Bare');
   expect(joined).toContain('Third');
 });
+
+// Real report, with a screenshot: every paragraph in an exported PDF sat much further apart than
+// in the live editor - roughly double the gap, and only for paragraphs ending the way real typed
+// content commonly does: a trailing <br> (confirmed from the reporter's own saved file, whose
+// paragraphs were consistently "<div><span>...</span><br></div>" - the shape iOS Safari leaves
+// after pressing Enter with nothing typed after it). Root cause: a trailing <br> becomes a
+// {brk:true} token, and the per-block token loop already calls flush() for it - finishing that
+// line and advancing y by one lineHeight. ppDrawDocBlock's own unconditional flush() right after
+// that loop ran again regardless, adding a SECOND lineHeight for the exact same trailing break -
+// paragraphs without a trailing <br> never hit this, which is why the gap only doubled for some
+// paragraphs and not others, exactly matching the uneven spacing in the screenshot.
+test('a paragraph ending in a trailing <br> gets the same gap after it as one that doesn\'t', async ({ page }) => {
+  const withBr = '<div>Paragraph one</div><div>Paragraph two<br></div><div>Paragraph three</div>';
+  const withoutBr = '<div>Paragraph one</div><div>Paragraph two</div><div>Paragraph three</div>';
+
+  const [gapWithBr, gapWithoutBr] = await page.evaluate(async ([hWith, hWithout]) => {
+    async function firstLineY(html) {
+      const ys = [];
+      const orig = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (text, x, y) { ys.push(y); return orig.apply(this, arguments); };
+      try { await window.ppRasterizeDocPage(html, 1240, 1754, 1); } finally { CanvasRenderingContext2D.prototype.fillText = orig; }
+      // One fillText call per word on "Paragraph three" - only need where its line starts.
+      return ys[ys.length - 2]; // "three" is the last word drawn; "Paragraph" is the one before it, same line
+    }
+    return [await firstLineY(hWith), await firstLineY(hWithout)];
+  }, [withBr, withoutBr]);
+
+  // A trailing <br> on the paragraph just before "Paragraph three" must not push it down any
+  // further than an otherwise-identical paragraph with no trailing <br> would.
+  expect(Math.abs(gapWithBr - gapWithoutBr)).toBeLessThan(2);
+});
