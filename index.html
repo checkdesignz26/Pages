@@ -22621,14 +22621,21 @@ body.leftCollapsed.rightCollapsed .stage.pattern,body.leftCollapsed.rightCollaps
      the same "no colour" convention design tools use: a circle with a diagonal line through it. -->
 <style id="pp-no-colour-swatch-css">
   .colorRow.ppColorRowWithNone{grid-template-columns:1fr 54px 34px!important;}
+  /* This file's own generic "button, select, input[type=color]" styling (several layered
+     !important passes, the last always winning by source order) otherwise paints straight over
+     a plain, non-!important background/border here - every property needs its own !important to
+     actually stick. A light, near-white swatch (matching what an actual colour choice would look
+     like) makes the red diagonal line read clearly against the dark panel, instead of a dark
+     circle with a barely-visible line on a dark background. */
   .ppNoColorBtn{
-    width:34px;height:34px;padding:0;border-radius:50%;align-self:center;
-    border:1px solid rgba(255,255,255,.35);
+    width:34px!important;height:34px!important;padding:0!important;
+    border-radius:50%!important;align-self:center!important;box-shadow:none!important;
+    border:2px solid rgba(255,255,255,.6)!important;
     background:
-      linear-gradient(135deg,transparent calc(50% - 1.5px),#ff5470 calc(50% - 1.5px),#ff5470 calc(50% + 1.5px),transparent calc(50% + 1.5px)),
-      rgba(255,255,255,.06);
+      linear-gradient(135deg,transparent calc(50% - 2px),#ff3b52 calc(50% - 2px),#ff3b52 calc(50% + 2px),transparent calc(50% + 2px)),
+      #f2eef4 !important;
   }
-  .ppNoColorBtn:disabled{opacity:.32;cursor:not-allowed;}
+  .ppNoColorBtn:disabled{opacity:.32!important;cursor:not-allowed!important;}
 </style>
 
 <!-- Real report, with a screenshot: selecting a layer packed in among others (a bullet list sat

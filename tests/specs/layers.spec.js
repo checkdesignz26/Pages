@@ -1967,6 +1967,34 @@ test('clearFillColor and clearBorderColor reset a shape layer back to no colour'
   expect(result.borderWidthInputValue).toBe('0');
 });
 
+// Real report, with a screenshot: the new "no colour" swatch rendered as a plain dark square with
+// no visible icon at all. This file's own generic "button, select, input[type=color]" styling
+// carries several layered !important passes (the last always winning by source order regardless
+// of a more specific but non-!important selector) - a plain, non-!important background/border on
+// .ppNoColorBtn was simply painted over by it. Every property needs its own !important to stick.
+test('the "no colour" swatch buttons keep their own light background and diagonal-line icon, not the generic dark button style', async ({ page }) => {
+  await page.evaluate(() => {
+    const l = layer('rectangle', { name: 'rect', x: 10, y: 10, w: 30, h: 30, z: nextZ() });
+    current().layers.push(l);
+    state.selected = l.id;
+    render();
+  });
+  await page.evaluate(() => document.querySelectorAll('.box.collapsed').forEach((b) => b.classList.remove('collapsed')));
+  await page.waitForTimeout(200);
+
+  const style = await page.evaluate(() => {
+    const el = document.getElementById('fillColorNone');
+    const cs = getComputedStyle(el);
+    return { backgroundColor: cs.backgroundColor, backgroundImage: cs.backgroundImage, borderRadius: cs.borderRadius };
+  });
+
+  // The generic button style's dark, near-black gradient - if this ever won again the swatch
+  // would go back to looking like a plain, iconless button.
+  expect(style.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+  expect(style.backgroundImage).toContain('255, 59, 82'); // the red diagonal line colour
+  expect(style.borderRadius).toBe('50%'); // a circle, not the generic button's rounded rectangle
+});
+
 // Real report: "blank page", sitting in "extra design elements" right next to buttons that ADD
 // things, read as adding a new blank page - it actually wipes every layer off the CURRENT page,
 // and did so with no confirmation at all, unlike the comparably destructive deletePage()'s
