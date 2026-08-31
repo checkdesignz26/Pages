@@ -1804,8 +1804,13 @@ test('exporting a page matches the live canvas\'s current text wrapping, not a f
   // Rather than fight the real (timing-sensitive) measurement heuristics in a headless browser,
   // set the exact same variable pp-stage-stable-width-js itself would cache, directly - this is
   // the one value every .stage on screen actually renders against, real device or not.
+  // referenceStageWidth now forces a fresh remeasurement before every export (see the
+  // stale-cache-recovery test below), which would otherwise overwrite this manually-injected
+  // value with whatever the headless page's real (roomy) layout happens to measure - stub that
+  // remeasurement out here so the injected value is what the export actually reads, same as before.
   async function paintedTextHeight(refWidth) {
     return page.evaluate(async (refWidth) => {
+      window.__ppMeasureStableStageWidth = function(){};
       document.documentElement.style.setProperty('--pp-stable-stage-width', refWidth + 'px');
       const p = current();
       const canvas = await renderPageToCanvas(p);
@@ -1839,6 +1844,66 @@ test('exporting a page matches the live canvas\'s current text wrapping, not a f
   expect(wideHeight).toBeGreaterThan(20);
   expect(wideHeight).toBeLessThan(120); // one line only
   expect(narrowHeight).toBeGreaterThan(wideHeight * 2); // wrapped onto (at least) a second line
+});
+
+// Real report, with the actual downloaded file: a title that sat comfortably on one line on the
+// live canvas exported wrapped onto two lines and clipped off the top of the page. The live stage
+// on screen was genuinely wide - nothing was actually wrong with the canvas the user was looking
+// at - but --pp-stable-stage-width (see pp-stage-stable-width-js) is a cached value only ever
+// refreshed on an actual window resize event, so it can go stale on a real device for reasons this
+// file can't fully audit (a missed rotation, a dismissed system banner, etc.) without the live
+// canvas ever visibly breaking to show it. referenceStageWidth now forces one fresh, synchronous
+// remeasurement (the same one pp-stage-stable-width-js already runs safely on resize) before every
+// export, so a stale cached number can never make it into an export that disagrees with reality.
+test('exporting a page recovers from a stale cached stage width instead of trusting it blindly', async ({ page }) => {
+  await page.evaluate(() => {
+    state.pages = [{
+      type: 'listing', w: 3000, h: 2250, layers: [{
+        id: 'title1', type: 'text', name: 'title',
+        text: 'Pattern pages - Etsy Listing builder',
+        x: 10, y: 3, w: 80, h: 16, z: 1, opacity: 1, r: 0,
+        fontSize: 14, bold: true, color: '#111111', textAlign: 'center', font: 'Georgia', lineHeight: 1.05,
+      }],
+    }];
+    state.selectedPage = 0;
+    state.selected = null;
+    render();
+  });
+  await page.waitForTimeout(300);
+
+  const result = await page.evaluate(async () => {
+    // Simulate the cached value having gone stale - much narrower than the real, currently
+    // rendered .stage on screen - without the live canvas itself being touched at all.
+    document.documentElement.style.setProperty('--pp-stable-stage-width', '300px');
+    const p = current();
+    const canvas = await renderPageToCanvas(p);
+    const ctx = canvas.getContext('2d');
+    const boxX0 = Math.round(0.10 * p.w), boxX1 = Math.round(0.90 * p.w);
+    const boxY0 = 0, boxY1 = Math.round(0.19 * p.h);
+    const w = boxX1 - boxX0, h = boxY1 - boxY0;
+    const imgData = ctx.getImageData(boxX0, boxY0, w, h);
+    let top = null, bottom = null;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = (y * w + x) * 4;
+        if (imgData.data[idx] < 200 || imgData.data[idx + 1] < 200 || imgData.data[idx + 2] < 200) {
+          if (top === null) top = y;
+          bottom = y;
+          break;
+        }
+      }
+    }
+    return {
+      paintedHeight: top === null ? 0 : bottom - top,
+      clippedAtTop: top === 0,
+      correctedWidth: getComputedStyle(document.documentElement).getPropertyValue('--pp-stable-stage-width'),
+    };
+  });
+
+  expect(result.correctedWidth).not.toBe('300px');
+  expect(result.clippedAtTop).toBe(false);
+  expect(result.paintedHeight).toBeGreaterThan(10);
+  expect(result.paintedHeight).toBeLessThan(90); // one line only, not wrapped onto a second
 });
 
 // Real report: "blank page", sitting in "extra design elements" right next to buttons that ADD

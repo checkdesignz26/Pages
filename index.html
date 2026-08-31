@@ -19653,6 +19653,19 @@ else install();
   // using right now, so the export can never disagree with what the canvas shows.
   function referenceStageWidth(p){
     var cap=p.type==='pattern'?560:p.type==='mockup'?680:(p.w===p.h?520:620);
+    // Real report, with the actual downloaded file: a title that sat comfortably on one line on
+    // screen exported wrapped onto two lines and clipped off the top of the page - along with
+    // several other text blocks overlapping/overflowing further down the same export. The live
+    // canvas looked completely fine at that exact moment, but --pp-stable-stage-width (see
+    // pp-stage-stable-width-js) is only ever refreshed on an actual window resize - it can go
+    // stale for any number of reasons this file can't fully audit on a real device (a dismissed
+    // system banner, a rotation the resize listener missed, etc.) without ever visibly breaking
+    // the live canvas the user is looking at, since nothing re-triggers a measurement to catch it.
+    // Rather than trust that possibly-stale cached number, force one fresh, synchronous
+    // measurement right before every export - it's the same measurement pp-stage-stable-width-js
+    // already performs safely on resize, just run on demand so the export can never disagree with
+    // whatever the canvas is actually showing right now.
+    try{ if(typeof window.__ppMeasureStableStageWidth==='function') window.__ppMeasureStableStageWidth(); }catch(e){}
     try{
       var raw=getComputedStyle(document.documentElement).getPropertyValue('--pp-stable-stage-width');
       var px=parseFloat(raw);
