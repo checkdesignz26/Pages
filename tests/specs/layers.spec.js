@@ -1906,6 +1906,67 @@ test('exporting a page recovers from a stale cached stage width instead of trust
   expect(result.paintedHeight).toBeLessThan(90); // one line only, not wrapped onto a second
 });
 
+// Real report, with a screenshot: selecting a layer packed in among others (a bullet list sitting
+// right under a title) put the floating delete "x" - pp-doggy-98-real-box-tighter-trim-css moves it
+// to top:-39px;right:-34px, clear of the box's own corner resize handle - squarely on top of a
+// different, unrelated layer above it. That fixed offset only accounts for the selected layer's own
+// corner, never whatever already sits in the space just outside it. It should fall back to the
+// original inset corner position (plain old top:6px;right:6px, fully inside the selected box) any
+// time the floating spot would land on another layer.
+test('the delete "x" falls back to sitting inside its own box when the floating spot would cover a different layer', async ({ page }) => {
+  await page.evaluate(() => {
+    state.pages = [{
+      type: 'listing', w: 3000, h: 2250, layers: [
+        { id: 'title', type: 'text', name: 'title', text: 'Title', x: 5, y: 0, w: 90, h: 10, z: 1, opacity: 1, r: 0, fontSize: 30, color: '#111', textAlign: 'center', font: 'Georgia' },
+        { id: 'bullets', type: 'text', name: 'bullets', text: 'bullets', x: 5, y: 12, w: 40, h: 40, z: 2, opacity: 1, r: 0, fontSize: 15, color: '#111', textAlign: 'left', font: 'Georgia' },
+      ],
+    }];
+    state.selectedPage = 0;
+    state.selected = 'bullets';
+    render();
+  });
+  await page.waitForTimeout(300);
+
+  const result = await page.evaluate(() => {
+    const layerEl = document.querySelector('.layer[data-id="bullets"]');
+    const titleEl = document.querySelector('.layer[data-id="title"]');
+    const del = layerEl.querySelector('.deleteMini');
+    const dr = del.getBoundingClientRect();
+    const tr = titleEl.getBoundingClientRect();
+    const overlapsTitle = dr.right > tr.left && dr.left < tr.right && dr.bottom > tr.top && dr.top < tr.bottom;
+    const lr = layerEl.getBoundingClientRect();
+    const insideOwnBox = dr.left >= lr.left - 1 && dr.top >= lr.top - 1;
+    return { hasInsetClass: del.classList.contains('ppDeleteMiniInset'), overlapsTitle, insideOwnBox };
+  });
+
+  expect(result.hasInsetClass).toBe(true);
+  expect(result.overlapsTitle).toBe(false);
+  expect(result.insideOwnBox).toBe(true);
+});
+
+// Real report: "I accidentally fill my text field with a border colour, now I can't reverse it
+// anymore" - <input type="color"> can only ever hand back a real colour, never "transparent"/
+// "none", so once picked there was no way back short of undo, even though fill:'transparent' (and
+// an invisible border via border:'transparent'+borderW:0) already render correctly everywhere.
+test('clearFillColor and clearBorderColor reset a shape layer back to no colour', async ({ page }) => {
+  const result = await page.evaluate(() => {
+    save();
+    const l = layer('rectangle', { name: 'rect', x: 10, y: 10, w: 30, h: 30, z: nextZ(), fill: '#ff0000', border: '#00ff00', borderW: 5 });
+    current().layers.push(l);
+    state.selected = l.id;
+    render();
+    window.clearFillColor();
+    const afterFill = { fill: l.fill, border: l.border, borderW: l.borderW };
+    window.clearBorderColor();
+    const afterBorder = { fill: l.fill, border: l.border, borderW: l.borderW };
+    return { afterFill, afterBorder, borderWidthInputValue: document.getElementById('borderWidth').value };
+  });
+
+  expect(result.afterFill).toEqual({ fill: 'transparent', border: '#00ff00', borderW: 5 });
+  expect(result.afterBorder).toEqual({ fill: 'transparent', border: 'transparent', borderW: 0 });
+  expect(result.borderWidthInputValue).toBe('0');
+});
+
 // Real report: "blank page", sitting in "extra design elements" right next to buttons that ADD
 // things, read as adding a new blank page - it actually wipes every layer off the CURRENT page,
 // and did so with no confirmation at all, unlike the comparably destructive deletePage()'s

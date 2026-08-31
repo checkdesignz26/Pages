@@ -1561,7 +1561,7 @@ body.autoGroupEditing .layer.collectionGrouped{
     <button class="full" onclick="ppRecolorDownload()" title="Download the recoloured image as a PNG file">download recoloured png</button>
     <div class="status" id="recolorPngStatus">Ready for a PNG.</div>
   </div></div>
-  <div class="box"><h2>shape colours</h2><div class="colorRow"><label class="smallText">fill colour</label><input id="fillColor" type="color" value="#ffffff" oninput="applyColorControls()"></div><div class="colorRow"><label class="smallText">border colour</label><input id="borderColor" type="color" value="#111111" oninput="applyColorControls()"></div><div class="rangeRow"><label>border</label><input id="borderWidth" type="range" min="0" max="16" value="0" oninput="applyColorControls()"></div></div>
+  <div class="box"><h2>shape colours</h2><div class="colorRow ppColorRowWithNone"><label class="smallText">fill colour</label><input id="fillColor" type="color" value="#ffffff" oninput="applyColorControls()"><button type="button" id="fillColorNone" class="ppNoColorBtn" onclick="clearFillColor()" title="Remove the fill (make it transparent)" aria-label="Remove fill colour"></button></div><div class="colorRow ppColorRowWithNone"><label class="smallText">border colour</label><input id="borderColor" type="color" value="#111111" oninput="applyColorControls()"><button type="button" id="borderColorNone" class="ppNoColorBtn" onclick="clearBorderColor()" title="Remove the border" aria-label="Remove border colour"></button></div><div class="rangeRow"><label>border</label><input id="borderWidth" type="range" min="0" max="16" value="0" oninput="applyColorControls()"></div></div>
  </aside>
 </main>
 <button id="toggleLeftPanel" class="panelToggle" onclick="toggleSidePanel('left')" aria-label="collapse left panel" title="Collapse or expand this panel"></button>
@@ -3199,7 +3199,7 @@ function syncControls(){
  const hasText=['text','label'].includes(l.type);
  const hasFillBorder=['text','label','rectangle','square','circle'].includes(l.type);
  ['textValue','fontFamily','fontSize','fontSizeNumber','lineHeight','letterSpacing','textPadding','textColor','textShadow','textGlow','textStroke','effectColor'].forEach(id=>{if($(id))$(id).disabled=!!l.disclosureBadge||!hasText});
- ['fillColor','borderColor','borderWidth'].forEach(id=>{if($(id))$(id).disabled=!!l.disclosureBadge||!hasFillBorder});
+ ['fillColor','borderColor','borderWidth','fillColorNone','borderColorNone'].forEach(id=>{if($(id))$(id).disabled=!!l.disclosureBadge||!hasFillBorder});
 }
 function applyControls(){
  let l=getLayer();
@@ -3257,6 +3257,13 @@ function applyControls(){
 }
 function applyTextControls(){let l=getLayer();if(!l)return;if(l.disclosureBadge){l.text='AI Generated';l.fontSize=12;l.font='system-ui';renderPages();return;}l.text=$('textValue').value;l.font=$('fontFamily').value;l.fontSize=+$('fontSize').value;l.lineHeight=($('lineHeight')?+$('lineHeight').value:105)/100;l.letterSpacing=$('letterSpacing')?+$('letterSpacing').value:0;l.textPadding=$('textPadding')?+$('textPadding').value:10;l.color=$('textColor').value;l.textShadow=+$('textShadow').value;l.textGlow=+$('textGlow').value;l.textStroke=+$('textStroke').value;l.effectColor=$('effectColor').value;renderPages();renderLayers();renderFrameList()}
 function applyColorControls(){let l=getLayer();if(!l)return;if(l.disclosureBadge){l.fill='rgba(255,255,255,.92)';l.border='#ffffff';l.borderW=0;l.color='#555555';renderPages();return;}l.fill=$('fillColor').value;l.border=$('borderColor').value;l.borderW=+$('borderWidth').value;renderPages();renderLayers();renderFrameList()}
+// Real report: "I accidentally fill my text field with a border colour, now I can't reverse it
+// anymore" - <input type="color"> can only ever produce a real colour, never hand back
+// "transparent"/"none", so once a fill or border colour was picked there was no way to clear it
+// again short of undo. These give the fill/border colour rows a one-tap "no colour" swatch, same
+// convention as this codebase's fillColor:'transparent' sentinel already understands.
+function clearFillColor(){let l=getLayer();if(!l||l.disclosureBadge)return;save();l.fill='transparent';renderPages();renderLayers();renderFrameList()}
+function clearBorderColor(){let l=getLayer();if(!l||l.disclosureBadge)return;save();l.border='transparent';l.borderW=0;if($('borderWidth'))$('borderWidth').value=0;renderPages();renderLayers();renderFrameList()}
 function toggleBold(){let l=getLayer();if(!l || l.disclosureBadge)return;l.bold=!l.bold;render()}function toggleItalic(){let l=getLayer();if(!l || l.disclosureBadge)return;l.italic=!l.italic;render()}
 function toHex(c){if(!c||c==='transparent')return '#ffffff';return c.startsWith('#')?c:'#111111'}
 function alignSelected(where){
@@ -22604,4 +22611,72 @@ body.leftCollapsed.rightCollapsed .stage.pattern,body.leftCollapsed.rightCollaps
   },true);
 })();
 </script>
+
+<!-- Real report: "I accidentally fill my text field with a border colour, now I can't reverse it
+     anymore" - <input type="color"> can only ever hand back a real colour, never "transparent"/
+     "none", so once a fill or border colour was picked there was no way back to "no colour" short
+     of undo, even though this app's own render/export already understand fill:'transparent' (and
+     an invisible border is just as reachable via border:'transparent'+borderW:0) - see
+     clearFillColor/clearBorderColor. This just gives the shape-colours row a one-tap swatch for it,
+     the same "no colour" convention design tools use: a circle with a diagonal line through it. -->
+<style id="pp-no-colour-swatch-css">
+  .colorRow.ppColorRowWithNone{grid-template-columns:1fr 54px 34px!important;}
+  .ppNoColorBtn{
+    width:34px;height:34px;padding:0;border-radius:50%;align-self:center;
+    border:1px solid rgba(255,255,255,.35);
+    background:
+      linear-gradient(135deg,transparent calc(50% - 1.5px),#ff5470 calc(50% - 1.5px),#ff5470 calc(50% + 1.5px),transparent calc(50% + 1.5px)),
+      rgba(255,255,255,.06);
+  }
+  .ppNoColorBtn:disabled{opacity:.32;cursor:not-allowed;}
+</style>
+
+<!-- Real report, with a screenshot: selecting a layer packed in among others (a bullet list sat
+     right under a title, with a photo alongside) put the floating delete "x" (pp-doggy-98-real-
+     box-tighter-trim-css moved it to top:-39px;right:-34px, clear of the box's own corner resize
+     handle) squarely on top of three unrelated layers at once - the title, the subtitle and the
+     mock-up photo. That fixed offset only ever accounted for the selected layer's own corner, never
+     what happens to already be sitting in the space just outside it, which is exactly where a
+     tightly laid-out listing keeps its other elements. Falls back to the ORIGINAL inset corner
+     position (the plain default .deleteMini rule, before that pass ever floated it outside the box)
+     whenever the floating spot would actually land on another layer - inside its own box can still
+     brush against that layer's own content, but it can never cover a DIFFERENT layer someone didn't
+     even select. -->
+<script id="pp-delete-mini-avoid-overlap-js">
+(function(){
+  'use strict';
+  function checkOne(del){
+    var layerEl=del.closest('.layer'); if(!layerEl)return;
+    var stage=layerEl.closest('.stage'); if(!stage)return;
+    del.classList.remove('ppDeleteMiniInset');
+    var dr=del.getBoundingClientRect();
+    var others=stage.querySelectorAll('.layer');
+    for(var i=0;i<others.length;i++){
+      var o=others[i]; if(o===layerEl)continue;
+      var r=o.getBoundingClientRect();
+      if(r.width<1||r.height<1)continue;
+      if(dr.right>r.left && dr.left<r.right && dr.bottom>r.top && dr.top<r.bottom){
+        del.classList.add('ppDeleteMiniInset');
+        return;
+      }
+    }
+  }
+  function checkAll(){
+    try{ document.querySelectorAll('.stage .layer.selected > .deleteMini').forEach(checkOne); }catch(e){}
+  }
+  var oldRender=window.render;
+  if(typeof oldRender==='function' && !oldRender.__ppDeleteMiniOverlapWrapped){
+    var wrapped=function(){ var r=oldRender.apply(this,arguments); setTimeout(checkAll,0); return r; };
+    wrapped.__ppDeleteMiniOverlapWrapped=true;
+    window.render=wrapped; try{render=wrapped;}catch(e){}
+  }
+  setTimeout(checkAll,300);
+})();
+</script>
+<style id="pp-delete-mini-avoid-overlap-css">
+  .stage .layer.selected > .deleteMini.ppDeleteMiniInset{
+    top:6px!important;
+    right:6px!important;
+  }
+</style>
 
