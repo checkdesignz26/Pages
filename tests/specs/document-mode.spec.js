@@ -799,6 +799,97 @@ test('inserting a sizeable image lands it constrained to the page, not overflowi
   expect(result.imgHeight).toBeLessThan(result.editorHeight * 0.5);
 });
 
+// Same real report, continued: the fix above only covered the "add image" button
+// (ppDocInsertImage). The exact same execCommand('insertHTML', '<img...><p><br></p>') pattern is
+// duplicated at two more insertion sites in the paste handler - pasting a logo copied from
+// another app (image bytes on the clipboard) and pasting one cut/copied from within the app
+// itself (an <img> inside HTML clipboard data) - neither of which got the fix, so a pasted logo
+// still overflowed even after the button-driven case was already fixed.
+test('pasting an image (HTML clipboard data, e.g. cut/copied from within the app) also lands it constrained to the page', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.waitForTimeout(1800);
+
+  const dataUrl = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 1200; c.height = 1200;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#333'; ctx.fillRect(0, 0, 1200, 1200);
+    return c.toDataURL('image/png');
+  });
+
+  const result = await page.evaluate((durl) => {
+    const ed = document.querySelector('.documentEditor[data-page-index="0"]');
+    ed.focus();
+    // A bare .focus() leaves the caret at position 0 (before any content), which never
+    // reproduces the bug - insertHTML there lands as a top-level sibling regardless, since
+    // there's no surrounding <p> to land inside. A real user has clicked somewhere inside the
+    // existing text before pasting; collapse the selection to the end of the content (inside its
+    // last paragraph) to match that.
+    const r = document.createRange();
+    r.selectNodeContents(ed);
+    r.collapse(false);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    const dt = new DataTransfer();
+    dt.setData('text/html', '<img src="' + durl + '">');
+    const evt = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+    ed.dispatchEvent(evt);
+    return true;
+  }, dataUrl);
+  expect(result).toBe(true);
+  await page.waitForSelector('.documentEditor img');
+  await page.waitForTimeout(300);
+
+  const check = await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor[data-page-index="0"]');
+    const img = ed.querySelector('img');
+    return { isDirectChild: img.parentElement === ed, imgHeight: img.getBoundingClientRect().height, editorHeight: ed.clientHeight };
+  });
+  expect(check.isDirectChild).toBe(true);
+  expect(check.imgHeight).toBeLessThan(check.editorHeight * 0.5);
+});
+
+test('pasting an image copied from another app (raw image bytes on the clipboard) also lands it constrained to the page', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.waitForTimeout(1800);
+
+  const dataUrl = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 1200; c.height = 1200;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#333'; ctx.fillRect(0, 0, 1200, 1200);
+    return c.toDataURL('image/png');
+  });
+
+  const check = await page.evaluate(async (durl) => {
+    const ed = document.querySelector('.documentEditor[data-page-index="0"]');
+    ed.focus();
+    // See the previous test - collapse the caret into the existing content first, matching a
+    // real user who tapped somewhere in their text before pasting a logo.
+    const r = document.createRange();
+    r.selectNodeContents(ed);
+    r.collapse(false);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    const res = await fetch(durl);
+    const blob = await res.blob();
+    const file = new File([blob], 'logo.png', { type: 'image/png' });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const evt = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+    ed.dispatchEvent(evt);
+    await new Promise((r) => setTimeout(r, 400));
+    const img = ed.querySelector('img');
+    return { found: !!img, isDirectChild: img ? img.parentElement === ed : false, imgHeight: img ? img.getBoundingClientRect().height : 0, editorHeight: ed.clientHeight };
+  }, dataUrl);
+
+  expect(check.found).toBe(true);
+  expect(check.isDirectChild).toBe(true);
+  expect(check.imgHeight).toBeLessThan(check.editorHeight * 0.5);
+});
+
 // Real report, with screenshots: a selected image's purple outline stayed stuck permanently -
 // visibly "framed" and un-draggable - no matter how many times it was tapped away from
 // afterward. Root cause: .ppDocImgSelected lives directly on the live <img> node, and a

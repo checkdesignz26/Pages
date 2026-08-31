@@ -17038,19 +17038,27 @@ else install();
   // holding nothing but the image (the common case: an empty paragraph, or the end of the
   // document), hoist the image out to be a direct child of the editor instead, so the percentage
   // actually has the page's own height to measure against.
+  //
+  // Exposed globally (not just used by ppDocInsertImage below) because this exact insertHTML
+  // pattern - <img ...><p><br></p> - is duplicated at two more insertion sites entirely: pasting
+  // an image copied from another app, and pasting one cut/copied from within the document itself
+  // (see the "paste" listener in upgrade()). A real report confirmed the same oversized-image
+  // overflow still happened via paste even after this was first fixed only for the "add image"
+  // button - same bug, same fix, needed at every place that ever runs this insertHTML.
+  window.ppHoistLoneDocImage=function(img){
+    if(!img)return;
+    const parent=img.parentElement;
+    if(parent&&parent.tagName==='P'&&parent.children.length===1&&parent.firstElementChild===img&&!(parent.textContent||'').trim()){
+      parent.replaceWith(img);
+    }
+  };
   window.ppDocInsertImage=function(input){const file=input.files&&input.files[0];if(!file)return;const ed=selectedEditor();if(!ed)return;const r=new FileReader();r.onload=()=>{
     ed.focus();
     const nonce183='ppDocImg'+Date.now()+Math.random().toString(36).slice(2);
     document.execCommand('insertHTML',false,`<img src="${r.result}" alt="manual image" data-pp-insert-nonce="${nonce183}"><p><br></p>`);
     input.value='';
     const img=ed.querySelector(`img[data-pp-insert-nonce="${nonce183}"]`);
-    if(img){
-      img.removeAttribute('data-pp-insert-nonce');
-      const parent=img.parentElement;
-      if(parent&&parent.tagName==='P'&&parent.children.length===1&&parent.firstElementChild===img&&!(parent.textContent||'').trim()){
-        parent.replaceWith(img);
-      }
-    }
+    if(img){img.removeAttribute('data-pp-insert-nonce');window.ppHoistLoneDocImage(img);}
     ed.dispatchEvent(new Event('input',{bubbles:true}));
   };r.readAsDataURL(file)}
   function escTitle(s){return String(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
@@ -21491,7 +21499,10 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
       e.stopPropagation();
       var cd=e.clipboardData||window.clipboardData;
       function insertImage(src){
-        document.execCommand('insertHTML',false,'<img src="'+src+'" alt="manual image"><p><br></p>');
+        const nonce183='ppPasteHoist'+Date.now()+Math.random().toString(36).slice(2);
+        document.execCommand('insertHTML',false,'<img src="'+src+'" alt="manual image" data-pp-insert-nonce="'+nonce183+'"><p><br></p>');
+        const justInserted=editor.querySelector('img[data-pp-insert-nonce="'+nonce183+'"]');
+        if(justInserted){justInserted.removeAttribute('data-pp-insert-nonce');window.ppHoistLoneDocImage(justInserted);}
         saveEditor(editor,false);
         rememberRange();
       }
@@ -21542,6 +21553,7 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
         var blobUrl=URL.createObjectURL(imgFile);
         var nonce='ppPasteImg'+Date.now()+Math.random().toString(36).slice(2);
         document.execCommand('insertHTML',false,'<img src="'+blobUrl+'" alt="manual image" data-pptemp="'+nonce+'"><p><br></p>');
+        window.ppHoistLoneDocImage(editor.querySelector('img[data-pptemp="'+nonce+'"]'));
         saveEditor(editor,false);
         rememberRange();
         var reader=new FileReader();
