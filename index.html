@@ -16852,7 +16852,16 @@ else install();
       // rebuilding every .documentEditor node from scratch - which is what actually kills the
       // resize overlay, since it's tracking the now-replaced <img> DOM node) is overkill for a
       // paragraph with nothing in it - there's no text to lose, so it's simply dropped instead.
-      if(!n.querySelector('img')&&!(n.textContent||'').trim()){n.remove();continue}
+      //
+      // Real report, with a screenshot: a logo sitting at the very end of an overflowing page
+      // vanished outright instead of moving to a new page. Since ppHoistLoneDocImage now hoists a
+      // lone image out to be a direct child of the editor (see its own comment - needed so the
+      // page's own max-height percentage actually applies), that hoisted <img> can itself end up
+      // as editor.lastElementChild once the trailing filler paragraph above it has already been
+      // dropped by this very check. n.querySelector('img') only ever finds an img DESCENDANT, not
+      // n itself being one - so a bare hoisted <img> silently passed this "no image, no text"
+      // filler test too, and got deleted the same way the empty paragraph legitimately should.
+      if(n.tagName!=='IMG'&&!n.querySelector('img')&&!(n.textContent||'').trim()){n.remove();continue}
       if(caretNode&&n.contains(caretNode))caretWasInMovedContent=true;
       moved.unshift(n.outerHTML);n.remove();
     }
@@ -16927,10 +16936,29 @@ else install();
       }
     }
   }
+  // Real report: shrinking an inline image small enough to comfortably fit on the page BEFORE it
+  // never actually moved it there - it just stayed put on whichever page it had originally
+  // overflowed onto, even once there was obviously room behind it. moveOverflow/pullBack above
+  // only ever look FORWARD from the page that was just edited (does it now overflow onto the
+  // next page, or can the next page's content be pulled back into it) - nothing ever re-checks
+  // whether the PREVIOUS page could now pull this page's content back into itself, which is
+  // exactly the direction a shrink (an image resized down, or text deleted) needs. Re-derive the
+  // previous page's own editor from the live DOM by index rather than capturing one, matching
+  // scheduleFontsReadyRecheck's sweep below - safe even if this fires after the page layout has
+  // changed, and a no-op (prevEditor stays null) when there's no previous page, or it isn't a
+  // document page at all (only document pages ever get a .documentEditor node).
+  function pullBackIntoPreviousPage(editor){
+    if(!editor||!document.body.contains(editor))return;
+    const index=+editor.dataset.pageIndex;
+    if(!Number.isFinite(index)||index<1)return;
+    const prevEditor=document.querySelector(`.documentEditor[data-page-index="${index-1}"]`);
+    if(!prevEditor||!pages()[index-1])return;
+    try{ pullBack(index-1,prevEditor); }catch(e){}
+  }
   function onDocInput(e){
     const editor=e.currentTarget,index=+editor.dataset.pageIndex,p=pages()[index];if(!p)return;
     p.docHtml=cleanEditorHtml(editor);
-    clearTimeout(editor._flowTimer);editor._flowTimer=setTimeout(()=>{if(!moveOverflow(index,editor)){pullBack(index,editor);p.docHtml=cleanEditorHtml(editor);if(typeof scheduleAutosave==='function')scheduleAutosave()}},120);
+    clearTimeout(editor._flowTimer);editor._flowTimer=setTimeout(()=>{if(!moveOverflow(index,editor)){pullBack(index,editor);p.docHtml=cleanEditorHtml(editor);if(typeof scheduleAutosave==='function')scheduleAutosave();pullBackIntoPreviousPage(editor);}},120);
   }
   // Real bug: the last line of a page could render half-clipped. Custom/embedded fonts
   // (docStyles, uploaded fonts) aren't necessarily ready yet at the fixed 20ms mark decorate()

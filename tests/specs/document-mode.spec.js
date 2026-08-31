@@ -752,6 +752,132 @@ test('resizing an image bigger keeps the resize handle working and does not spaw
   expect(after.pageCount).toBe(pageCountBefore);
 });
 
+// Real report, with a screenshot: a logo at the very end of a page that genuinely overflowed
+// (not just a few pixels - a whole page of text plus a full-size image) vanished outright instead
+// of moving to a new page along with it. Root cause: moveOverflow's "drop it, don't move it"
+// filler check exists so the empty <p><br></p> that always trails an inserted image doesn't get
+// promoted onto a whole new page (see the test above) - but it only ever checked for an image
+// DESCENDANT ("!n.querySelector('img')"), never for the element itself BEING one. Once
+// ppHoistLoneDocImage hoists a lone image out to be a direct child of the editor (needed so the
+// page's own max-height percentage actually applies - see that fix's own comment), that hoisted
+// <img> can itself end up as editor.lastElementChild after the trailing filler paragraph ahead of
+// it has already been dropped this same way - and silently failed the exact same "no image, no
+// text" test a real filler paragraph should, getting deleted instead of carried onto a new page.
+test('an image that overflows off the end of a page moves onto a new page instead of vanishing', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.waitForTimeout(1800);
+
+  await page.click('.documentEditor');
+  await page.waitForTimeout(150);
+  // Enough real paragraph text that a full-size image landing right after it is guaranteed to
+  // overflow the page outright, not just by a few pixels of empty filler.
+  const text = 'Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor. '.repeat(24);
+  await page.evaluate((txt) => {
+    const ed = document.querySelector('.documentEditor');
+    ed.focus();
+    const r = document.createRange();
+    r.selectNodeContents(ed);
+    r.collapse(false);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    document.execCommand('insertText', false, txt);
+  }, text);
+  await page.waitForTimeout(500);
+
+  const dataUrl = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 1200; c.height = 1200;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#333'; ctx.fillRect(0, 0, 1200, 1200);
+    return c.toDataURL('image/png');
+  });
+  const pngBuffer = Buffer.from(dataUrl.split(',')[1], 'base64');
+  await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor[data-page-index="0"]');
+    ed.focus();
+    const r = document.createRange();
+    r.selectNodeContents(ed);
+    r.collapse(false);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
+  await page.setInputFiles('#ppDocImageInput', { name: 'logo.png', mimeType: 'image/png', buffer: pngBuffer });
+  await page.waitForSelector('.documentEditor img');
+  await page.waitForTimeout(500);
+
+  const after = await page.evaluate(() => ({
+    pageCount: state.pages.length,
+    imgCount: document.querySelectorAll('.documentEditor img').length,
+    imgOnPage1: !!document.querySelector('.documentEditor[data-page-index="1"] img'),
+  }));
+  expect(after.imgCount).toBe(1);
+  expect(after.pageCount).toBe(2);
+  expect(after.imgOnPage1).toBe(true);
+});
+
+// Real report, with a screenshot: an oversized logo that had overflowed onto a new page, once
+// resized down small enough to obviously fit back on the page before it, just stayed put - the
+// user had to keep shrinking it further than they wanted, or manually cut/paste it back. Root
+// cause: moveOverflow/pullBack (see onDocInput above) only ever look FORWARD from the page that
+// was just edited - does it now overflow onto the next page, or can the next page's content be
+// pulled back into it - never backward. Nothing ever re-checked whether the PREVIOUS page could
+// now pull this page's content back into itself, which is exactly the direction a shrink needs.
+test('shrinking an inline image small enough to fit on the previous page moves it there', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.waitForTimeout(1800);
+
+  const dataUrl = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 1200; c.height = 1200;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#333'; ctx.fillRect(0, 0, 1200, 1200);
+    return c.toDataURL('image/png');
+  });
+
+  // Build the two-page scenario directly (a nearly-full page 0, an oversized image alone on page
+  // 1) rather than via the insertion flow above - what's under test here is what happens once an
+  // image is already overflowed onto a later page and then resized down, not how it got there.
+  await page.evaluate((durl) => {
+    const text = 'Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor. '.repeat(24);
+    const DOC_W = state.pages[0].w, DOC_H = state.pages[0].h;
+    state.pages[0].docHtml = '<p>' + text + '</p>';
+    state.pages.splice(1, 0, { type: 'Document', w: DOC_W, h: DOC_H, layers: [], documentLite: true, docHtml: '<img src="' + durl + '" alt="manual image" style="width:400px;height:400px"><p><br></p>' });
+    window.render();
+  }, dataUrl);
+  await page.waitForTimeout(500);
+
+  const before = await page.evaluate(() => ({
+    pageCount: state.pages.length,
+    imgOnPage1: !!document.querySelector('.documentEditor[data-page-index="1"] img'),
+  }));
+  expect(before.pageCount).toBe(2);
+  expect(before.imgOnPage1).toBe(true);
+
+  // Shrink the image directly to the size a completed resize-drag would leave it at, then fire
+  // the same 'input' event notifyEditor() dispatches on drag-end - the drag gesture itself is
+  // pre-existing, unrelated code; what's under test is the reflow that 'input' triggers.
+  await page.evaluate(() => {
+    const img = document.querySelector('.documentEditor[data-page-index="1"] img');
+    img.style.width = '60px';
+    img.style.height = '60px';
+    img.closest('.documentEditor').dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForTimeout(400);
+
+  const after = await page.evaluate(() => ({
+    pageCount: state.pages.length,
+    imgOnPage0: !!document.querySelector('.documentEditor[data-page-index="0"] img'),
+    imgOnPage1: !!document.querySelector('.documentEditor[data-page-index="1"] img'),
+  }));
+  // Page 1 held nothing but the image, so pulling it back onto page 0 empties page 1 out
+  // entirely - it should be removed rather than left behind as an empty page.
+  expect(after.pageCount).toBe(1);
+  expect(after.imgOnPage0).toBe(true);
+  expect(after.imgOnPage1).toBe(false);
+});
+
 // Real report: "can't add my logo on the page, it jumps immediately on the next page" - unlike
 // the resize-driven overflow above, this is the image landing too big THE MOMENT it's inserted,
 // with no resizing involved at all. Root cause: .documentEditor img has max-height:42%, but a
