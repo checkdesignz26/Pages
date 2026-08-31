@@ -752,6 +752,53 @@ test('resizing an image bigger keeps the resize handle working and does not spaw
   expect(after.pageCount).toBe(pageCountBefore);
 });
 
+// Real report: "can't add my logo on the page, it jumps immediately on the next page" - unlike
+// the resize-driven overflow above, this is the image landing too big THE MOMENT it's inserted,
+// with no resizing involved at all. Root cause: .documentEditor img has max-height:42%, but a
+// CSS percentage height only resolves against a containing block with a DEFINITE height -
+// .documentEditor itself has one (a fixed page height), but insertHTML lands the <img> inside
+// whichever <p> the cursor was in (auto height), silently turning that 42% cap into no
+// constraint at all, so a normal-sized logo renders at its full natural size and overflows.
+test('inserting a sizeable image lands it constrained to the page, not overflowing onto a new one', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.waitForTimeout(1800);
+
+  await page.click('.documentEditor');
+  await page.waitForTimeout(150);
+  const pageCountBefore = await page.evaluate(() => state.pages.length);
+
+  // A real, sizeable logo-shaped PNG (built at runtime rather than hardcoded base64) - big
+  // enough that, uncapped, it would be far taller than a page on its own.
+  const dataUrl = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 1200; c.height = 1200;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#333'; ctx.fillRect(0, 0, 1200, 1200);
+    return c.toDataURL('image/png');
+  });
+  const pngBuffer = Buffer.from(dataUrl.split(',')[1], 'base64');
+  await page.setInputFiles('#ppDocImageInput', { name: 'logo.png', mimeType: 'image/png', buffer: pngBuffer });
+  await page.waitForSelector('.documentEditor img');
+  await page.waitForTimeout(400);
+
+  const result = await page.evaluate(() => {
+    const ed = document.querySelector('.documentEditor[data-page-index="0"]');
+    const img = ed.querySelector('img');
+    return {
+      pageCount: state.pages.length,
+      imgIsDirectChildOfEditor: img.parentElement === ed,
+      imgHeight: img.getBoundingClientRect().height,
+      editorHeight: ed.clientHeight,
+    };
+  });
+
+  expect(result.pageCount).toBe(pageCountBefore);
+  expect(result.imgIsDirectChildOfEditor).toBe(true);
+  // Comfortably under half the page, matching the intended ~42% cap - not the ~59%+ an
+  // unconstrained square image landing in an auto-height <p> would render at.
+  expect(result.imgHeight).toBeLessThan(result.editorHeight * 0.5);
+});
+
 // Real report, with screenshots: a selected image's purple outline stayed stuck permanently -
 // visibly "framed" and un-draggable - no matter how many times it was tapped away from
 // afterward. Root cause: .ppDocImgSelected lives directly on the live <img> node, and a

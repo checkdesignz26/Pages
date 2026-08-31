@@ -17017,7 +17017,31 @@ else install();
     ed.dispatchEvent(new Event('input',{bubbles:true}));
   }
   window.ppDocChooseImage=function(){const f=document.getElementById('ppDocImageInput');if(f)f.click()}
-  window.ppDocInsertImage=function(input){const file=input.files&&input.files[0];if(!file)return;const ed=selectedEditor();if(!ed)return;const r=new FileReader();r.onload=()=>{ed.focus();document.execCommand('insertHTML',false,`<img src="${r.result}" alt="manual image"><p><br></p>`);ed.dispatchEvent(new Event('input',{bubbles:true}));input.value=''};r.readAsDataURL(file)}
+  // Real report, with a screenshot: a freshly inserted image landed far bigger than its own
+  // max-height:42% is meant to allow, overflowing an otherwise near-empty page onto a brand new
+  // one. Percentage heights only resolve against a containing block with a DEFINITE height -
+  // .documentEditor itself has one (a fixed page height), but insertHTML lands the <img> wherever
+  // the cursor happens to sit, which is normally still inside the surrounding <p> (an auto-height
+  // paragraph), silently turning max-height:42% into no constraint at all - the image then renders
+  // at its full natural size, easily taller than the page. Whenever the <p> it landed in ends up
+  // holding nothing but the image (the common case: an empty paragraph, or the end of the
+  // document), hoist the image out to be a direct child of the editor instead, so the percentage
+  // actually has the page's own height to measure against.
+  window.ppDocInsertImage=function(input){const file=input.files&&input.files[0];if(!file)return;const ed=selectedEditor();if(!ed)return;const r=new FileReader();r.onload=()=>{
+    ed.focus();
+    const nonce183='ppDocImg'+Date.now()+Math.random().toString(36).slice(2);
+    document.execCommand('insertHTML',false,`<img src="${r.result}" alt="manual image" data-pp-insert-nonce="${nonce183}"><p><br></p>`);
+    input.value='';
+    const img=ed.querySelector(`img[data-pp-insert-nonce="${nonce183}"]`);
+    if(img){
+      img.removeAttribute('data-pp-insert-nonce');
+      const parent=img.parentElement;
+      if(parent&&parent.tagName==='P'&&parent.children.length===1&&parent.firstElementChild===img&&!(parent.textContent||'').trim()){
+        parent.replaceWith(img);
+      }
+    }
+    ed.dispatchEvent(new Event('input',{bubbles:true}));
+  };r.readAsDataURL(file)}
   function escTitle(s){return String(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
   window.ppUpdateDocumentTOC=function(){
     if(typeof save==='function')save();
