@@ -878,6 +878,75 @@ test('shrinking an inline image small enough to fit on the previous page moves i
   expect(after.imgOnPage1).toBe(false);
 });
 
+// Real report, with a screenshot: a line of text showed up duplicated - once at the end of one
+// page, again at the start of the next. moveOverflow already guards against exactly this: if an
+// editor's own flowVer has fallen behind pages()[index].__flowVer183 (bumped by some OTHER page's
+// own flow update touching this page's data without this particular DOM node having been
+// rebuilt to match yet), it resyncs editor.innerHTML from the array FIRST, before doing anything
+// else - otherwise whatever gets computed from the stale DOM would get saved right back over the
+// true content. pullBack (used by pullBackIntoPreviousPage above) never had that same guard - it
+// was safe everywhere else only because every other caller happens to run moveOverflow on the
+// same editor first (which does the resync as a side effect) before ever reaching pullBack, but
+// pullBackIntoPreviousPage calls pullBack on the PREVIOUS page's editor directly, with no
+// preceding moveOverflow call on that editor to resync it first. Appending freshly-pulled content
+// onto that stale DOM, then saving the result, is exactly what would duplicate a line of text.
+test('pulling content back into a page whose live DOM has fallen behind resyncs it first, instead of duplicating stale content', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.waitForTimeout(1800);
+
+  const dataUrl = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 1200; c.height = 1200;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#333'; ctx.fillRect(0, 0, 1200, 1200);
+    return c.toDataURL('image/png');
+  });
+
+  await page.evaluate((durl) => {
+    const DOC_W = state.pages[0].w, DOC_H = state.pages[0].h;
+    state.pages[0].docHtml = '<h1>Title</h1><p>Real current paragraph.</p>';
+    state.pages.splice(1, 0, { type: 'Document', w: DOC_W, h: DOC_H, layers: [], documentLite: true, docHtml: '<img src="' + durl + '" alt="manual image" style="width:400px;height:400px"><p><br></p>' });
+    window.render();
+  }, dataUrl);
+  await page.waitForTimeout(300);
+
+  // NOW, after that render() has already settled, leave page 0's live DOM node showing older,
+  // different content with a flowVer bumped out from under it - the exact shape a stale,
+  // not-currently-focused editor is left in after some other page's flow update bumps this
+  // page's version without a render() having rebuilt this specific node to match yet. Injecting
+  // this before the render() above would just get overwritten by it immediately.
+  await page.evaluate(() => {
+    const ed0 = document.querySelector('.documentEditor[data-page-index="0"]');
+    ed0.innerHTML = '<h1>Title</h1><p>Real current paragraph.</p><p>STALE DUPLICATE LEFTOVER</p>';
+    ed0.dataset.flowVer183 = '0';
+    state.pages[0].__flowVer183 = (state.pages[0].__flowVer183 || 0) + 1;
+  });
+
+  // Shrink the image on page 1 small enough to fit on page 0 - triggers pullBackIntoPreviousPage,
+  // which calls pullBack directly on page 0's (stale) editor with no moveOverflow call ahead of
+  // it to resync it first.
+  await page.evaluate(() => {
+    const img = document.querySelector('.documentEditor[data-page-index="1"] img');
+    img.style.width = '60px';
+    img.style.height = '60px';
+    img.closest('.documentEditor').dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForTimeout(400);
+
+  const after = await page.evaluate(() => ({
+    page0Html: state.pages[0].docHtml,
+    liveHtml: document.querySelector('.documentEditor[data-page-index="0"]').innerHTML,
+    staleCountInData: (state.pages[0].docHtml.match(/STALE DUPLICATE LEFTOVER/g) || []).length,
+  }));
+  // The stale leftover paragraph must not survive into the resynced, saved content at all - not
+  // zero-or-more times, not duplicated, not even once.
+  expect(after.staleCountInData).toBe(0);
+  expect(after.page0Html).not.toContain('STALE DUPLICATE LEFTOVER');
+  expect(after.liveHtml).not.toContain('STALE DUPLICATE LEFTOVER');
+  // The real content must still be there, untouched.
+  expect(after.page0Html).toContain('Real current paragraph.');
+});
+
 // Real report: "can't add my logo on the page, it jumps immediately on the next page" - unlike
 // the resize-driven overflow above, this is the image landing too big THE MOMENT it's inserted,
 // with no resizing involved at all. Root cause: .documentEditor img has max-height:42%, but a

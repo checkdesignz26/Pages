@@ -16890,6 +16890,21 @@ else install();
   function pullBack(index,editor){
     // Same stale-index guard as moveOverflow above.
     if(!editor||!document.body.contains(editor))return;
+    // Real report, with a screenshot: a heading/paragraph showed up duplicated at the end of one
+    // page and again at the start of the next. moveOverflow (above) guards against exactly this -
+    // resyncing editor.innerHTML from pages()[index].docHtml first whenever this editor's own
+    // flowVer has fallen behind - but this function never carried the same guard, even though
+    // it's called on non-active editors just as often (scheduleFontsReadyRecheck's sweep below
+    // calls it on every .documentEditor in one pass, and pullBackIntoPreviousPage above calls it
+    // on whichever editor sits right before the one actually being edited). Skipping the resync
+    // here meant appending freshly-pulled content onto whatever this editor's DOM already
+    // happened to contain - stale or not - and then writing that combination straight back into
+    // pages()[index].docHtml, baking in a duplicate of anything the DOM was already behind on.
+    const truth183=pages()[index];
+    if(truth183&&editor.dataset.flowVer183!==String(truth183.__flowVer183||0)&&document.activeElement!==editor){
+      editor.innerHTML=truth183.docHtml||'<p><br></p>';
+      editor.dataset.flowVer183=String(truth183.__flowVer183||0);
+    }
     const ni=nextDocIndex(index,false);if(ni<0)return;
     const np=pages()[ni];if(!np||np.docTOC)return;
     const temp=document.createElement('div');temp.innerHTML=np.docHtml||'';
