@@ -17255,7 +17255,17 @@ else install();
     for(const tok of tokens){
       if(tok.brk){await flush();continue}
       if(tok.img){
-        await flush();
+        // Real report, with a screenshot and later the actual .ppages file: a large gap sat
+        // before an inserted image in the exported PDF, well beyond the blank line the user had
+        // actually left there. flush() exists here to finish whatever text line came before the
+        // image WITHIN this same block (e.g. "some text [image]") - but flush() unconditionally
+        // treats an EMPTY pending line as a genuine blank line worth its own lineHeight (the same
+        // assumption the block's own closing flush already had to guard against above). An image
+        // that starts a block with no text ahead of it in that same block (the reporter's file:
+        // "<div><img ...><p><br></p></div>", nothing preceding the img inside that div) hit
+        // exactly that gap - there was nothing pending to finish, so this was adding a whole
+        // extra blank line for no reason. Only call it when there's real pending text to flush.
+        if(line.length)await flush();
         try{
           const img=await new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=tok.img});
           let dw,dh;

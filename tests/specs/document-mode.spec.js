@@ -2578,3 +2578,43 @@ test('a paragraph ending in a trailing <br> gets the same gap after it as one th
   // further than an otherwise-identical paragraph with no trailing <br> would.
   expect(Math.abs(gapWithBr - gapWithoutBr)).toBeLessThan(2);
 });
+
+// Real report, continued: even after the trailing-<br> gap above was fixed, a big gap remained
+// specifically before an inserted image - confirmed against the actual .ppages file, whose image
+// sat alone in its own block ("<div><img ...><p><br></p></div>", nothing else preceding it in
+// that div - the shape ppDocInsertImage always leaves). Root cause: the token loop calls flush()
+// right before drawing any image, to finish whatever text line came before it WITHIN THE SAME
+// BLOCK - but flush() treats a currently-empty pending line as a genuine blank line worth its own
+// lineHeight (see the trailing-<br> fix above for the same assumption biting elsewhere). An image
+// with no text ahead of it in its own block hit that unconditionally, adding a whole extra blank
+// line for no reason before the image had drawn a single pixel.
+test('an image with no text before it in its own block does not get pushed down by a phantom blank line first', async ({ page }) => {
+  const png1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  const htmlWithImg = `<div>Paragraph before</div><div><img src="${png1x1}" style="width:10%;height:auto;"><p><br></p></div>`;
+  const htmlPlain = `<div>Paragraph before</div><div>Paragraph after</div>`;
+
+  const [imgY, nextParaY] = await page.evaluate(async ([hImg, hPlain]) => {
+    async function drawImgY(html) {
+      const ys = [];
+      const orig = CanvasRenderingContext2D.prototype.drawImage;
+      CanvasRenderingContext2D.prototype.drawImage = function (img, x, y) { ys.push(y); return orig.apply(this, arguments); };
+      try { await window.ppRasterizeDocPage(html, 1240, 1754, 1); } finally { CanvasRenderingContext2D.prototype.drawImage = orig; }
+      return ys[0];
+    }
+    async function drawSecondParaY(html) {
+      const ys = [];
+      const orig = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (text, x, y) { ys.push(y); return orig.apply(this, arguments); };
+      try { await window.ppRasterizeDocPage(html, 1240, 1754, 1); } finally { CanvasRenderingContext2D.prototype.fillText = orig; }
+      // The last fillText call is always the page-number footer, drawn after every block - "after"
+      // (the second paragraph's only word) is the one right before it.
+      return ys[ys.length - 2];
+    }
+    return [await drawImgY(hImg), await drawSecondParaY(hPlain)];
+  }, [htmlWithImg, htmlPlain]);
+
+  // The image should start exactly where an ordinary second paragraph would have (fillText's y is
+  // a text baseline - 24px, the font size, below the block's own top-of-line cursor that
+  // drawImage's y already is) - not one whole lineHeight (37.2px) further down.
+  expect(Math.abs(imgY - (nextParaY - 24))).toBeLessThan(2);
+});
