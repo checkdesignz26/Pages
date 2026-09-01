@@ -2618,3 +2618,39 @@ test('an image with no text before it in its own block does not get pushed down 
   // drawImage's y already is) - not one whole lineHeight (37.2px) further down.
   expect(Math.abs(imgY - (nextParaY - 24))).toBeLessThan(2);
 });
+
+// Real report, continued once more: even after both fixes above, a big gap still remained AFTER
+// an inserted image. Confirmed against the real .ppages file's live editor rendering of the exact
+// same content: a <p><br></p> immediately after an image (the filler ppDocInsertImage always adds
+// so there's somewhere to keep typing - it carries no content of its own, see its own comment)
+// contributes only its own small margin there, absorbed into the image's containing div like any
+// ordinary nested child - nowhere near a full extra lineHeight. The PDF's block-based token loop
+// doesn't have real block flow to absorb it into, so it needs the same explicit treatment
+// moveOverflow already gives this exact filler pattern elsewhere: not real content, skip it.
+test('the filler blank paragraph ppDocInsertImage always adds after an image does not add its own extra gap in the PDF', async ({ page }) => {
+  const png1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  const htmlWithFiller = `<div>Paragraph before</div><div><img src="${png1x1}" style="width:10%;height:auto;"><p><br></p></div><div>Paragraph after</div>`;
+
+  const result = await page.evaluate(async (h) => {
+    const drawCalls = [];
+    const origFill = CanvasRenderingContext2D.prototype.fillText;
+    const origDraw = CanvasRenderingContext2D.prototype.drawImage;
+    CanvasRenderingContext2D.prototype.fillText = function (text, x, y) { drawCalls.push({ type: 'text', y }); return origFill.apply(this, arguments); };
+    CanvasRenderingContext2D.prototype.drawImage = function (img, x, y, w, hh) { drawCalls.push({ type: 'img', y, h: hh }); return origDraw.apply(this, arguments); };
+    try { await window.ppRasterizeDocPage(h, 1240, 1754, 1); }
+    finally { CanvasRenderingContext2D.prototype.fillText = origFill; CanvasRenderingContext2D.prototype.drawImage = origDraw; }
+    return drawCalls;
+  }, htmlWithFiller);
+
+  const imgCall = result.find((c) => c.type === 'img');
+  // Last fillText call is the page-number footer; "after" (the third block's only word) is the
+  // one right before it.
+  const nextParaY = result.filter((c) => c.type === 'text')[result.filter((c) => c.type === 'text').length - 2].y;
+
+  // The block's own bottom margin (0.3 * lineHeight, 24*1.55) plus the image's own built-in 20px
+  // gap is the ONLY space that should separate the image from the next real paragraph - the
+  // filler paragraph in between must not add anything beyond that on top.
+  const lineHeight = 24 * 1.55;
+  const expectedNextTopY = imgCall.y + imgCall.h + 20 + lineHeight * 0.3;
+  expect(Math.abs((nextParaY - 24) - expectedNextTopY)).toBeLessThan(2);
+});

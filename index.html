@@ -17252,8 +17252,25 @@ else install();
       commitLinkRun();
       y+=lineHeight;line=[];lineWidth=0;
     };
+    let justDrewImage=false;
     for(const tok of tokens){
-      if(tok.brk){await flush();continue}
+      if(tok.brk){
+        // Real report, continued: even with the two fixes above, a big gap still remained AFTER
+        // an inserted image. Confirmed against the real .ppages file's live editor rendering of
+        // the exact same content: a <p><br></p> immediately after an image contributes only its
+        // own small margin there (a normal nested child absorbed into its parent div's box, per
+        // ordinary block flow) - nowhere near a full extra lineHeight. That trailing paragraph is
+        // ppDocInsertImage's own "somewhere to keep typing afterward" filler (see its comment) -
+        // it carries no content of its own, exactly like moveOverflow already treats it as
+        // droppable filler rather than real content elsewhere in this file. Give it the same
+        // treatment here: skip it entirely (the image's own dh+20 margin already accounts for
+        // reasonable space before whatever comes next) rather than adding a whole second gap on
+        // top of it. Only the FIRST such break right after an image is absorbed this way - a
+        // second, genuinely-typed blank line after that would still count normally.
+        if(justDrewImage&&!line.length){justDrewImage=false;continue}
+        await flush();
+        continue;
+      }
       if(tok.img){
         // Real report, with a screenshot and later the actual .ppages file: a large gap sat
         // before an inserted image in the exported PDF, well beyond the blank line the user had
@@ -17283,9 +17300,11 @@ else install();
           }
           ctx.drawImage(img,pad.left+(contentW-dw)/2,y,dw,dh);
           y+=dh+20;
+          justDrewImage=true;
         }catch(e){}
         continue;
       }
+      justDrewImage=false;
       ctx.font=`${tok.italic?'italic ':''}${tok.bold?800:font.weight} ${font.size}px "${tok.fontFamily||'Georgia'}", Georgia, serif`;
       const tw=ctx.measureText(tok.text).width;
       if(lineWidth+tw>contentW&&line.length)await flush();
@@ -17296,14 +17315,15 @@ else install();
     // after it than the live editor shows - roughly double, for any paragraph ending the way
     // real typed content commonly does (a trailing <br>, e.g. from pressing Enter without more
     // text following - <div><span>...</span><br></div> was the norm in the reporter's actual
-    // saved file). A trailing <br> becomes a {brk:true} token, and the loop above already calls
-    // flush() for it - which finishes that line and advances y by one lineHeight, whether or not
-    // there was any pending text to draw. This unconditional flush() used to run again right
-    // after the loop regardless, adding a SECOND lineHeight for the exact same trailing break -
-    // only skip it when the last token already was a brk (nothing pending left to flush); a block
-    // ending in real text (no trailing break) still needs this to draw its final unflushed line,
-    // and a wholly empty block (no text, no <br> at all) still needs it for its own blank line.
-    if(!(tokens.length&&tokens[tokens.length-1].brk))await flush();
+    // saved file). A trailing <br> (or a trailing image - see justDrewImage above) becomes a token
+    // the loop above already flushes/draws itself; this used to call flush() again unconditionally
+    // right after the loop regardless, adding a redundant SECOND blank line on top of whatever the
+    // last token already accounted for. Only call it when there's still real pending text to draw
+    // (line.length) or the block had no tokens at all (a wholly empty block, no text/<br>/image -
+    // still needs this for its own blank line) - not just "was the last token a brk", which missed
+    // a block ending directly in an image with nothing after it (tokens.length with no brk, but
+    // still nothing left pending either).
+    if(!tokens.length||line.length)await flush();
     return y+lineHeight*0.3;
   }
   async function ppRasterizeDocPage(innerHtml,w,h,pageNum){
