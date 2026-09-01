@@ -2654,3 +2654,42 @@ test('the filler blank paragraph ppDocInsertImage always adds after an image doe
   const expectedNextTopY = imgCall.y + imgCall.h + 20 + lineHeight * 0.3;
   expect(Math.abs((nextParaY - 24) - expectedNextTopY)).toBeLessThan(2);
 });
+
+// Real report, with a screen recording: on a completely ordinary canvas page (no document editor
+// anywhere in sight), dragging the font size slider on a selected text layer moved the slider but
+// never actually resized the text. Root cause: activeEditor (in the persistent-document-engine
+// module) gets set the moment any document page's editor is ever focused, but nothing anywhere in
+// this file ever sets it back to null - not on blur, not on navigating away to a completely
+// different, non-document page. wireControls()'s font-size/line-height/letter-spacing/colour
+// listeners, plus toggleBold/toggleItalic, used a bare "if(activeEditor)" truthy check to decide
+// whether to apply the change via execCommand (document editing) or via the ordinary layer-update
+// path - once a user visits document mode even once in a session, that check stayed true forever
+// after for every page, silently routing every normal text layer's slider into a document-editing
+// call with no live selection to act on, a no-op. window.__ppDocEditorActive() (already used
+// correctly elsewhere in this same module, e.g. setTextAlign) also confirms the node is still
+// actually attached to the DOM - not just non-null - which is what these were missing.
+test('visiting document mode once does not permanently break the font size slider on ordinary text layers', async ({ page }) => {
+  await openDocumentPage(page);
+  await page.click('.documentEditor');
+  await page.waitForTimeout(300);
+
+  // Back to a normal page with a plain text layer - nothing document-related in sight anymore.
+  await page.evaluate(() => {
+    state.selectedPage = 0;
+    window.addText('text');
+  });
+  await page.waitForTimeout(300);
+
+  await page.evaluate(() => {
+    const el = document.getElementById('fontSize');
+    el.value = '90';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForTimeout(200);
+
+  const after = await page.evaluate(() => {
+    const s = state.pages[0].layers.find((l) => l.id === state.selected);
+    return { fontSize: s.fontSize };
+  });
+  expect(after.fontSize).toBe(90);
+});

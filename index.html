@@ -21509,7 +21509,20 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
       // fresh font-family span around the previous one each time instead of replacing it.
       (fresh.tagName==='SELECT'?['change']:['input','change']).forEach(function(type){
         fresh.addEventListener(type,function(){
-          if(activeEditor){map[id](fresh);return;}
+          // Real report: dragging the font size slider on an ordinary text layer moved the
+          // slider itself but never resized the actual text - confirmed from a screen recording,
+          // on a plain canvas page with no document editor anywhere in sight. Root cause:
+          // activeEditor (set the moment any document page's editor is ever focused) never gets
+          // reset back to null - not on blur, not on navigating to a completely different page,
+          // not anywhere in this file. Once a user visits document mode even once in a session,
+          // this bare truthy check stayed true forever after, permanently misrouting every normal
+          // text layer's font-size/line-height/letter-spacing/colour slider into
+          // applyCss()'s execCommand-based document-editing path instead of the real
+          // layerApplyTextControls() layer update - silently doing nothing on an ordinary layer,
+          // since there's no live selection inside a (possibly long-gone) document editor to
+          // format. window.__ppDocEditorActive() below already has the right check (also
+          // confirms the node is still actually in the DOM, not just non-null) - use it here too.
+          if(window.__ppDocEditorActive()){map[id](fresh);return;}
           if(typeof layerApplyTextControls==='function')layerApplyTextControls();
         });
       });
@@ -21535,11 +21548,14 @@ window.addEventListener('resize',sync);document.addEventListener('scroll',functi
     exec(where==='center'?'justifyCenter':where==='right'?'justifyRight':'justifyLeft');
   };
   window.toggleBold=function(){
-    if(activeEditor){exec('bold');return;}
+    // Same stale-activeEditor gap as wireControls()'s font-size handler above - a bare truthy
+    // check here stays true forever after the first document page visit, misrouting bold on an
+    // ordinary text layer into a no-op execCommand call instead of actually toggling the layer.
+    if(window.__ppDocEditorActive()){exec('bold');return;}
     if(typeof layerToggleBold==='function')layerToggleBold();
   };
   window.toggleItalic=function(){
-    if(activeEditor){exec('italic');return;}
+    if(window.__ppDocEditorActive()){exec('italic');return;}
     if(typeof layerToggleItalic==='function')layerToggleItalic();
   };
   // Real bug: "bullet list"/"numbered list" in the text panel only ever wrote into #textValue,
