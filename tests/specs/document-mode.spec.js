@@ -894,6 +894,16 @@ test('pulling content back into a page whose live DOM has fallen behind resyncs 
   await openDocumentPage(page);
   await page.waitForTimeout(1800);
 
+  // openDocumentPage leaves page 0's editor focused (it's focused right after creation). This
+  // setup's own splice+render below rebuilds the page list DOM to make room for the new page 1,
+  // which blurs the still-focused editor 0 as a side effect - the editor's blur handler calls
+  // saveEditor(editor,true), capturing editor.innerHTML (still the OLD, pre-render content at
+  // that instant) into pages()[0].docHtml, clobbering the very value this test is about to set
+  // below before the actual resync-vs-duplication scenario it's testing even begins. Blur first,
+  // deliberately, so that race is over and done with before this test's own setup starts.
+  await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+  await page.waitForTimeout(100);
+
   const dataUrl = await page.evaluate(() => {
     const c = document.createElement('canvas');
     c.width = 1200; c.height = 1200;
