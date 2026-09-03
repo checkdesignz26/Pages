@@ -15,6 +15,19 @@
   --bg:#060a16; --panel:#171d31; --panel2:#202844; --line:rgba(255,255,255,.14);
   --text:#fff8ff; --muted:#cfc7dd; --purple:#9b6bff; --pink:#ff8ed6; --accent:#ff8ed6;
 }
+/* Light/airy theme palette - only active with body.theme-light. Matches the exact colours of
+   the author's sister app for visual consistency across both products (same var names, same
+   hex values), added alongside the dark palette above rather than replacing it - the base
+   styles throughout this file are almost entirely hardcoded colours, not var()-driven, so the
+   actual light-theme look comes from the body.theme-light override block further down, not
+   from these variables alone. */
+:root{
+  --cream:#f2e6d3; --cream2:#ecd9bd; --panelTan:#f1e3cc; --btnTan:#fffaf0;
+  --ink:#3a2e26; --inkSoft:#7d6a58;
+  --teal:#5cb8ab; --tealInk:#1f5c53; --coral:#f0917a; --coralInk:#7a3325;
+  --gold:#e8b74f; --goldInk:#7a5a12; --lav:#b39ddb; --lavInk:#4a3a72;
+  --rose:#e8829f; --roseInk:#6b2f3e;
+}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(circle at top left,#17224a,#060a16 70%);color:var(--text)}
 button,input,select{font:inherit}
@@ -1309,8 +1322,192 @@ body.autoGroupEditing .layer.collectionGrouped{
     outline-offset:2px!important;
   }
 </style>
+
+<!-- Light/airy theme - only active with body.theme-light (see pp-theme-toggle-js for how it
+     gets applied/persisted). Matches the sister app's exact palette (--cream/--ink/etc, defined
+     in the :root block near the top of this file). Deliberately scoped to app CHROME only - the
+     header, side panels, buttons/inputs and layer list - not the actual page/canvas/document
+     content areas (.stage, .documentPaper, .documentEditor), which are already styled as white
+     "paper" independent of the app's own theme and should stay that way regardless of which
+     theme is active, the same way a real design tool's canvas doesn't recolour with the UI
+     around it. Every base rule this overrides is itself already !important (this file's own
+     patch-on-patch history - see the exploration notes on :root at the top), so these need
+     !important too to reliably win; placed last in <head> so equal-specificity ties also
+     resolve in this block's favour by source order. -->
+<style id="pp-theme-light-css">
+body.theme-light{
+  background:linear-gradient(160deg,var(--cream),var(--cream2))!important;
+  color:var(--ink)!important;
+  /* Redefining the app's own original colour variables (not just adding new light-only ones)
+     catches every place throughout this file that reads var(--muted)/var(--text)/etc directly
+     with no !important of its own (e.g. .rangeRow label's "color:var(--muted)" at line 109) -
+     a plain var() reference re-evaluates from whatever value is in scope, so this fixes those
+     spots without needing to hunt down and override each one individually. Matches the sister
+     app's own "body.theme-light{--muted:var(--inkSoft);}" approach, extended to the other
+     original vars this file also has (--text/--line/--purple/--pink/--accent) that theirs didn't
+     need because their base theme never defined those the same way. */
+  --muted:var(--inkSoft);
+  --text:var(--ink);
+  --line:rgba(58,46,38,.16);
+  --purple:var(--lav);
+  --pink:var(--rose);
+  --accent:var(--rose);
+}
+body.theme-light header{
+  background:linear-gradient(180deg,#f8ecd8,#f2e0c2)!important;
+  border-bottom:1px solid rgba(58,46,38,.14)!important;
+  box-shadow:0 8px 22px rgba(58,46,38,.08)!important;
+}
+body.theme-light .tagline{color:var(--inkSoft)!important;}
+body.theme-light .subtagline{color:var(--inkSoft)!important;}
+body.theme-light .brand h1 span{color:var(--inkSoft)!important;}
+body.theme-light .brandTitle,body.theme-light .brand h1{
+  background-image:linear-gradient(105deg,var(--coralInk) 0%,var(--roseInk) 50%,var(--lavInk) 100%)!important;
+  text-shadow:none!important;
+}
+body.theme-light .workspace{
+  background:
+    radial-gradient(circle at 25% 8%,rgba(240,145,122,.10),transparent 28%),
+    radial-gradient(circle at 78% 12%,rgba(179,157,219,.10),transparent 30%),
+    linear-gradient(90deg,rgba(58,46,38,.05) 1px,transparent 1px),
+    linear-gradient(rgba(58,46,38,.05) 1px,transparent 1px),
+    linear-gradient(180deg,#ede0c8 0%,#e9dac0 56%,#e4d3b6 100%) !important;
+  background-size:auto,auto,36px 36px,36px 36px,auto !important;
+}
+body.theme-light .pageTitle{
+  background:var(--btnTan)!important;color:var(--ink)!important;
+  border:1px solid rgba(58,46,38,.16)!important;
+}
+body.theme-light .ppMagicSelectionBar{
+  background:rgba(58,46,38,.045)!important;
+  border-color:rgba(58,46,38,.14)!important;
+  color:var(--inkSoft)!important;
+}
+body.theme-light .actionGroup{
+  background:rgba(58,46,38,.045)!important;
+  border-color:rgba(58,46,38,.12)!important;
+}
+body.theme-light .actionGroup button,body.theme-light .toolbarRow button{
+  color:var(--ink)!important;
+  background:var(--btnTan)!important;
+  border:1px solid rgba(58,46,38,.16)!important;
+}
+body.theme-light .primaryGroup{background:rgba(240,145,122,.10)!important;border-color:rgba(240,145,122,.28)!important;}
+body.theme-light .primaryGroup button.primary,
+body.theme-light button.primary{
+  background:linear-gradient(90deg,#f6c2b0,var(--coral))!important;
+  border:0!important;color:var(--coralInk)!important;
+}
+body.theme-light #ppThemeToggleBtn{
+  background:linear-gradient(90deg,#cdbdf2,var(--lav))!important;
+  border:0!important;color:var(--lavInk)!important;
+}
+body.theme-light .side{
+  background:linear-gradient(180deg,#f6e9d4,#f0dfc4)!important;
+}
+body.theme-light .side.left{border-right-color:rgba(58,46,38,.10)!important;}
+body.theme-light .side.right{border-left-color:rgba(58,46,38,.10)!important;}
+body.theme-light .panelIntro{
+  background:linear-gradient(180deg,rgba(58,46,38,.05),rgba(58,46,38,.02))!important;
+  border-color:rgba(58,46,38,.10)!important;
+}
+body.theme-light .panelIntro strong{color:var(--ink)!important;}
+body.theme-light .panelIntro span{color:var(--inkSoft)!important;}
+body.theme-light .box{
+  background:#fffefb!important;
+  border-color:rgba(58,46,38,.12)!important;
+}
+body.theme-light .box.trayTop{border-color:rgba(240,145,122,.28)!important;background:#fffefb!important;}
+body.theme-light .box>h2,body.theme-light .box h2{
+  background:#e9d8ba!important;
+  color:var(--ink)!important;
+  border-bottom-color:rgba(58,46,38,.10)!important;
+}
+body.theme-light .smallText{color:var(--inkSoft)!important;}
+body.theme-light .rangeRow label,
+body.theme-light .rangeRow label span,
+body.theme-light label{color:var(--inkSoft)!important;}
+body.theme-light .pill{color:var(--inkSoft)!important;}
+body.theme-light button,body.theme-light select,
+body.theme-light input[type=number],body.theme-light input[type=text],body.theme-light input[type=color]{
+  background:var(--btnTan)!important;
+  color:var(--ink)!important;
+  border:1px solid rgba(58,46,38,.18)!important;
+  box-shadow:none!important;
+}
+body.theme-light button.active{outline-color:var(--rose)!important;}
+body.theme-light .layerItem{
+  background:#fffefb!important;
+  border-color:rgba(58,46,38,.12)!important;
+  color:var(--ink)!important;
+}
+body.theme-light .layerPanelModeRow,
+body.theme-light .layerPanelModeRow span{color:var(--inkSoft)!important;}
+body.theme-light .documentLiteBox{
+  background:linear-gradient(180deg,rgba(240,145,122,.08),rgba(255,255,255,.4))!important;
+  border-color:rgba(240,145,122,.30)!important;
+}
+body.theme-light .documentLiteStatus{color:var(--inkSoft)!important;}
+/* The "no colour" swatch's red diagonal line needs a pale backdrop to read against, same reason
+   it's already deliberately light instead of dark on the app's own default (dark) theme - both
+   themes need that same light circle, so nothing to override here. */
+
+/* Quick Start Guide modal (.qs* classes) */
+body.theme-light .qsBox{
+  background:#fffefb!important;
+  border-color:rgba(58,46,38,.14)!important;
+}
+body.theme-light .qsScroll{color:var(--ink)!important;}
+body.theme-light .qsClose{background:rgba(58,46,38,.08)!important;color:var(--ink)!important;}
+body.theme-light .qsHeader h2{color:var(--ink)!important;}
+body.theme-light .qsHeader p{color:var(--inkSoft)!important;}
+body.theme-light .qsGlanceItem{
+  background:rgba(58,46,38,.04)!important;
+  border-color:rgba(58,46,38,.12)!important;
+  color:var(--inkSoft)!important;
+}
+body.theme-light .qsGlanceItem strong{color:var(--coralInk)!important;}
+body.theme-light .qsBox h3{color:var(--coralInk)!important;}
+body.theme-light .qsStep{background:rgba(58,46,38,.04)!important;border-color:rgba(58,46,38,.10)!important;}
+body.theme-light .qsStepTitle{color:var(--ink)!important;}
+body.theme-light .qsStepBody{color:var(--inkSoft)!important;}
+body.theme-light .qsTable td{color:var(--inkSoft)!important;border-top-color:rgba(58,46,38,.10)!important;}
+body.theme-light .qsTable td:first-child{color:var(--ink)!important;}
+body.theme-light .qsNote{color:var(--inkSoft)!important;border-left-color:var(--coral)!important;}
+
+/* Remaining near-white/pale-pink text colours found throughout the app's own panels and
+   dialogs (mechanically located by grepping every CSS rule containing color:#fff8fb/#ffe9fb/
+   etc, then keeping only the ones that sit on this app's own light panel backgrounds - not the
+   ones drawn as overlays on top of arbitrary user pattern/image content, e.g. crop tool
+   overlays or toast notifications, which stay legible regardless of theme and are left alone). */
+body.theme-light .autoGroupLabel,body.theme-light .autoGroupMoveHint,
+body.theme-light .forcedGroupLabel,body.theme-light .manualGroupLabel,
+body.theme-light .checkRow,body.theme-light .customMockupHint strong,
+body.theme-light .frameStepper span,body.theme-light .swbHeaderTitle,
+body.theme-light .swbLabel,body.theme-light .uploadDesignAssets109,
+body.theme-light .ppTextSheetLabel192,body.theme-light .autosaveNotice,
+body.theme-light .listingHelperBox .helperOutputTitle strong,
+body.theme-light .showcaseControlRoomTitle,body.theme-light .presetGroup h3,
+body.theme-light .lkmTag,body.theme-light .recolorSourcePill,
+body.theme-light .applyTiny,body.theme-light .fontPairBtn .applyTiny{
+  color:var(--inkSoft)!important;
+}
+body.theme-light .swbCloseBtn{background:rgba(58,46,38,.08)!important;color:var(--ink)!important;}
+body.theme-light .mainTextEditor,body.theme-light .pasteArea,
+body.theme-light .swbSearchInput,body.theme-light .listingHelperBox textarea,
+body.theme-light .listingHelperBox textarea.output{
+  background:var(--btnTan)!important;color:var(--ink)!important;
+  border-color:rgba(58,46,38,.18)!important;
+}
+</style>
 </head>
 <body>
+<script>
+// Applied synchronously, before anything below paints, so a returning visitor who chose the
+// light theme never sees a flash of the dark theme first (the same reason the sister app's own
+// theme toggle applies its class this early rather than waiting for DOMContentLoaded).
+(function(){try{if(localStorage.getItem('patternPages.theme.v1')==='light')document.body.classList.add('theme-light');}catch(e){}})();
+</script>
 <div class="app">
 <header class="studioHeader">
  <div class="brand">
@@ -1349,6 +1546,7 @@ body.autoGroupEditing .layer.collectionGrouped{
       <button onclick="zoomPage(-0.05)" title="Zoom out">−</button>
       <button onclick="zoomPage(0.05)" title="Zoom in">+</button>
       <button onclick="toggleHandedMode()" id="handModeBtn" title="Switch which side the panels are on">left-handed layout</button>
+      <button onclick="window.ppToggleTheme && window.ppToggleTheme()" id="ppThemeToggleBtn" title="Switch between the dark and light/airy look">light mode</button>
       <button onclick="openSwatchBook()" title="Open the Guide - a searchable reference for what every button does">📖 guide</button>
     </div>
   </div>
@@ -11265,6 +11463,35 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
 })();
 </script>
 
+<!-- Light/airy theme toggle. The actual body.theme-light class is already applied (if saved)
+     by the early inline script right after <body> above, before this ever runs - avoids a
+     flash of the dark theme on load. This IIFE only wires up the toggle button (label sync
+     + click handler) and writes the choice back to localStorage on change, independent of any
+     project file, the same standalone-persistence pattern the "layers panel wide" toggle above
+     uses (patternPages.<feature>.<version> localStorage key, guarded against double-install). -->
+<script id="pp-theme-toggle-js">
+(function(){
+  'use strict';
+  if(window.__PP_THEME_TOGGLE__) return;
+  window.__PP_THEME_TOGGLE__=true;
+  var KEY='patternPages.theme.v1';
+
+  function isLight(){return document.body.classList.contains('theme-light');}
+  function updateButton(){
+    var btn=document.getElementById('ppThemeToggleBtn');
+    if(!btn)return;
+    btn.textContent=isLight()?'dark mode':'light mode';
+    btn.title=isLight()?'Switch to the dark look':'Switch to the light/airy look';
+  }
+  function setLight(on){
+    document.body.classList.toggle('theme-light',!!on);
+    try{localStorage.setItem(KEY,on?'light':'dark');}catch(e){}
+    updateButton();
+  }
+  window.ppToggleTheme=function(){setLight(!isLight());};
+  updateButton();
+})();
+</script>
 
 <script>
 window.addEventListener('DOMContentLoaded',function(){
