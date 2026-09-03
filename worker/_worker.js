@@ -30,7 +30,13 @@
  *    step 1. (This replaces the old ACCESS_KEY secret - that can be
  *    deleted once 82667 is confirmed working via KV instead, see the
  *    generate-etsy-codes.js script for how 82667 gets seeded in.)
- * 3. Deploy this file (same drag-and-drop/upload flow as before - upload
+ * 3. Add two more secrets under Settings -> Variables and Secrets:
+ *    - RESEND_API_KEY: an API key from resend.com, used to actually send
+ *      the "here's your code" and "here's your code again" emails.
+ *    - ISSUE_SECRET: any long random string you make up - this is what
+ *      proves a call to /api/issue-code really came from your own Zapier
+ *      automation and not a random visitor trying to mint free codes.
+ * 4. Deploy this file (same drag-and-drop/upload flow as before - upload
  *    index.html and this _worker.js together).
  *
  * After that, a link like:
@@ -38,6 +44,15 @@
  * unlocks the site and remembers the visitor via a cookie for COOKIE_DAYS
  * days. Anyone who hits the bare domain with no valid key/cookie/trial sees
  * the gate page, with a box to type a key in by hand.
+ *
+ * Two more routes this file now handles itself, ahead of the gate logic:
+ *   POST /api/issue-code  - called by a Zapier "New Etsy Order" automation
+ *     to mint a fresh unique code for that buyer and email it to them
+ *     directly (see worker/SETUP.md for the exact Zap to build).
+ *   GET/POST /recover     - a page a locked-out customer can use to have
+ *     their code emailed to them again, by the email address it was
+ *     issued to.
+ * See worker/SETUP.md for the full walkthrough of both.
  */
 
 const ACCESS_COOKIE = 'pp_access';
@@ -46,10 +61,21 @@ const COOKIE_DAYS = 180;
 const TRIAL_DAYS = 7;
 const RATE_LIMIT_MAX_ATTEMPTS = 20;
 const RATE_LIMIT_WINDOW_SECONDS = 60 * 60;
+const CODE_DIGITS = 5;
+const RECOVERY_MAX_ATTEMPTS = 5;
+const RECOVERY_WINDOW_SECONDS = 60 * 60;
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname === '/api/issue-code') {
+      return handleIssueCode(request, env);
+    }
+    if (url.pathname === '/recover') {
+      return handleRecover(request, env);
+    }
+
     const cookies = parseCookies(request.headers.get('Cookie') || '');
 
     let attemptedKey = null;
@@ -65,7 +91,7 @@ export default {
     // keyspace now that there's more than one valid value to guess.
     if (attemptedKey !== null) {
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-      const allowed = await checkAndBumpRateLimit(env, ip);
+      const allowed = await checkAndBumpRateLimit(env, `ratelimit:${ip}`, RATE_LIMIT_MAX_ATTEMPTS, RATE_LIMIT_WINDOW_SECONDS);
       if (!allowed) {
         return new Response(gatePage('rateLimited'), {
           status: 429,
@@ -221,8 +247,11 @@ async function mintTrial(env) {
   return id;
 }
 
-async function checkAndBumpRateLimit(env, ip) {
-  const key = `ratelimit:${ip}`;
+// key should already include whatever prefix distinguishes this rate
+// limit "bucket" from others (e.g. "ratelimit:<ip>" for key-guessing,
+// "recover-ip:<ip>" or "recover-email:<email>" for the recovery form) -
+// each bucket is tracked independently.
+async function checkAndBumpRateLimit(env, key, maxAttempts, windowSeconds) {
   let current = 0;
   try {
     const raw = await env.PP_LICENSES.get(key);
@@ -232,9 +261,9 @@ async function checkAndBumpRateLimit(env, ip) {
     // locking everyone out - the key lookup itself is still the real gate.
     return true;
   }
-  if (current >= RATE_LIMIT_MAX_ATTEMPTS) return false;
+  if (current >= maxAttempts) return false;
   try {
-    await env.PP_LICENSES.put(key, String(current + 1), { expirationTtl: RATE_LIMIT_WINDOW_SECONDS });
+    await env.PP_LICENSES.put(key, String(current + 1), { expirationTtl: windowSeconds });
   } catch (e) {}
   return true;
 }
@@ -285,6 +314,8 @@ function gatePage(variant) {
   .err{color:#ff8ea3;font-size:13px;margin:-8px 0 14px;}
   .buyLink{display:block;margin-top:14px;color:#ffb8e7;font-size:13.5px;font-weight:700;text-decoration:none;}
   .buyLink:hover{text-decoration:underline;}
+  .recoverLink{display:block;margin-top:10px;color:#9b93ad;font-size:12.5px;text-decoration:none;}
+  .recoverLink:hover{text-decoration:underline;color:#c9c1d6;}
 </style>
 </head>
 <body>
@@ -297,6 +328,233 @@ function gatePage(variant) {
       <button type="submit">Unlock</button>
     </form>
     ${showBuyLink ? `<a class="buyLink" href="${ETSY_LISTING_URL}" target="_blank" rel="noopener">Buy Pattern Pages on Etsy &rarr;</a>` : ''}
+    ${variant !== 'rateLimited' ? `<a class="recoverLink" href="/recover">Lost your access key?</a>` : ''}
+  </div>
+</body>
+</html>`;
+}
+
+// ---------------------------------------------------------------------
+// Issuing codes automatically after purchase (called by a Zapier "New
+// Etsy Order" automation - see SETUP.md) and recovering a lost one.
+// ---------------------------------------------------------------------
+
+async function handleIssueCode(request, env) {
+  if (request.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405 });
+  }
+  const providedSecret = request.headers.get('X-Issue-Secret') || '';
+  if (!env.ISSUE_SECRET || providedSecret !== env.ISSUE_SECRET) {
+    return jsonResponse({ success: false, error: 'unauthorized' }, 401);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (e) {
+    return jsonResponse({ success: false, error: 'invalid JSON body' }, 400);
+  }
+  const email = normalizeEmail(body.email);
+  const orderId = String(body.orderId || '').trim();
+  if (!email || !orderId) {
+    return jsonResponse({ success: false, error: 'email and orderId are both required' }, 400);
+  }
+
+  // Idempotent: Zapier (or any webhook sender) can retry the same order
+  // more than once - always return the SAME code for a given orderId
+  // rather than minting (and emailing) a second one.
+  const orderKey = `order:${orderId}`;
+  const existingCode = await env.PP_LICENSES.get(orderKey);
+  if (existingCode) {
+    return jsonResponse({ success: true, code: existingCode, reused: true });
+  }
+
+  const code = await generateUniqueCode(env);
+  const now = Date.now();
+  await env.PP_LICENSES.put(code, JSON.stringify({ type: 'lifetime', email, orderId, createdAt: now, revoked: false }));
+  await env.PP_LICENSES.put(orderKey, code);
+  // Recovery lookup key - stores the most recent code for an email. If the
+  // same person buys again under the same email, this simply points at
+  // whichever code they most recently received (their older code, if
+  // still unrevoked, keeps working too - this only affects what /recover
+  // finds for them).
+  await env.PP_LICENSES.put(`email:${email}`, code);
+
+  const emailResult = await sendEmail(env, {
+    to: email,
+    subject: 'Your Pattern Pages access key',
+    html: purchaseEmailHtml(code),
+  });
+
+  return jsonResponse({ success: true, code, emailSent: emailResult.ok });
+}
+
+async function handleRecover(request, env) {
+  if (request.method === 'GET') {
+    return new Response(recoverPage(), { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
+  }
+  if (request.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405 });
+  }
+
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const ipAllowed = await checkAndBumpRateLimit(env, `recover-ip:${ip}`, RECOVERY_MAX_ATTEMPTS, RECOVERY_WINDOW_SECONDS);
+  if (!ipAllowed) {
+    return new Response(recoverPage({ rateLimited: true }), { status: 429, headers: { 'content-type': 'text/html; charset=utf-8' } });
+  }
+
+  let email = null;
+  try {
+    const form = await request.clone().formData();
+    email = normalizeEmail(form.get('email'));
+  } catch (e) {}
+
+  if (email) {
+    // Also rate-limit per target email, not just per IP - stops someone
+    // from spamming one specific inbox with recovery emails by rotating
+    // IPs/VPNs.
+    const emailAllowed = await checkAndBumpRateLimit(env, `recover-email:${email}`, RECOVERY_MAX_ATTEMPTS, RECOVERY_WINDOW_SECONDS);
+    if (emailAllowed) {
+      const code = await env.PP_LICENSES.get(`email:${email}`);
+      if (code) {
+        const record = await getRawRecord(env, code);
+        if (record && !record.revoked) {
+          await sendEmail(env, {
+            to: email,
+            subject: 'Your Pattern Pages access key',
+            html: recoveryEmailHtml(code),
+          });
+        }
+      }
+    }
+  }
+
+  // Always show the same "if we found it, it's on its way" confirmation
+  // regardless of whether an email was actually found/sent - so this
+  // page can't be used to check which email addresses have a code
+  // (email enumeration).
+  return new Response(recoverPage({ submitted: true }), { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
+}
+
+async function generateUniqueCode(env) {
+  const min = Math.pow(10, CODE_DIGITS - 1);
+  const max = Math.pow(10, CODE_DIGITS) - 1;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const code = String(Math.floor(min + Math.random() * (max - min + 1)));
+    const existing = await env.PP_LICENSES.get(code);
+    if (!existing) return code;
+  }
+  // Astronomically unlikely at this keyspace/volume, but fall back to a
+  // wider random value rather than looping forever.
+  return 'PP' + crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+}
+
+function normalizeEmail(value) {
+  const email = String(value || '').trim().toLowerCase();
+  if (!email || !email.includes('@') || email.length > 254) return null;
+  return email;
+}
+
+async function sendEmail(env, { to, subject, html }) {
+  if (!env.RESEND_API_KEY) {
+    return { ok: false, error: 'RESEND_API_KEY not configured' };
+  }
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: env.FROM_EMAIL || 'Pattern Pages <onboarding@resend.dev>',
+        to: [to],
+        subject,
+        html,
+      }),
+    });
+    return { ok: res.ok, status: res.status };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+function emailShell(bodyHtml) {
+  return `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#2a2438;">
+    <h1 style="font-size:20px;margin:0 0 18px;">Pattern Pages</h1>
+    ${bodyHtml}
+    <p style="font-size:12.5px;color:#7a7488;margin-top:28px;">Check Designz</p>
+  </div>`;
+}
+
+function purchaseEmailHtml(code) {
+  return emailShell(`
+    <p style="font-size:15px;line-height:1.5;">Thank you for buying Pattern Pages! Here's your access key:</p>
+    <p style="font-size:28px;font-weight:800;letter-spacing:2px;background:#f7f4fe;border-radius:12px;padding:16px;text-align:center;margin:18px 0;">${escapeHtml(code)}</p>
+    <p style="font-size:14px;line-height:1.5;">Open <a href="https://ppages.checkdesignz.com/?key=${encodeURIComponent(code)}">Pattern Pages</a> and enter this key the first time you're asked - after that you'll stay signed in for an extended period.</p>
+    <p style="font-size:13px;line-height:1.5;color:#5c5570;">Lost this email later? Visit <a href="https://ppages.checkdesignz.com/recover">ppages.checkdesignz.com/recover</a> and we'll send your key again.</p>
+  `);
+}
+
+function recoveryEmailHtml(code) {
+  return emailShell(`
+    <p style="font-size:15px;line-height:1.5;">Here's your Pattern Pages access key again:</p>
+    <p style="font-size:28px;font-weight:800;letter-spacing:2px;background:#f7f4fe;border-radius:12px;padding:16px;text-align:center;margin:18px 0;">${escapeHtml(code)}</p>
+    <p style="font-size:14px;line-height:1.5;">Open <a href="https://ppages.checkdesignz.com/?key=${encodeURIComponent(code)}">Pattern Pages</a> and enter it there.</p>
+  `);
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
+}
+
+function recoverPage({ submitted = false, rateLimited = false } = {}) {
+  let body;
+  if (rateLimited) {
+    body = `<p>Too many recovery attempts from this connection - please wait a bit and try again.</p>`;
+  } else if (submitted) {
+    body = `<p>If that email has a Pattern Pages access key on file, we've just sent it. Check your inbox (and spam folder) in a minute or two.</p>`;
+  } else {
+    body = `
+      <p>Enter the email address you used when you bought Pattern Pages, and we'll send your access key to it again.</p>
+      <form method="POST">
+        <input type="email" name="email" placeholder="you@example.com" autofocus autocomplete="email" required>
+        <button type="submit">Send my access key</button>
+      </form>
+    `;
+  }
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pattern Pages — recover access key</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:#141225;color:#fff8fb;font:16px/1.5 system-ui,-apple-system,sans-serif;}
+  .card{max-width:380px;width:90%;padding:32px 28px;border-radius:18px;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,232,248,.14);text-align:center;}
+  h1{font-size:20px;margin:0 0 6px;}
+  p{color:#c9c1d6;font-size:14px;margin:0 0 20px;}
+  input{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:12px;
+    border:1px solid rgba(255,232,248,.24);background:rgba(255,255,255,.07);
+    color:#fff8fb;font-size:15px;margin-bottom:12px;}
+  button{width:100%;padding:12px;border:0;border-radius:12px;font-weight:800;
+    font-size:15px;cursor:pointer;color:#fff;
+    background:linear-gradient(90deg,#7c5cff,#ff5ea8);}
+  a.back{display:block;margin-top:14px;color:#9b93ad;font-size:12.5px;text-decoration:none;}
+  a.back:hover{text-decoration:underline;color:#c9c1d6;}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Recover your access key</h1>
+    ${body}
+    <a class="back" href="/">&larr; Back to Pattern Pages</a>
   </div>
 </body>
 </html>`;

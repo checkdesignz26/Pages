@@ -34,8 +34,25 @@ function makeEnv(seed = {}) {
         return new Response('REAL_APP_CONTENT', { status: 200, headers: { 'content-type': 'text/html' } });
       },
     },
+    ISSUE_SECRET: 'test-issue-secret',
+    RESEND_API_KEY: 'test-resend-key',
+    FROM_EMAIL: 'Pattern Pages <test@example.com>',
   };
 }
+
+// _worker.js's sendEmail() calls the real global fetch() to reach Resend's
+// API - swap it out for a recording stub for the duration of the tests
+// below (this is Node's global fetch, unrelated to worker.fetch itself,
+// so it's safe to replace without affecting how we call the worker).
+const sentEmails = [];
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, opts) => {
+  if (String(url) === 'https://api.resend.com/emails') {
+    sentEmails.push(JSON.parse(opts.body));
+    return new Response(JSON.stringify({ id: 'mock-email-id' }), { status: 200 });
+  }
+  return realFetch(url, opts);
+};
 
 function req(url, opts = {}) {
   return new Request(url, opts);
@@ -221,6 +238,138 @@ async function run() {
       {}
     );
     assert(res.status === 303, 'a fresh IP with the right key should still succeed even after another IP got rate-limited, got ' + res.status);
+  }
+
+  // 11. /api/issue-code without the shared secret should be rejected.
+  {
+    const env = makeEnv();
+    const res = await worker.fetch(
+      req('https://ppages.example.com/api/issue-code', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'buyer@example.com', orderId: 'ORDER1' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      env,
+      {}
+    );
+    assert(res.status === 401, '/api/issue-code with no secret header should be 401, got ' + res.status);
+  }
+
+  // 12. /api/issue-code with the right secret mints a code, stores it (and
+  //     the email/order lookups), and emails it.
+  {
+    const env = makeEnv();
+    sentEmails.length = 0;
+    const res = await worker.fetch(
+      req('https://ppages.example.com/api/issue-code', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'Buyer@Example.com', orderId: 'ORDER1' }),
+        headers: { 'content-type': 'application/json', 'X-Issue-Secret': 'test-issue-secret' },
+      }),
+      env,
+      {}
+    );
+    assert(res.status === 200, '/api/issue-code with the right secret should return 200, got ' + res.status);
+    const data = JSON.parse(await res.text());
+    assert(data.success === true, '/api/issue-code should report success');
+    assert(/^\d{5}$/.test(data.code), 'issued code should be a 5-digit code, got ' + data.code);
+
+    const record = JSON.parse(env.PP_LICENSES._store.get(data.code));
+    assert(record.type === 'lifetime', 'issued code should be stored as a lifetime record');
+    assert(record.email === 'buyer@example.com', 'issued code record should store the lowercased email, got ' + record.email);
+    assert(env.PP_LICENSES._store.get('order:ORDER1') === data.code, 'orderId should map to the issued code for idempotency');
+    assert(env.PP_LICENSES._store.get('email:buyer@example.com') === data.code, 'email should map to the issued code for recovery lookups');
+
+    assert(sentEmails.length === 1, 'issuing a code should send exactly one email, sent ' + sentEmails.length);
+    assert(sentEmails[0].to[0] === 'buyer@example.com', 'the purchase email should go to the buyer\'s email');
+    assert(sentEmails[0].html.includes(data.code), 'the purchase email body should contain the actual code');
+
+    // Re-issuing for the SAME orderId must return the same code and must
+    // NOT send a second email (Zapier retries should be harmless).
+    sentEmails.length = 0;
+    const res2 = await worker.fetch(
+      req('https://ppages.example.com/api/issue-code', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'buyer@example.com', orderId: 'ORDER1' }),
+        headers: { 'content-type': 'application/json', 'X-Issue-Secret': 'test-issue-secret' },
+      }),
+      env,
+      {}
+    );
+    const data2 = JSON.parse(await res2.text());
+    assert(data2.code === data.code, 'retrying the same orderId should return the same code, got ' + data2.code + ' vs ' + data.code);
+    assert(data2.reused === true, 'retrying the same orderId should be flagged as reused');
+    assert(sentEmails.length === 0, 'retrying the same orderId must not send a second email');
+  }
+
+  // 13. /recover GET shows the form; POST with a known email sends the
+  //     recovery email but always shows the same generic confirmation.
+  {
+    const env = makeEnv();
+    env.PP_LICENSES._store.set('email:knownbuyer@example.com', '55555');
+    env.PP_LICENSES._store.set('55555', JSON.stringify({ type: 'lifetime', email: 'knownbuyer@example.com', createdAt: Date.now(), revoked: false }));
+
+    const getRes = await worker.fetch(req('https://ppages.example.com/recover'), env, {});
+    assert(getRes.status === 200, 'GET /recover should return the form, got ' + getRes.status);
+    assert((await getRes.text()).includes('Send my access key'), 'GET /recover should show the email form');
+
+    sentEmails.length = 0;
+    const knownForm = new URLSearchParams();
+    knownForm.set('email', 'knownbuyer@example.com');
+    const knownRes = await worker.fetch(
+      req('https://ppages.example.com/recover', {
+        method: 'POST',
+        body: knownForm,
+        headers: { 'content-type': 'application/x-www-form-urlencoded', 'CF-Connecting-IP': '5.5.5.1' },
+      }),
+      env,
+      {}
+    );
+    assert(knownRes.status === 200, 'POST /recover with a known email should return 200, got ' + knownRes.status);
+    assert(sentEmails.length === 1, 'a known email should trigger exactly one recovery email, sent ' + sentEmails.length);
+    assert(sentEmails[0].html.includes('55555'), 'the recovery email should contain the actual code');
+    const knownBodyText = await knownRes.text();
+
+    sentEmails.length = 0;
+    const unknownForm = new URLSearchParams();
+    unknownForm.set('email', 'nobodyhasthis@example.com');
+    const unknownRes = await worker.fetch(
+      req('https://ppages.example.com/recover', {
+        method: 'POST',
+        body: unknownForm,
+        headers: { 'content-type': 'application/x-www-form-urlencoded', 'CF-Connecting-IP': '5.5.5.2' },
+      }),
+      env,
+      {}
+    );
+    const unknownBodyText = await unknownRes.text();
+    assert(sentEmails.length === 0, 'an unrecognized email should not trigger any email');
+    assert(unknownBodyText === knownBodyText, '/recover must show the identical confirmation whether or not the email was found (no email enumeration)');
+  }
+
+  // 14. /recover is rate-limited per IP, separately from the main gate's
+  //     key-guessing rate limit.
+  {
+    const env = makeEnv();
+    let sawRateLimited = false;
+    for (let i = 0; i < 10; i++) {
+      const form = new URLSearchParams();
+      form.set('email', `nobody${i}@example.com`);
+      const res = await worker.fetch(
+        req('https://ppages.example.com/recover', {
+          method: 'POST',
+          body: form,
+          headers: { 'content-type': 'application/x-www-form-urlencoded', 'CF-Connecting-IP': '6.6.6.6' },
+        }),
+        env,
+        {}
+      );
+      if (res.status === 429) {
+        sawRateLimited = true;
+        break;
+      }
+    }
+    assert(sawRateLimited, 'repeated /recover POSTs from the same IP should eventually hit the recovery rate limiter (429)');
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);
