@@ -2214,3 +2214,34 @@ test('a normal complete click on a pattern thumbnail selects it exactly once, no
   await expect.poll(() => page.evaluate(() => state.selectedTray.pattern)).toBe(0);
   expect(await page.evaluate(() => document.querySelector('#patternTray .thumb').classList.contains('ppMagicSelected'))).toBe(true);
 });
+
+// Real report, with a screenshot: after selecting one pattern, clearing the multi-select, then
+// selecting a different one, the FIRST pattern still looked selected (a plain highlighted
+// border) even though only the second one had the "tap patterns to select several" ring and
+// number badge - two patterns visibly "selected" for one actual selection. Root cause: .selected
+// is only ever applied by the tray's full-grid-rebuild (safeRenderTrays, baked onto whichever
+// thumb matched state.selectedTray.pattern at that moment) and never revisited afterwards -
+// paint() (the code that runs on every click/clear and actually owns live selection state) only
+// ever managed the separate .ppMagicSelected class, leaving the stale .selected highlight behind
+// indefinitely once the tray stopped fully rebuilding on every click.
+test('selecting a different pattern after clearing the multi-select does not leave a stale highlight on the previous one', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => {
+    const a = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const b = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    state.trays.pattern.push({ src: a, name: 'p1' });
+    state.trays.pattern.push({ src: b, name: 'p2' });
+    if (typeof renderTrays === 'function') renderTrays();
+  });
+
+  await clickResilient(page, page.locator('#patternTray .thumb').nth(0));
+  await clickResilient(page, page.locator('text=clear selection'));
+  await clickResilient(page, page.locator('#patternTray .thumb').nth(1));
+
+  await expect.poll(() =>
+    page.evaluate(() => Array.from(document.querySelectorAll('#patternTray .thumb')).map((t) => t.classList.contains('selected')))
+  ).toEqual([false, true]);
+  expect(
+    await page.evaluate(() => Array.from(document.querySelectorAll('#patternTray .thumb')).map((t) => t.classList.contains('ppMagicSelected')))
+  ).toEqual([false, true]);
+});

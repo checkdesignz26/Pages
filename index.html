@@ -16643,6 +16643,24 @@ window.generatePatternShowcaseLayout=function(){
   function paint(){
     paintQueued=false;
     normaliseSelection();
+    // Real report, with a screenshot: two patterns could both look
+    // "selected" at once - one with the plain .selected highlight, one
+    // with the multi-select .ppMagicSelected ring + number badge - and the
+    // stale .selected one never went away on its own. That class is only
+    // ever *applied* by safeRenderTrays' full grid rebuild (baked onto
+    // whichever thumb matched state.selectedTray.pattern at that moment)
+    // and is never revisited afterwards - toggleThumb()/paint() here only
+    // ever managed .ppMagicSelected, so a thumb selected before the next
+    // unrelated rebuild (e.g. uploading another pattern) keeps wearing an
+    // increasingly wrong .selected highlight forever after. It's not just
+    // cosmetic either: #patternTray .thumb.selected img is used elsewhere
+    // (e.g. the custom mock-up crop cage) as a fallback for "the active
+    // pattern", so a stale one can feed a stale image into unrelated
+    // features too. Since this is the one place that already repaints on
+    // every selection change, make it own .selected as well, keeping it
+    // in lockstep with state.selectedTray.pattern instead of leaving it to
+    // a rebuild that may not happen again for a while.
+    var s=S(), selectedIndex=s&&s.selectedTray?s.selectedTray.pattern:null;
     thumbList().forEach(function(th){
       var src=srcFromThumb(th), order=selected.indexOf(src);
       th.classList.toggle('ppMagicSelected',order>-1);
@@ -16651,6 +16669,7 @@ window.generatePatternShowcaseLayout=function(){
         if(!badge){ badge=document.createElement('span'); badge.className='ppMagicNumber'; th.appendChild(badge); }
         if(badge.textContent!==String(order+1)) badge.textContent=String(order+1);
       }else if(badge){ badge.remove(); }
+      th.classList.toggle('selected', selectedIndex!=null && String(selectedIndex)===th.dataset.trayIndex);
     });
     var bar=ensureBar();
     if(bar){
