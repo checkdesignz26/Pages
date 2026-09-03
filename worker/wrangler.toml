@@ -1,0 +1,17 @@
+name = "ppages"
+compatibility_date = "2024-09-23"
+main = "_worker.js"
+
+[assets]
+directory = "./"
+binding = "ASSETS"
+run_worker_first = true
+
+# Created once in the Cloudflare dashboard (Workers & Pages -> KV -> Create
+# namespace), then bind it here with its real id - or just add the binding
+# via the dashboard's Worker Settings -> Bindings UI instead, which does
+# the same thing without touching this file. Either way the binding
+# (variable) name the worker code expects is PP_LICENSES.
+[[kv_namespaces]]
+binding = "PP_LICENSES"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"

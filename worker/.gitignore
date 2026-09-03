@@ -1,0 +1,12 @@
+.wrangler/
+node_modules/
+
+# Generated access codes and the PDF listing them - this repo is public,
+# these must never be committed (they'd give away every unlock code to
+# anyone who can see the repo). generate-etsy-codes.js and
+# generate-etsy-pdf.py (re)create these locally; hand the output files to
+# the seller directly instead of committing them.
+etsy-codes-kv-bulk.json
+etsy-codes-list.json
+seed-existing-key-82667.json
+patternpages-access-key.pdf

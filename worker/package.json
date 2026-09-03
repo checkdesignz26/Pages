@@ -1,0 +1,6 @@
+{
+  "name": "pp-gatekeeper-worker",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker gating Pattern Pages behind a 7-day trial + access keys. Deployed separately from the main index.html repo checkout - see the setup comment at the top of _worker.js."
+}
