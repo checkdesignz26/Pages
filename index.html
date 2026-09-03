@@ -9283,6 +9283,7 @@ function makeNumberedList(){
     border-radius:12px;
   }
   .showcaseFillTools button{font-size:11.5px!important;min-height:34px!important}
+  .showcaseMagicFillTools{grid-template-columns:1fr!important;margin-top:0!important;}
 
 </style>
 
@@ -9355,6 +9356,15 @@ function makeNumberedList(){
     }
     $('ppFillSlotInsideShowcase').onclick=function(e){e.preventDefault();window.fillSelectedFrame();};
     $('ppClearSlotInsideShowcase').onclick=function(e){e.preventDefault();window.clearSelectedSlot();};
+
+    // Real request: magic fill got the same "duplicate it where the user expects it" treatment
+    // fill selected slot/clear slot already had above - same reasoning, added as its own row so
+    // it doesn't fight the fill/clear pair for space.
+    var magicTools=document.createElement('div');
+    magicTools.className='showcaseFillTools showcaseMagicFillTools';
+    magicTools.innerHTML='<button type="button" class="full primary" id="ppMagicFillInsideShowcase" title="Fill every empty slot at once with patterns from the tray">🪄 magic fill</button>';
+    tools.insertAdjacentElement('afterend', magicTools);
+    $('ppMagicFillInsideShowcase').onclick=function(e){e.preventDefault();window.magicFillEmptySlots();};
   }
 
   // NOTE(consolidation): this block used to capture window.generatePatternShowcaseLayout
