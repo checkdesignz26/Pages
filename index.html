@@ -12112,7 +12112,12 @@ window.addEventListener('DOMContentLoaded',function(){
       s.selectedImageSrc=s.trays.asset[index].src;
     }
 
-    if(rerender!==false) safeRenderTrays();
+    // Selecting an already-rendered thumbnail only needs its highlight
+    // updated, not the whole grid torn down and rebuilt (see the note on
+    // updateTraySelectionHighlight below for why that distinction matters -
+    // it's what was actually causing "I selected it but Place Pattern says
+    // I didn't", worse in Safari than Chrome).
+    if(rerender!==false) updateTraySelectionHighlight();
     return s.trays[type][index];
   }
 
@@ -12126,6 +12131,23 @@ window.addEventListener('DOMContentLoaded',function(){
     var s=ensureState();
     if(!s) return null;
     return trayItem(type, s.selectedTray[type]);
+  }
+
+  // Toggles the .selected class on the tray thumbnails already in the DOM,
+  // without touching their structure - unlike safeRenderTrays, this never
+  // removes/recreates the elements, so it's safe to call from inside a
+  // click/pointerup handler on one of those very elements.
+  function updateTraySelectionHighlight(){
+    var s=ensureState(); if(!s) return;
+    ['pattern','asset'].forEach(function(type){
+      var el=$(type==='pattern'?'patternTray':'assetTray');
+      if(!el) return;
+      var selectedIndex=s.selectedTray[type];
+      Array.prototype.forEach.call(el.children, function(d){
+        var isSelected=String(selectedIndex)===d.dataset.trayIndex;
+        d.classList.toggle('selected', isSelected);
+      });
+    });
   }
 
   function safeRenderTrays(){
@@ -12147,16 +12169,25 @@ window.addEventListener('DOMContentLoaded',function(){
         img.src=it.thumbSrc || it.src || '';
         d.appendChild(img);
 
+        // A single click listener (not also pointerup/touchend) is
+        // deliberate: with three separate listeners all calling choose()
+        // for what's really one physical tap, the first to fire used to
+        // trigger a full grid rebuild (the old safeRenderTrays() call this
+        // replaced with updateTraySelectionHighlight above) that destroyed
+        // this very element while the browser's own click gesture for the
+        // same tap was still in flight - Safari in particular does not
+        // reliably deliver a click event whose original target has already
+        // been removed from the document. click alone, on an element that
+        // now never gets removed out from under it mid-gesture, fires
+        // consistently across both touch and mouse in every browser this
+        // app supports (the draggable thumb's touch-action:none below
+        // already removes the legacy double-tap-zoom delay that separate
+        // touch handling used to work around).
         function choose(e){
           stop(e);
           selectTray(type,i,true);
           return false;
         }
-
-        d.addEventListener('pointerdown', stop, {capture:true, passive:false});
-        d.addEventListener('touchstart', stop, {capture:true, passive:false});
-        d.addEventListener('pointerup', choose, {capture:true, passive:false});
-        d.addEventListener('touchend', choose, {capture:true, passive:false});
         d.addEventListener('click', choose, {capture:true, passive:false});
 
         if(type==='pattern'){
@@ -16567,6 +16598,7 @@ window.generatePatternShowcaseLayout=function(){
   var gesture=null;
   var observer=null;
   var paintQueued=false;
+  var lastToggledThumb=null, lastToggledAt=0;   // see the click-fallback note below
 
   function S(){ try{return state;}catch(e){return window.state||null;} }
   function currentPage(){
@@ -16625,6 +16657,7 @@ window.generatePatternShowcaseLayout=function(){
   }
   function toggleThumb(th){
     var src=srcFromThumb(th); if(!src) return;
+    lastToggledThumb=th; lastToggledAt=Date.now();
     var at=selected.indexOf(src);
     if(at>-1) selected.splice(at,1); else selected.push(src);
     var s=S(), ps=patternList();
@@ -16654,10 +16687,40 @@ window.generatePatternShowcaseLayout=function(){
     if(!g.moved&&document.documentElement.contains(g.thumb)) toggleThumb(g.thumb);
   },true);
   window.addEventListener('pointercancel',function(e){ if(gesture&&gesture.id===e.pointerId) gesture=null; },true);
+  // Real report: a customer on desktop Safari (Mac) could select a pattern
+  // - it visually looked selected - then have "place pattern" claim
+  // nothing was chosen, sporadically and inconsistently (worked fine in
+  // Chrome). Root cause: this whole tray-selection system runs entirely
+  // off pointerdown/pointerup pairing (by pointerId) rather than the
+  // simpler, far more uniformly-reliable click event - and WebKit/Safari
+  // has known inconsistencies in exactly when it fires (or doesn't fire) a
+  // pointerup for a given pointerdown, especially for trackpad input,
+  // which this whole gesture state machine has no recovery from: if
+  // pointerup silently never arrives, `gesture` is left dangling and
+  // toggleThumb() is just never called - no error, no visible feedback
+  // difference, the tap simply does nothing to the underlying selection
+  // state even though nothing looked wrong. click, by contrast, is a
+  // simple, long-standardised event with none of that per-engine pointer-
+  // pairing complexity - use it as a fallback: if a pointerdown-started
+  // gesture on this exact thumb never got resolved by pointerup, resolve
+  // it here instead of leaving the tap silently dropped.
   window.addEventListener('click',function(e){
-    if(e.target&&e.target.closest&&e.target.closest('#patternTray .thumb')){
-      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    var th=e.target&&e.target.closest&&e.target.closest('#patternTray .thumb');
+    if(!th) return;
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    if(gesture&&gesture.thumb===th){
+      var g=gesture; gesture=null;
+      if(!g.moved&&document.documentElement.contains(g.thumb)) toggleThumb(g.thumb);
+      return;
     }
+    // Second tier: no gesture was ever recorded for this click at all -
+    // covers pointerdown itself not firing/registering (not just a
+    // dropped pointerup, handled above). Only fire if this exact thumb
+    // wasn't *just* toggled a moment ago by the normal pointerdown/up path
+    // - that's the ordinary successful case already handled, and without
+    // this guard it would be toggled a second time (right back off) by
+    // this same click arriving immediately after.
+    if(!(th===lastToggledThumb && Date.now()-lastToggledAt<400)) toggleThumb(th);
   },true);
 
   function isSlot(l){ return !!(l&&(l.patternSlot||l.generatedPatternLayout||l.showcaseSlot)); }

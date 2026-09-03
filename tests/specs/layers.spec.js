@@ -2130,3 +2130,87 @@ test('the Frame Shadow slider lives inside the frames panel body, not as a detac
   });
   await expect(slider).toBeHidden();
 });
+
+// Real report, with a screenshot: a customer on desktop Safari (Mac Studio) could select a
+// pattern from the tray - it visually looked selected - then have "place pattern" claim she
+// hadn't chosen one, sporadically and inconsistently; the same steps worked fine in Chrome.
+// Root cause: the pattern tray's selection (ppages-v183a-smooth-magic-js) runs entirely off a
+// hand-rolled pointerdown/pointerup pairing (matched by pointerId) rather than the plain click
+// event, and WebKit/Safari is known to be less consistent about exactly when it fires (or
+// silently doesn't fire) a pointerup for a given pointerdown - when that happens here, the
+// in-flight gesture is just left dangling and the tray selection never updates, with no error
+// and no visible sign anything went wrong. Real end-to-end pointer hardware can't be forced to
+// drop an event on demand, so this drives the exact same code path a dropped pointerup would by
+// dispatching pointerdown/click without ever dispatching pointerup (or, for the more severe
+// case, only a bare click with no pointerdown at all) - the two-tier click fallback added to fix
+// this should still resolve the selection either way.
+test('the pattern tray still selects a pattern when the browser drops the pointerup event (real report: sporadic on desktop Safari)', async ({ page }) => {
+  await expandAllBoxes(page);
+
+  await page.evaluate(() => {
+    const a = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const b = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    state.trays.pattern.push({ src: a, name: 'p1' });
+    state.trays.pattern.push({ src: b, name: 'p2' });
+    if (typeof renderTrays === 'function') renderTrays();
+  });
+
+  async function dispatchDroppedPointerup(index) {
+    await page.evaluate((i) => {
+      const th = document.querySelectorAll('#patternTray .thumb')[i];
+      const rect = th.getBoundingClientRect();
+      const cx = rect.x + rect.width / 2;
+      const cy = rect.y + rect.height / 2;
+      const pointerId = Math.floor(Math.random() * 1e6);
+      th.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId, clientX: cx, clientY: cy }));
+      // pointerup deliberately never dispatched - simulates the browser dropping it.
+      th.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
+    }, index);
+  }
+
+  await dispatchDroppedPointerup(1);
+  await expect.poll(() => page.evaluate(() => state.selectedTray.pattern)).toBe(1);
+  expect(await page.evaluate(() => !!window.getSelectedPattern())).toBe(true);
+
+  let alertMessage = null;
+  page.once('dialog', async (d) => { alertMessage = d.message(); await d.dismiss(); });
+  const layersBefore = await page.evaluate(() => current().layers.length);
+  await clickResilient(page, page.locator('text=place pattern'));
+  await page.waitForTimeout(200);
+  expect(alertMessage).toBeNull();
+  expect(await page.evaluate(() => current().layers.length)).toBe(layersBefore + 1);
+
+  // The more severe case: pointerdown never registered at all, only a bare click.
+  await page.evaluate(() => {
+    const th = document.querySelectorAll('#patternTray .thumb')[0];
+    const rect = th.getBoundingClientRect();
+    th.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 }));
+  });
+  await expect.poll(() => page.evaluate(() => state.selectedTray.pattern)).toBe(0);
+  expect(await page.evaluate(() => !!window.getSelectedPattern())).toBe(true);
+});
+
+// A normal, complete click (pointerdown + pointerup + click, exactly what real hardware
+// dispatches) must NOT be double-counted by the click fallback above and toggle straight back
+// off - that would be a regression in the opposite direction.
+test('a normal complete click on a pattern thumbnail selects it exactly once, not toggled back off by the click fallback', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => {
+    const a = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    state.trays.pattern.push({ src: a, name: 'p1' });
+    if (typeof renderTrays === 'function') renderTrays();
+  });
+
+  await page.evaluate(() => {
+    const th = document.querySelectorAll('#patternTray .thumb')[0];
+    const rect = th.getBoundingClientRect();
+    const cx = rect.x + rect.width / 2, cy = rect.y + rect.height / 2;
+    const pointerId = 42;
+    th.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId, clientX: cx, clientY: cy }));
+    th.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerId, clientX: cx, clientY: cy }));
+    th.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
+  });
+
+  await expect.poll(() => page.evaluate(() => state.selectedTray.pattern)).toBe(0);
+  expect(await page.evaluate(() => document.querySelector('#patternTray .thumb').classList.contains('ppMagicSelected'))).toBe(true);
+});
