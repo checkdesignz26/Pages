@@ -2104,3 +2104,29 @@ test('clear current page asks for confirmation, and only clears layers if confir
   await page.evaluate(() => window.clearCurrentPage());
   expect(await page.evaluate(() => current().layers.length)).toBe(0);
 });
+
+test('the Frame Shadow slider lives inside the frames panel body, not as a detached card next to it', async ({ page }) => {
+  // ensureFrameShadowInFrames() used to append the slider directly onto the frames .box
+  // itself rather than its .panelBody, so it rendered outside the panel's collapsible
+  // content area - a floating card between "frames" and the next panel that stayed visible
+  // even while "frames" was collapsed (reported via a screen recording showing exactly
+  // that misplacement in both the dark and light themes).
+  const slider = page.locator('#frameOnlyShadowSlider');
+
+  // A few independent boot()/setTimeout cycles re-collapse or rebuild panels shortly after
+  // load (see expandAllBoxes' own comment above), so keep re-expanding until the slider is
+  // actually visible rather than expanding once and hoping it sticks.
+  await expect(async () => {
+    await expandAllBoxes(page);
+    await expect(slider).toBeVisible({ timeout: 500 });
+  }).toPass({ timeout: 10000 });
+
+  const parentIsPanelBody = await slider.evaluate((el) => el.closest('.frameShadowBox').parentElement.classList.contains('panelBody'));
+  expect(parentIsPanelBody).toBe(true);
+
+  await page.evaluate(() => {
+    const h2 = Array.from(document.querySelectorAll('.box>h2,.box h2')).find((h) => h.textContent.trim() === 'frames');
+    if (h2) h2.click();
+  });
+  await expect(slider).toBeHidden();
+});
