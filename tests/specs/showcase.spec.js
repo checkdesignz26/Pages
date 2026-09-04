@@ -358,3 +358,59 @@ test('an individual pattern-showcase strip stays selectable from the layers pane
   await clickResilient(page, stripRow.locator('.ppLayerSelectZone'));
   await expect.poll(() => page.evaluate(() => state.selected)).toBe(setup.stripIds[0]);
 });
+
+// Real report: dragging another layer (a background rectangle) "underneath" the Pattern
+// Showcase to send it behind the whole thing silently did nothing, and left both the dragged
+// layer's row and the showcase row looking selected. The collapsed showcase row never had a
+// data-id at all, so the touch-drag patch's drop-target detection (which keys everything off
+// data-id) could never recognize it as somewhere to drop onto - the row now carries a sentinel
+// id, and dropping there sends the dragged layer behind every strip/tile in the showcase.
+test('dragging a layer onto the collapsed Pattern Showcase row sends it behind the whole showcase', async ({ page }) => {
+  const setup = await page.evaluate(() => {
+    save();
+    window.showcaseLayoutType = 'squares';
+    window.setCards(4, 'squares');
+    addShape('rectangle');
+    render();
+    const p = current();
+    const showcase = p.layers.filter((l) => l.generatedPatternLayout);
+    const rect = p.layers.find((l) => l.type === 'rectangle');
+    state.selected = rect.id;
+    render();
+    return { rectId: rect.id, rectZ: rect.z, minShowcaseZBefore: Math.min(...showcase.map((l) => l.z || 0)) };
+  });
+  // The rectangle was added after the showcase, so it should start in front of it.
+  expect(setup.rectZ).toBeGreaterThan(setup.minShowcaseZBefore);
+
+  // Let the layer-panel boot()/re-render timers settle before touching its DOM, same as the
+  // other real-drag tests in this codebase.
+  await page.waitForTimeout(1800);
+  await expandAllBoxes(page);
+
+  const rectRow = page.locator(`#layerList .layerItem[data-id="${setup.rectId}"]`);
+  const showcaseRow = page.locator('#layerList .ppShowcaseGroupRow');
+  await expect(showcaseRow).toHaveAttribute('data-id', '__ppShowcaseGroup__');
+  const rectBox = await rectRow.boundingBox();
+  const showcaseBox = await showcaseRow.boundingBox();
+
+  await page.mouse.move(rectBox.x + rectBox.width / 2, rectBox.y + rectBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(rectBox.x + rectBox.width / 2, rectBox.y + rectBox.height / 2 - 15, { steps: 3 });
+  await page.waitForTimeout(50);
+  await expect(page.locator('.ppLayerDragGhost')).toHaveCount(1);
+  await page.mouse.move(showcaseBox.x + showcaseBox.width / 2, showcaseBox.y + showcaseBox.height / 2, { steps: 10 });
+  await page.waitForTimeout(50);
+  await expect(showcaseRow).toHaveClass(/ppDropTarget/);
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+
+  const after = await page.evaluate((rectId) => {
+    const p = current();
+    const rect = p.layers.find((l) => l.id === rectId);
+    const showcase = p.layers.filter((l) => l.generatedPatternLayout);
+    return { rectZ: rect.z, minShowcaseZ: Math.min(...showcase.map((l) => l.z || 0)), selected: state.selected };
+  }, setup.rectId);
+
+  expect(after.rectZ).toBeLessThan(after.minShowcaseZ);
+  expect(after.selected).toBe(setup.rectId);
+});

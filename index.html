@@ -3416,6 +3416,28 @@ function reorderLayerByDrop(dragId,targetId,mode='all'){
  state.selected=dragId;
  render();
 }
+// Real report: dragging a background rectangle "underneath" the generated Pattern Showcase to
+// send it behind the whole thing did nothing - the showcase's row in the layers panel represents
+// many real strip/tile layers together, not one single layer with one z, so it never fit
+// reorderLayerByDrop's one-id-to-one-id model. The touch-drag patch (pp-layer-panel-touch-drag-
+// patch) calls this instead whenever the drop target is that row.
+function sendLayerBehindShowcase(dragId){
+ let p=current();
+ let dragged=(p.layers||[]).find(l=>l.id===dragId);
+ let showcase=(p.layers||[]).filter(l=>l&&l.generatedPatternLayout);
+ if(!dragged||!showcase.length)return;
+ save();
+ if(dragged.groupId){
+   const oldGroupId=dragged.groupId;
+   delete dragged.groupId;
+   if(groupMembers(oldGroupId).length===0) p.layers=p.layers.filter(l=>l.id!==oldGroupId);
+ }
+ const minShowcaseZ=Math.min(...showcase.map(l=>l.z||0));
+ dragged.z=minShowcaseZ-1;
+ normaliseZ();
+ state.selected=dragId;
+ render();
+}
 function selectedForwardOne(){if(state.selected)moveLayerOne(state.selected,1,'all')}
 function selectedBackOne(){if(state.selected)moveLayerOne(state.selected,-1,'all')}
 
@@ -15054,7 +15076,11 @@ window.addEventListener('DOMContentLoaded',function(){
       // toggleGroupExpanded) ever ran - preventDefault() on pointerdown suppresses the browser's
       // follow-up synthetic click entirely, so tapping the arrow silently did nothing.
       var row=closestRow(e.target);
-      if(row && row.classList.contains('groupRow')) return null;
+      // Same reasoning applies to the collapsed "Pattern Showcase" row's own expand/collapse
+      // grip, now that it carries a data-id (see makeGroupRow) making it a valid drop TARGET -
+      // without this it would also arm as a drag SOURCE via that same data-id, breaking the
+      // grip's tap-to-toggle for the identical preventDefault-before-click reason as groupRow.
+      if(row && (row.classList.contains('groupRow')||row.classList.contains('ppShowcaseGroupRow'))) return null;
       var direct=e.target && e.target.closest && e.target.closest('.dragGrip');
       if(direct) return direct;
       if(!row) return null;
@@ -15082,7 +15108,9 @@ window.addEventListener('DOMContentLoaded',function(){
     var DRAG_ARM_THRESHOLD=8; // px of movement before a row-body touch commits to a drag
     function rowBodyDragCandidate(e){
       var row=closestRow(e.target);
-      if(!row || row.classList.contains('groupRow') || !row.dataset.id) return null;
+      // The showcase row's data-id (see makeGroupRow) exists only so it can be a valid drop
+      // TARGET - it's not a real single layer, so it can't be dragged from as a source either.
+      if(!row || row.classList.contains('groupRow') || row.classList.contains('ppShowcaseGroupRow') || !row.dataset.id) return null;
       if(e.target && e.target.closest && e.target.closest('button,.dragGrip')) return null;
       return row;
     }
@@ -15196,7 +15224,13 @@ window.addEventListener('DOMContentLoaded',function(){
       if(d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
       if(commit && d.target && d.target.dataset.id && d.target.dataset.id!==d.id){
         try{
-          if(typeof reorderLayerByDrop==='function'){
+          // The showcase row's data-id is a sentinel, not a real layer (see makeGroupRow) - it
+          // represents many strip/tile layers at once, so it needs its own "behind the whole
+          // collection" move instead of the generic single-id-to-single-id reorder.
+          if(d.target.dataset.id==='__ppShowcaseGroup__' && typeof sendLayerBehindShowcase==='function'){
+            sendLayerBehindShowcase(d.id);
+            safeToast('Sent behind the Pattern Showcase.');
+          }else if(typeof reorderLayerByDrop==='function'){
             reorderLayerByDrop(d.id,d.target.dataset.id,d.mode||'all');
             safeToast('Layer order updated.');
           }
@@ -20728,6 +20762,13 @@ else install();
     var hidden=list.length&&list.every(function(l){return !!l.hidden;});
     var collapsed=isShowcaseCollapsed();
     var row=document.createElement('div');row.className='layerItem ppShowcaseGroupRow '+(hidden?'isHidden ':'');
+    // Real report: dragging another layer (e.g. a background rectangle) "underneath" the
+    // showcase to send it behind the whole thing silently did nothing - the touch-drag patch
+    // (pp-layer-panel-touch-drag-patch) only ever recognises a drop target via its data-id, and
+    // this row never had one (it doesn't correspond to any single real layer, just the whole
+    // strip/tile collection together). Giving it this sentinel id makes it a valid target; that
+    // patch and reorderLayerByDrop below both special-case this exact id.
+    row.dataset.id=SHOWCASE_GROUP_KEY;
     // A <button>, not a <span> - the document-level click handler below (which sends any other
     // tap on this row to selectGroup()) explicitly leaves plain buttons alone, exactly like the
     // eye/delete buttons on this same row already rely on.
