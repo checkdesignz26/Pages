@@ -12608,6 +12608,7 @@ window.addEventListener('DOMContentLoaded',function(){
    standing right there waving at us. */
 (function(){
   var clipboardLayer = window.ppLayerClipboard || null;
+  var clipboardSourcePageSize = window.ppLayerClipboardSourcePageSize || null;
   function appState(){
     try{ if(typeof state !== 'undefined' && state && Array.isArray(state.pages)) return state; }catch(e){}
     return window.state || {pages:[],selectedPage:0,selected:null};
@@ -12655,6 +12656,32 @@ window.addEventListener('DOMContentLoaded',function(){
     try{ if(typeof renderLayers==='function') renderLayers(); }catch(e){}
     try{ if(typeof syncControls==='function') syncControls(); }catch(e){}
   }
+  // Real report, with a screenshot: pasting a custom mock-up group onto a page with very
+  // different dimensions (e.g. a square product shot's layer group pasted onto a tall
+  // 1000x2100 Pinterest pin, to reuse it across several social-media sizes) came out
+  // stretched into an unrecognisable blur instead of looking the same. x/y/w/h are stored
+  // as percentages of the PAGE's own box (see renderLayer: d.style.width=l.w+'%' etc.), so
+  // the exact same percentages mean a completely different physical shape once the target
+  // page's own aspect ratio differs from the page the layer was copied from - a box that
+  // was visually square at 40%w x 40%h on a 1000x1000 page is a tall sliver at 40%w x 40%h
+  // on a 1000x2100 page, which then gets object-fit:cover-cropped down to almost nothing.
+  // Rescaling by the ratio of source-page to target-page pixel dimensions keeps the pasted
+  // content's PHYSICAL size (and therefore its own proportions) the same as it looked on
+  // the page it was copied from, regardless of what shape the destination page is.
+  function pasteScaleFactors(sourceSize,p){
+    if(!sourceSize || !p) return null;
+    var sw=+sourceSize.w||0, sh=+sourceSize.h||0, tw=+p.w||0, th=+p.h||0;
+    if(!sw || !sh || !tw || !th) return null;
+    if(Math.abs(sw-tw)<0.5 && Math.abs(sh-th)<0.5) return null;
+    return {sx:sw/tw, sy:sh/th};
+  }
+  function applyPasteScale(item,sf){
+    if(!sf || !item) return;
+    if(item.x!=null) item.x=(+item.x||0)*sf.sx;
+    if(item.w!=null) item.w=(+item.w||0)*sf.sx;
+    if(item.y!=null) item.y=(+item.y||0)*sf.sy;
+    if(item.h!=null) item.h=(+item.h||0)*sf.sy;
+  }
   function insertLayer(src,p,opts){
     opts=opts||{};
     var c=clone(src);
@@ -12662,6 +12689,7 @@ window.addEventListener('DOMContentLoaded',function(){
     c.name=opts.keepName ? (src.name||src.type||'Layer') : (opts.name || copyName(src.name||src.type,p));
     c.z=(typeof opts.z==='number')?opts.z:nextZSafe(p);
     c._manualName=true;
+    applyPasteScale(c,pasteScaleFactors(opts.sourcePageSize,p));
     if(opts.offset){ c.x=(+c.x||0)+3; c.y=(+c.y||0)+3; }
     layersOf(p).push(c);
     return c;
@@ -12687,11 +12715,13 @@ window.addEventListener('DOMContentLoaded',function(){
     // highest - a tied z across all of them was the earlier bug here.
     var zs=(typeof opts.baseZ==='number')?zsJustAbove(opts.baseZ,bundle.members.length+1,p):null;
     var zBase=zs?null:nextZSafe(p);
+    var sf=pasteScaleFactors(opts.sourcePageSize,p);
     var newMembers=bundle.members.map(function(m,i){
       var mc=clone(m);
       mc.id=uidSafe();
       mc.groupId=newGroupId;
       mc._manualName=true;
+      applyPasteScale(mc,sf);
       if(opts.offset){ mc.x=(+mc.x||0)+3; mc.y=(+mc.y||0)+3; }
       mc.z=zs?zs[i]:zBase+i;
       return mc;
@@ -12719,6 +12749,9 @@ window.addEventListener('DOMContentLoaded',function(){
     if(!l){ alert('Select a layer first.'); return false; }
     clipboardLayer=(typeof isGroupLayer==='function' && isGroupLayer(l)) ? groupBundleFor(l) : clone(l);
     window.ppLayerClipboard=clipboardLayer;
+    var srcPage=currentPage();
+    clipboardSourcePageSize=srcPage?{w:+srcPage.w||0,h:+srcPage.h||0}:null;
+    window.ppLayerClipboardSourcePageSize=clipboardSourcePageSize;
     var note=document.getElementById('ppLayerClipboardNote');
     if(note) note.textContent='copied: '+(l.name||l.type||'layer')+' · ready to paste to another page';
     return false;
@@ -12746,7 +12779,11 @@ window.addEventListener('DOMContentLoaded',function(){
       if(!l){ alert('Select and copy a layer first.'); return false; }
       src=(typeof isGroupLayer==='function' && isGroupLayer(l)) ? groupBundleFor(l) : clone(l);
       clipboardLayer=src; window.ppLayerClipboard=src;
+      var srcPage2=currentPage();
+      clipboardSourcePageSize=srcPage2?{w:+srcPage2.w||0,h:+srcPage2.h||0}:null;
+      window.ppLayerClipboardSourcePageSize=clipboardSourcePageSize;
     }
+    var sourcePageSize=clipboardSourcePageSize||window.ppLayerClipboardSourcePageSize||null;
     if(!all.length){ alert('No pages found. Add a page first.'); return false; }
     var currentIndex=+s.selectedPage||0;
     var srcName=isGroupBundle(src) ? (src.group.name||src.group.type||'group') : (src.name||src.type||'layer');
@@ -12762,13 +12799,13 @@ window.addEventListener('DOMContentLoaded',function(){
     }
     if(answer==='all' || answer==='all pages'){
       all.forEach(function(p,i){
-        if(i!==currentIndex) pasteOne(p,i,{keepName:true});
+        if(i!==currentIndex) pasteOne(p,i,{keepName:true,sourcePageSize:sourcePageSize});
       });
     }else{
       var num=parseInt(answer,10);
       if(!num || num<1 || num>all.length){ alert('Page not found. Use 1 to '+all.length+'.'); return false; }
       var idx=num-1;
-      pasteOne(all[idx],idx,{keepName:true,offset:idx===currentIndex});
+      pasteOne(all[idx],idx,{keepName:true,offset:idx===currentIndex,sourcePageSize:sourcePageSize});
     }
     if(pasted.length){
       var last=pasted[pasted.length-1];

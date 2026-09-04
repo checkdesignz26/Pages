@@ -2313,3 +2313,62 @@ test('deleting one multi-selected pattern, then deleting the still-selected othe
   await page.waitForTimeout(300);
   await expect.poll(() => page.evaluate(() => state.trays.pattern.length)).toBe(1);
 });
+// Real report, with a screenshot: grouping a custom mock-up (photo + pattern layer) and using
+// "copy for other page" -> "paste to page..." to reuse it across pages sized for different
+// social platforms (e.g. copied from a square page, pasted onto the "Long Pinterest Pin"
+// preset, 1000x2100) came out visually stretched into an unrecognisable blur. x/y/w/h are
+// stored as percentages of the page's own box, so the same percentages describe a totally
+// different physical shape once the destination page's aspect ratio differs from the source
+// page's - insertLayer/insertGroupBundle now rescale by the source/target page pixel-size
+// ratio so the pasted content keeps the same physical proportions it had on the original page.
+test('pasting a grouped layer onto a page with a very different aspect ratio keeps its physical proportions instead of stretching', async ({ page }) => {
+  await expandAllBoxes(page);
+
+  await page.evaluate(() => {
+    const p = state.pages[state.selectedPage];
+    p.w = 1000; p.h = 1000;
+    const gid = 'testGroupScale';
+    const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    p.layers.push({ id: 'gsMember1', type: 'image', groupId: gid, x: 10, y: 10, w: 40, h: 40, z: 1, r: 0, opacity: 1, scale: 1, fit: 'cover', src: tinyPng });
+    p.layers.push({ id: 'gsMember2', type: 'image', groupId: gid, x: 15, y: 15, w: 20, h: 20, z: 2, r: 0, opacity: 1, scale: 1, fit: 'cover', customMockup: true, src: tinyPng });
+    p.layers.push({ id: gid, type: 'group', x: 10, y: 10, w: 40, h: 40, z: 3, r: 0, opacity: 1, scale: 1 });
+    state.selected = gid;
+    if (typeof render === 'function') render();
+  });
+
+  await page.evaluate(() => window.ppCopySelectedLayer());
+
+  await page.evaluate(() => window.addPresetPage('pin-long')); // 1000x2100, a very different aspect ratio
+  await expect.poll(() => page.evaluate(() => state.pages.length)).toBeGreaterThan(1);
+  const targetIndex = await page.evaluate(() => state.pages.length - 1);
+  await page.evaluate((idx) => { state.selectedPage = idx; }, targetIndex);
+
+  page.once('dialog', (d) => d.accept(String(targetIndex + 1)));
+  await page.evaluate(() => window.ppPasteLayerToPage());
+
+  await expect
+    .poll(() =>
+      page.evaluate((idx) => {
+        const p = state.pages[idx];
+        return (p.layers || []).some((l) => l.groupId && l.customMockup);
+      }, targetIndex)
+    )
+    .toBe(true);
+
+  const physical = await page.evaluate((idx) => {
+    const p = state.pages[idx];
+    const bg = p.layers.find((l) => l.groupId && !l.customMockup);
+    const pattern = p.layers.find((l) => l.groupId && l.customMockup);
+    return {
+      bg: { w: (bg.w / 100) * p.w, h: (bg.h / 100) * p.h },
+      pattern: { w: (pattern.w / 100) * p.w, h: (pattern.h / 100) * p.h },
+    };
+  }, targetIndex);
+
+  // Same physical pixel size (and therefore the same square proportions) as on the 1000x1000
+  // source page - 40% and 20% of 1000 respectively - regardless of the target page's own shape.
+  expect(physical.bg.w).toBeCloseTo(400, 0);
+  expect(physical.bg.h).toBeCloseTo(400, 0);
+  expect(physical.pattern.w).toBeCloseTo(200, 0);
+  expect(physical.pattern.h).toBeCloseTo(200, 0);
+});
