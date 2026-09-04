@@ -12818,6 +12818,42 @@ window.addEventListener('DOMContentLoaded',function(){
     redraw();
     return false;
   };
+  // Real report: mid-session, "paste to page..." suddenly left the whole app unresponsive - no
+  // error, nothing clickable, even after a reload. This app already hit and fixed the exact same
+  // class of bug once before for "save as" (see ppShowSaveAsDialog, downloadPstudio's own
+  // window.downloadPstudio wrap): on iOS/iPadOS Safari, a blocking native dialog (prompt/confirm/
+  // alert) shown mid-click-handler can misbehave badly enough to take the whole page down with
+  // it, not just the one action - which is a much worse failure mode than "reload to recover"
+  // suggests, since a page that's actually stuck mid-dialog doesn't necessarily let a plain
+  // reload gesture back in either. A custom in-page dialog, exactly like the save-as one, never
+  // touches window.prompt at all, so it can't hit that failure mode.
+  function ppShowPasteToPageDialog(srcName,defaultTarget,maxPage,onConfirm){
+    var old=document.getElementById('ppPasteToPageOverlay'); if(old)old.remove();
+    var overlay=document.createElement('div');
+    overlay.id='ppPasteToPageOverlay';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(10,8,18,.55);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:20px;';
+    var box=document.createElement('div');
+    box.style.cssText='background:#1c1626;border:1px solid rgba(255,232,248,.18);border-radius:16px;padding:20px;max-width:360px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.5);';
+    box.innerHTML='<div style="color:var(--whiteText,#fff8fb);font:900 15px system-ui;margin-bottom:6px;">Paste "'+String(srcName).replace(/[<>]/g,'')+'" to which page?</div>'+
+      '<div style="color:rgba(var(--mutedTextRGB,216,206,222),.86);font-size:13px;line-height:1.4;margin-bottom:12px;">Type a page number (1 to '+maxPage+'), or type <strong>all</strong> to paste to every other page.</div>'+
+      '<input id="ppPasteToPageInput" type="text" inputmode="numeric" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,232,248,.24);background:rgba(255,255,255,.06);color:var(--whiteText,#fff8fb);font-size:15px;margin-bottom:14px;" />'+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
+      '<button type="button" id="ppPasteToPageCancel" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:var(--whiteText,#fff8fb);font-weight:700;" title="Cancel without pasting">Cancel</button>'+
+      '<button type="button" id="ppPasteToPageConfirm" style="padding:9px 16px;border-radius:10px;border:0;background:linear-gradient(135deg,#9b6bff,#ff8ed6);color:#fff;font-weight:800;" title="Paste to the page above">Paste</button>'+
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    var input=box.querySelector('#ppPasteToPageInput');
+    input.value=defaultTarget;
+    input.focus();
+    input.select();
+    function close(){ overlay.remove(); }
+    box.querySelector('#ppPasteToPageCancel').addEventListener('click',close);
+    overlay.addEventListener('click',function(e){ if(e.target===overlay)close(); });
+    function confirmChoice(){ var v=input.value; close(); onConfirm(v); }
+    box.querySelector('#ppPasteToPageConfirm').addEventListener('click',confirmChoice);
+    input.addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();confirmChoice();} else if(e.key==='Escape'){close();} });
+  }
   window.ppPasteLayerToPage=function(){
     var s=appState(), all=listPages();
     var src=clipboardLayer||window.ppLayerClipboard;
@@ -12835,31 +12871,33 @@ window.addEventListener('DOMContentLoaded',function(){
     var currentIndex=+s.selectedPage||0;
     var srcName=isGroupBundle(src) ? (src.group.name||src.group.type||'group') : (src.name||src.type||'layer');
     var defaultTarget=String(Math.min(currentIndex+2, all.length));
-    var answer=prompt('Paste "'+srcName+'" to which page?\n\nType a page number, for example 2.\nType all to paste to every other page.', defaultTarget);
-    if(answer==null) return false;
-    answer=String(answer).trim().toLowerCase();
-    try{ if(typeof save==='function') save(); }catch(e){}
-    var pasted=[];
-    function pasteOne(p,idx,opts){
-      var layer=isGroupBundle(src) ? insertGroupBundle(src,p,opts) : insertLayer(src,p,opts);
-      pasted.push({layer:layer,index:idx});
-    }
-    if(answer==='all' || answer==='all pages'){
-      all.forEach(function(p,i){
-        if(i!==currentIndex) pasteOne(p,i,{keepName:true,sourcePageSize:sourcePageSize});
-      });
-    }else{
-      var num=parseInt(answer,10);
-      if(!num || num<1 || num>all.length){ alert('Page not found. Use 1 to '+all.length+'.'); return false; }
-      var idx=num-1;
-      pasteOne(all[idx],idx,{keepName:true,offset:idx===currentIndex,sourcePageSize:sourcePageSize});
-    }
-    if(pasted.length){
-      var last=pasted[pasted.length-1];
-      s.selectedPage=last.index;
-      s.selected=last.layer.id;
-    }
-    redraw();
+    ppShowPasteToPageDialog(srcName,defaultTarget,all.length,function(answer){
+      if(answer==null) return;
+      answer=String(answer).trim().toLowerCase();
+      if(!answer) return;
+      try{ if(typeof save==='function') save(); }catch(e){}
+      var pasted=[];
+      function pasteOne(p,idx,opts){
+        var layer=isGroupBundle(src) ? insertGroupBundle(src,p,opts) : insertLayer(src,p,opts);
+        pasted.push({layer:layer,index:idx});
+      }
+      if(answer==='all' || answer==='all pages'){
+        all.forEach(function(p,i){
+          if(i!==currentIndex) pasteOne(p,i,{keepName:true,sourcePageSize:sourcePageSize});
+        });
+      }else{
+        var num=parseInt(answer,10);
+        if(!num || num<1 || num>all.length){ alert('Page not found. Use 1 to '+all.length+'.'); return; }
+        var idx=num-1;
+        pasteOne(all[idx],idx,{keepName:true,offset:idx===currentIndex,sourcePageSize:sourcePageSize});
+      }
+      if(pasted.length){
+        var last=pasted[pasted.length-1];
+        s.selectedPage=last.index;
+        s.selected=last.layer.id;
+      }
+      redraw();
+    });
     return false;
   };
 })();

@@ -2343,8 +2343,9 @@ test('pasting a grouped layer onto a page with a very different aspect ratio kee
   const targetIndex = await page.evaluate(() => state.pages.length - 1);
   await page.evaluate((idx) => { state.selectedPage = idx; }, targetIndex);
 
-  page.once('dialog', (d) => d.accept(String(targetIndex + 1)));
   await page.evaluate(() => window.ppPasteLayerToPage());
+  await page.fill('#ppPasteToPageInput', String(targetIndex + 1));
+  await page.click('#ppPasteToPageConfirm');
 
   await expect
     .poll(() =>
@@ -2421,4 +2422,52 @@ test('a freshly added rectangle/square/circle shape shows no leftover "Your labe
     return calls;
   });
   expect(drawnTexts.some((t) => String(t).includes('Your label'))).toBe(false);
+});
+
+// Real report: mid-session, "paste to page..." suddenly left the whole app unresponsive - no
+// error, nothing clickable, not even after a reload. This app already hit and fixed the exact
+// same class of bug once before for "save as" (see ppShowSaveAsDialog): a blocking native dialog
+// (prompt/confirm/alert) shown mid-click-handler can misbehave badly on iOS/iPadOS Safari.
+// "paste to page..." used window.prompt() for its "which page?" question - replaced with a
+// custom in-page dialog (ppShowPasteToPageDialog) that never touches window.prompt at all.
+test('paste to page uses a custom in-page dialog, not a native prompt() that can hang iOS Safari', async ({ page }) => {
+  await expandAllBoxes(page);
+  let nativeDialogFired = false;
+  page.on('dialog', (d) => { nativeDialogFired = true; d.accept(); });
+
+  await page.evaluate(() => {
+    save();
+    addText('promo text');
+    render();
+    const l = current().layers[0];
+    state.selected = l.id;
+    addPage('pattern');
+    render();
+    state.selectedPage = 0;
+    state.selected = l.id;
+    render();
+  });
+
+  await page.evaluate(() => window.ppCopySelectedLayer());
+  await page.evaluate(() => window.ppPasteLayerToPage());
+
+  const dialog = page.locator('#ppPasteToPageOverlay');
+  await expect(dialog).toBeVisible();
+  expect(nativeDialogFired).toBe(false);
+
+  await page.fill('#ppPasteToPageInput', '2');
+  await page.click('#ppPasteToPageConfirm');
+
+  await expect.poll(() => page.evaluate(() => state.pages[1].layers.length)).toBe(1);
+  await expect(dialog).toHaveCount(0);
+  expect(nativeDialogFired).toBe(false);
+
+  // Cancel closes without pasting.
+  await page.evaluate((id) => { state.selectedPage = 0; state.selected = id; render(); }, await page.evaluate(() => current().layers[0].id));
+  await page.evaluate(() => window.ppPasteLayerToPage());
+  await expect(dialog).toBeVisible();
+  const countBeforeCancel = await page.evaluate(() => state.pages[1].layers.length);
+  await page.click('#ppPasteToPageCancel');
+  await expect(dialog).toHaveCount(0);
+  expect(await page.evaluate(() => state.pages[1].layers.length)).toBe(countBeforeCancel);
 });
