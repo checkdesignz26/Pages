@@ -12677,9 +12677,23 @@ window.addEventListener('DOMContentLoaded',function(){
     var s=appState(), p=currentPage(); return layersOf(p).find(function(l){ return l.id===s.selected; });
   }
   function uidSafe(){ try{ if(typeof uid==='function') return uid(); }catch(e){} return 'l'+Date.now()+Math.floor(Math.random()*99999); }
+  // Real report, with a screenshot: pasting several separate layers onto another page, one at a
+  // time (copy, paste, copy the next one, paste again...), left their stacking order scrambled -
+  // not just different from the source page's order, but effectively RANDOM. Root cause: this
+  // used to defer to the app's global nextZ(), which computes off current() - i.e. whichever page
+  // is currently SELECTED/VIEWED, not the page argument actually being pasted into. "Paste to
+  // page" is inherently cross-page (you stay on the source page while the dialog picks a
+  // different target), so nextZ() kept computing "one above the SOURCE page's own max z" every
+  // time, regardless of what had already landed on the target page - pasting three layers in a
+  // row could hand all three the exact same z, leaving their final left-to-right/front-to-back
+  // order down to whatever happened to render last. Computing directly from the given page's own
+  // layers (which both call sites below always pass) fixes this without touching same-page
+  // duplication at all, since that path always supplies its own explicit z instead of falling
+  // back to this function.
   function nextZSafe(p){
-    try{ if(typeof nextZ==='function') return nextZ(); }catch(e){}
-    var max=0; layersOf(p||currentPage()).forEach(function(l){ max=Math.max(max,+l.z||0); }); return max+1;
+    var list=layersOf(p||currentPage());
+    var max=0; list.forEach(function(l){ max=Math.max(max,+l.z||0); });
+    return max+1;
   }
   // Real request: duplicating something should drop the copy right next to its source, not jump
   // it to the front of the whole stack (nextZSafe() = current highest z + 1, used unconditionally

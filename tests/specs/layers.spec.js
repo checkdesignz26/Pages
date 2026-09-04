@@ -2529,3 +2529,54 @@ test('paste to page uses a custom in-page dialog, not a native prompt() that can
   await expect(dialog).toHaveCount(0);
   expect(await page.evaluate(() => state.pages[1].layers.length)).toBe(countBeforeCancel);
 });
+
+// Real report, with a screenshot: pasting several separate layers onto another page, one at a
+// time (copy one, paste it, copy the next, paste that too...), left their stacking order
+// scrambled in the layers panel. Root cause: nextZSafe(p) - used whenever paste-to-page doesn't
+// specify an explicit z - deferred to the app's global nextZ(), which computes off current(),
+// i.e. whichever page is currently selected/viewed. Since "paste to page" is inherently
+// cross-page (you stay on the source page while the dialog itself picks a different target),
+// nextZ() kept computing "one above the SOURCE page's own max z" every single time, ignoring
+// what had already landed on the target page - pasting three layers in a row could hand all
+// three the exact same z, leaving their final stacking order down to whatever happened to render
+// last rather than the order they were actually pasted in.
+test('pasting several separate layers onto another page, one at a time, stacks them in the order they were pasted instead of tying their z', async ({ page }) => {
+  await expandAllBoxes(page);
+  const ids = await page.evaluate(() => {
+    save();
+    addText('first');
+    render();
+    const l1 = current().layers[current().layers.length - 1];
+    addText('second');
+    render();
+    const l2 = current().layers[current().layers.length - 1];
+    addText('third');
+    render();
+    const l3 = current().layers[current().layers.length - 1];
+    addPage('pattern');
+    state.selectedPage = 0;
+    render();
+    return { l1: l1.id, l2: l2.id, l3: l3.id };
+  });
+  const targetIndex = await page.evaluate(() => state.pages.length - 1);
+
+  async function copyPasteBackToSource(id) {
+    await page.evaluate((lid) => { state.selectedPage = 0; state.selected = lid; render(); }, id);
+    await page.evaluate(() => window.ppCopySelectedLayer());
+    await page.evaluate(() => window.ppPasteLayerToPage());
+    await page.fill('#ppPasteToPageInput', String(targetIndex + 1));
+    await page.click('#ppPasteToPageConfirm');
+    await page.waitForTimeout(150);
+  }
+
+  // Paste in a specific, known order: first, second, third.
+  await copyPasteBackToSource(ids.l1);
+  await copyPasteBackToSource(ids.l2);
+  await copyPasteBackToSource(ids.l3);
+
+  const zs = await page.evaluate((idx) => state.pages[idx].layers.map((l) => l.z), targetIndex);
+  expect(zs.length).toBe(3);
+  // Each one landed strictly above the last, matching paste order - not tied together.
+  expect(zs[0]).toBeLessThan(zs[1]);
+  expect(zs[1]).toBeLessThan(zs[2]);
+});
