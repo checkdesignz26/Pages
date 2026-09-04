@@ -2374,6 +2374,64 @@ test('pasting a grouped layer onto a page with a very different aspect ratio kee
   expect(physical.pattern.h).toBeCloseTo(200, 0);
 });
 
+// Real report, with a screenshot: pasting a plain circle from a square Etsy listing image
+// (1080x1080) onto a much SHORTER page (a 1200x630 Facebook landscape banner) came out huge,
+// spilling off the bottom of the page entirely. The physical-size preservation from the test
+// above is exactly right when the target page has more room than the source, but when the
+// target is much shorter along one axis, keeping the exact same pixel size can push the layer
+// past the page edge - applyPasteScale now shrinks it back down (uniformly, so its own shape
+// never distorts) whenever that would happen, and nudges it back on-page as a last resort.
+test('pasting a layer onto a page so much shorter than the source that physical-size preservation would overflow it stays fully on the page', async ({ page }) => {
+  await expandAllBoxes(page);
+
+  await page.evaluate(() => {
+    const p = state.pages[state.selectedPage];
+    p.w = 1080; p.h = 1080;
+    addShape('circle');
+    render();
+    const l = current().layers[current().layers.length - 1];
+    l.x = 30; l.y = 20; l.w = 40; l.h = 40;
+    state.selected = l.id;
+    render();
+  });
+
+  await page.evaluate(() => window.ppCopySelectedLayer());
+
+  await page.evaluate(() => {
+    addPage('pattern');
+    const p = state.pages[state.pages.length - 1];
+    p.w = 1200; p.h = 630;
+    render();
+  });
+  const targetIndex = await page.evaluate(() => state.pages.length - 1);
+  // Stay on the source page (0) when invoking paste - the dialog itself is how the target page
+  // gets picked (matching real usage). Pre-selecting the target page first would make the app
+  // think this is a same-page duplicate and nudge the result by its unrelated "avoid landing
+  // exactly on top of the original" offset, muddying what this test is actually checking.
+
+  await page.evaluate(() => window.ppPasteLayerToPage());
+  await page.fill('#ppPasteToPageInput', String(targetIndex + 1));
+  await page.click('#ppPasteToPageConfirm');
+
+  await expect
+    .poll(() => page.evaluate((idx) => state.pages[idx].layers.some((l) => l.type === 'circle'), targetIndex))
+    .toBe(true);
+  const box = await page.evaluate((idx) => {
+    const l = state.pages[idx].layers.find((x) => x.type === 'circle');
+    return { x: l.x, y: l.y, w: l.w, h: l.h };
+  }, targetIndex);
+
+  // Never overflows the page it landed on...
+  expect(box.x).toBeGreaterThanOrEqual(-0.01);
+  expect(box.y).toBeGreaterThanOrEqual(-0.01);
+  expect(box.x + box.w).toBeLessThanOrEqual(100.01);
+  expect(box.y + box.h).toBeLessThanOrEqual(100.01);
+  // ...and its own shape stays a circle (equal physical width and height), never squashed.
+  const physicalW = (box.w / 100) * 1200;
+  const physicalH = (box.h / 100) * 630;
+  expect(physicalW).toBeCloseTo(physicalH, 0);
+});
+
 // Real report: a freshly added "+ rectangle" (extra design elements panel, documented as "a
 // plain shape layer") showed a "Your label" placeholder baked into it, with no way to edit or
 // clear it - double-tapping it never opened the floating text editor, since that only ever

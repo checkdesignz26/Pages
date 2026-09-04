@@ -12729,6 +12729,32 @@ window.addEventListener('DOMContentLoaded',function(){
     if(item.y!=null) item.y=(+item.y||0)*sf.sy;
     if(item.h!=null) item.h=(+item.h||0)*sf.sy;
   }
+  // Real report, with a screenshot: pasting a plain circle from a square Etsy listing image
+  // (1080x1080) onto a much SHORTER page (a 1200x630 Facebook landscape banner) came out huge,
+  // spilling off the bottom of the page. applyPasteScale's physical-size preservation above is
+  // exactly right when the target page has more room than the source (that's the Pinterest-pin
+  // case the test above covers), but when the target is much shorter/narrower along one axis,
+  // keeping the exact same pixel size can no longer fit on the page at all. Shrink it back down
+  // - uniformly, so the item's own shape never distorts - only when it would actually overflow,
+  // so the already-verified "target has more room" case is untouched (fit stays 1). Called as
+  // the LAST step (after the +3 same-page-duplicate offset below), not from inside
+  // applyPasteScale itself, so that nudge can never reopen an overflow this just closed.
+  function clampToPageBounds(item){
+    if(!item || item.w==null || item.h==null || item.x==null || item.y==null) return;
+    var w=+item.w||0, h=+item.h||0, x=+item.x||0, y=+item.y||0;
+    if(w<=0 || h<=0) return;
+    var fit=Math.min(1, 100/w, 100/h);
+    if(fit<1){
+      var cx=x+w/2, cy=y+h/2;
+      w*=fit; h*=fit;
+      x=cx-w/2; y=cy-h/2;
+    }
+    if(x+w>100) x=100-w;
+    if(y+h>100) y=100-h;
+    if(x<0) x=0;
+    if(y<0) y=0;
+    item.w=w; item.h=h; item.x=x; item.y=y;
+  }
   function insertLayer(src,p,opts){
     opts=opts||{};
     var c=clone(src);
@@ -12736,8 +12762,10 @@ window.addEventListener('DOMContentLoaded',function(){
     c.name=opts.keepName ? (src.name||src.type||'Layer') : (opts.name || copyName(src.name||src.type,p));
     c.z=(typeof opts.z==='number')?opts.z:nextZSafe(p);
     c._manualName=true;
-    applyPasteScale(c,pasteScaleFactors(opts.sourcePageSize,p));
+    var sf=pasteScaleFactors(opts.sourcePageSize,p);
+    applyPasteScale(c,sf);
     if(opts.offset){ c.x=(+c.x||0)+3; c.y=(+c.y||0)+3; }
+    if(sf) clampToPageBounds(c);
     layersOf(p).push(c);
     return c;
   }
@@ -12770,6 +12798,7 @@ window.addEventListener('DOMContentLoaded',function(){
       mc._manualName=true;
       applyPasteScale(mc,sf);
       if(opts.offset){ mc.x=(+mc.x||0)+3; mc.y=(+mc.y||0)+3; }
+      if(sf) clampToPageBounds(mc);
       mc.z=zs?zs[i]:zBase+i;
       return mc;
     });
