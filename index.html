@@ -19543,6 +19543,32 @@ else install();
     return span;
   }
 
+  // Real report: deleting a layer sometimes seemed to "need two taps" - this button used a
+  // blocking native confirm() dialog, the same class of bug already found and fixed twice this
+  // session for window.prompt() (see ppShowSaveAsDialog and ppShowPasteToPageDialog): native
+  // dialogs shown mid-click-handler are known to be unreliable on iOS/iPadOS Safari. A custom,
+  // non-blocking in-page dialog never touches confirm() at all.
+  function ppShowConfirmDialog(message,onConfirm){
+    var old=document.getElementById('ppConfirmDialogOverlay'); if(old)old.remove();
+    var overlay=document.createElement('div');
+    overlay.id='ppConfirmDialogOverlay';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(10,8,18,.55);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:20px;';
+    var box=document.createElement('div');
+    box.style.cssText='background:#1c1626;border:1px solid rgba(255,232,248,.18);border-radius:16px;padding:20px;max-width:340px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.5);';
+    box.innerHTML='<div style="color:var(--whiteText,#fff8fb);font:900 15px system-ui;margin-bottom:16px;line-height:1.35;">'+String(message).replace(/[<>]/g,'')+'</div>'+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
+      '<button type="button" id="ppConfirmDialogCancel" title="Cancel without deleting" style="padding:9px 16px;border-radius:10px;border:1px solid rgba(255,232,248,.2);background:transparent;color:var(--whiteText,#fff8fb);font-weight:700;">Cancel</button>'+
+      '<button type="button" id="ppConfirmDialogOk" title="Confirm the delete" style="padding:9px 16px;border-radius:10px;border:0;background:linear-gradient(135deg,#9b6bff,#ff8ed6);color:#fff;font-weight:800;">Delete</button>'+
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function close(){ overlay.remove(); }
+    box.querySelector('#ppConfirmDialogCancel').addEventListener('click',close);
+    overlay.addEventListener('click',function(e){ if(e.target===overlay)close(); });
+    box.querySelector('#ppConfirmDialogOk').addEventListener('click',function(){ close(); onConfirm(); });
+  }
+  window.ppShowConfirmDialog=ppShowConfirmDialog;
+
   var previousRowForLayer=window.rowForLayer;
   window.__ppV170OldRowForLayer=previousRowForLayer;
   function rowForLayerV170(l,mode){
@@ -19654,9 +19680,10 @@ else install();
     del.type='button'; del.className='deleteLayerBtn'; del.title='delete layer'; del.textContent='×';
     del.addEventListener('click',function(e){
       e.stopPropagation();
-      if(!confirm('Delete this layer?'))return;
-      if(typeof deleteLayerById==='function')deleteLayerById(l.id,(S()||{}).selectedPage);
-      else{var p=P(); if(p){p.layers=layers().filter(function(x){return x.id!==l.id;}); if((S()||{}).selected===l.id)(S()||{}).selected=null; try{render();}catch(_){}}}
+      ppShowConfirmDialog('Delete this layer?',function(){
+        if(typeof deleteLayerById==='function')deleteLayerById(l.id,(S()||{}).selectedPage);
+        else{var p=P(); if(p){p.layers=layers().filter(function(x){return x.id!==l.id;}); if((S()||{}).selected===l.id)(S()||{}).selected=null; try{render();}catch(_){}}}
+      });
     });
 
     // Real report: "temperamental" - a normal, roughly-centred tap aimed at the layer's own name

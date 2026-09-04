@@ -681,8 +681,8 @@ test('locking a layer blocks dragging and deleting it, until unlocked', async ({
   expect(afterDragAttempt.y).toBe(before.y);
   expect(afterDragAttempt.selected).not.toBe(id);
 
-  page.once('dialog', (dialog) => dialog.accept());
   await clickResilient(page, page.locator('#layerList .deleteLayerBtn').first());
+  await page.click('#ppConfirmDialogOk');
   await page.waitForTimeout(150);
   expect(await page.evaluate(() => current().layers.length)).toBe(1);
 
@@ -943,10 +943,10 @@ test('a layer whose group no longer exists heals back into an ordinary, deletabl
   await expect(page.locator(`.layerItem[data-id="${patternId}"]`)).toHaveCount(1);
   expect(await page.evaluate((id) => !current().layers.find((l) => l.id === id).groupId, patternId)).toBe(true);
 
-  page.on('dialog', (d) => d.accept());
   await page.evaluate((id) => {
     document.querySelector(`.layerItem[data-id="${id}"] .deleteLayerBtn`).click();
   }, patternId);
+  await page.click('#ppConfirmDialogOk');
   await page.waitForTimeout(200);
 
   expect(await page.evaluate(() => current().layers.length)).toBe(0);
@@ -2579,4 +2579,45 @@ test('pasting several separate layers onto another page, one at a time, stacks t
   // Each one landed strictly above the last, matching paste order - not tied together.
   expect(zs[0]).toBeLessThan(zs[1]);
   expect(zs[1]).toBeLessThan(zs[2]);
+});
+
+// Real report, with a screen recording: deleting a layer sometimes seemed unreliable. The
+// delete "x" button used a blocking native confirm() dialog - the same class of bug already
+// found and fixed twice this session for window.prompt() (see ppShowSaveAsDialog and
+// ppShowPasteToPageDialog): native dialogs shown mid-click-handler are known to be unreliable
+// on iOS/iPadOS Safari. Replaced with a custom in-page dialog that never touches confirm().
+test('deleting a layer uses a custom in-page confirm dialog, not a native confirm() that can hang iOS Safari', async ({ page }) => {
+  await expandAllBoxes(page);
+  let nativeDialogFired = false;
+  page.on('dialog', (d) => { nativeDialogFired = true; d.accept(); });
+
+  await page.evaluate(() => {
+    save();
+    addText('a');
+    render();
+  });
+
+  const before = await page.evaluate(() => current().layers.length);
+  const delBtn = page.locator('#layerList .deleteLayerBtn').first();
+  await clickResilient(page, delBtn);
+
+  const dialog = page.locator('#ppConfirmDialogOverlay');
+  await expect(dialog).toBeVisible();
+  expect(nativeDialogFired).toBe(false);
+  // Nothing deleted yet - still waiting on confirmation.
+  expect(await page.evaluate(() => current().layers.length)).toBe(before);
+
+  await page.click('#ppConfirmDialogOk');
+  await expect(dialog).toHaveCount(0);
+  expect(await page.evaluate(() => current().layers.length)).toBe(before - 1);
+  expect(nativeDialogFired).toBe(false);
+
+  // Cancel leaves the layer alone.
+  await page.evaluate(() => { addText('b'); render(); });
+  const beforeCancel = await page.evaluate(() => current().layers.length);
+  await clickResilient(page, delBtn);
+  await expect(dialog).toBeVisible();
+  await page.click('#ppConfirmDialogCancel');
+  await expect(dialog).toHaveCount(0);
+  expect(await page.evaluate(() => current().layers.length)).toBe(beforeCancel);
 });
