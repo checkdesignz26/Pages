@@ -5,7 +5,7 @@
 // "square" button (1080x1080) was a pixel-for-pixel exact duplicate of Instagram's "square post"
 // (also 1080x1080) - two buttons, one real output. Every preset button now shows its actual
 // pixel dimensions inline, and the true duplicate was removed outright rather than relabeled.
-const { test, expect, expandAllBoxes } = require('../support/fixtures');
+const { test, expect, expandAllBoxes, clickResilient } = require('../support/fixtures');
 
 test('every quick-size preset button shows its own dimensions, not just a short reused label', async ({ page }) => {
   await expandAllBoxes(page);
@@ -61,4 +61,55 @@ test('clear current page lives in the pages panel next to delete current page, n
 
   const extraBox = page.locator('.box').filter({ has: page.locator('h2', { hasText: 'extra design elements' }) }).first();
   await expect(extraBox.locator('button:has-text("clear current page")')).toHaveCount(0);
+});
+
+// Real report: opening "page size & presets", picking a preset, then tapping "add new page"
+// stopped working entirely - "you can't select anything." Root cause: two separate "start calm,
+// collapse every panel" scripts (flashmop-collapsed-start-final, flashmop-pattern-tray-open-
+// default) each re-sweep every .box on their own staggered setTimeout schedule (up to 560ms after
+// load), to catch panels that don't exist yet at page-load - but neither one could tell "the user
+// already opened this on purpose" from "this one just hasn't been swept yet", so a panel opened
+// within that first half-second (a real possibility on a slower load, or just a fast/impatient
+// tap) could get yanked shut again moments later, mid-interaction, leaving whatever the user
+// tapped next landing on a hidden button. Fixed by marking a panel the instant a real person
+// toggles it (see the ppUserToggled dataset flag in ppages-v182q-all-panels-tap-only-js's
+// toggle(), the actual live accordion toggle - an older duplicate in setupCollapsiblePanels is
+// now dead code, superseded by that same v182q script's own capture-phase interception), so both
+// sweep scripts leave an already-user-touched panel alone.
+test('toggling a panel marks it as user-touched, so the "start calm" sweeps can tell it apart from one they just haven\'t reached yet', async ({ page }) => {
+  // Racing real setTimeout-based sweep scripts from inside a test is inherently timing-dependent
+  // (the test harness's own overhead can easily land a click after every sweep has already fired
+  // once, which proves nothing either way) - assert the actual, deterministic mechanism the fix
+  // relies on instead: a real toggle marks the box immediately, every time.
+  const box = page.locator('.box').filter({ has: page.locator('h2', { hasText: 'page size & presets' }) }).first();
+  const h2 = box.locator('h2');
+
+  await h2.click();
+  await expect.poll(() => box.evaluate((el) => el.dataset.ppUserToggled)).toBe('1');
+
+  // Toggling again keeps the marker - it should never get cleared once set.
+  const wasCollapsed = await box.evaluate((el) => el.classList.contains('collapsed'));
+  await h2.click();
+  const nowCollapsed = await box.evaluate((el) => el.classList.contains('collapsed'));
+  expect(nowCollapsed).toBe(!wasCollapsed);
+  expect(await box.evaluate((el) => el.dataset.ppUserToggled)).toBe('1');
+});
+
+// Real report: opening "page size & presets", picking a preset, then tapping "add new page"
+// stopped working entirely - "you can't select anything." The end-to-end flow itself (independent
+// of the race above) should always work regardless of timing.
+test('picking a preset and adding a new page works end to end', async ({ page }) => {
+  const presetBtn = page.locator('button:text-is("pin 1000×1500")');
+  const addBtn = page.locator('button:has-text("add new page")').first();
+  await clickResilient(page, presetBtn);
+  const pagesBefore = await page.evaluate(() => state.pages.length);
+  await clickResilient(page, addBtn);
+
+  const pagesAfter = await page.evaluate(() => state.pages.length);
+  const newPage = await page.evaluate(() => {
+    const p = state.pages[state.pages.length - 1];
+    return { w: p.w, h: p.h };
+  });
+  expect(pagesAfter).toBe(pagesBefore + 1);
+  expect(newPage).toEqual({ w: 1000, h: 1500 });
 });

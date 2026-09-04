@@ -3906,6 +3906,13 @@ function setupCollapsiblePanels(){
     box.appendChild(body);
     const title = (h2.textContent || '').trim();
     if(defaultClosed.has(title)) box.classList.add('collapsed');
+    // NOTE: this listener is dead for real user interactions - ppages-v182q-all-panels-tap-only-js
+    // (further down) installs a document-level capture-phase pointerdown/click handler that calls
+    // stopImmediatePropagation() on every panel-header interaction before it ever reaches this one,
+    // and owns the actual collapse toggle now via its own toggle(node). Left in place (harmless,
+    // still fires for the rare caller that dispatches a real, non-synthetic click straight at this
+    // element) rather than removed, since a bare "does nothing" deletion here is easy to get wrong
+    // without full certainty nothing else depends on it.
     h2.addEventListener('click', ()=> box.classList.toggle('collapsed'));
   });
 }
@@ -5774,7 +5781,12 @@ body.leftCollapsed.rightCollapsed .stage.listing{
 /* Start calm: all accordion sections collapsed. Side panels remain visible. */
 (function(){
   function collapseAllSections(){
+    // Leave alone any panel a real person has already tapped open/closed themselves (see the
+    // ppUserToggled marker in setupCollapsiblePanels) - this runs again on a staggered timer to
+    // catch panels that didn't exist yet at page-load, and used to just as happily re-collapse
+    // one the user had already opened and was actively using.
     document.querySelectorAll('.box').forEach(function(box){
+      if(box.dataset && box.dataset.ppUserToggled==='1') return;
       box.classList.add('collapsed');
     });
   }
@@ -5913,6 +5925,10 @@ body.leftCollapsed.rightCollapsed .stage.listing{
 (function(){
   function normaliseStartPanels(){
     document.querySelectorAll('.box').forEach(function(box){
+      // Same reasoning as collapseAllSections in flashmop-collapsed-start-final - this also
+      // reruns on its own staggered timer (up to 560ms out), and a panel the user already opened
+      // (or closed) by hand by then shouldn't get silently reset either way.
+      if(box.dataset && box.dataset.ppUserToggled==='1') return;
       var title=(box.querySelector(':scope > h2')?.textContent || '').trim().toLowerCase();
       if(title === 'pattern tray'){
         box.classList.remove('collapsed');
@@ -16274,7 +16290,18 @@ document.addEventListener('DOMContentLoaded',function(){
       return;
     }
     var box=node.closest('.box');
-    if(box) box.classList.toggle('collapsed');
+    // Real report: open a panel (e.g. "page size & presets"), pick a preset, tap "add new page"
+    // - and on a slower load, or just a fast/impatient tap, that all lands within the first
+    // half-second after the page finishes loading, where two separate "start calm, collapse
+    // every panel" scripts (flashmop-collapsed-start-final, flashmop-pattern-tray-open-default)
+    // are each still re-sweeping every .box on their own staggered timers (up to 560ms out), to
+    // catch panels that didn't exist yet at page-load. Neither one had any way to tell "the user
+    // already opened this on purpose" from "this one just hasn't been swept yet" - so a panel the
+    // user had JUST tapped open (this is the actual live toggle - see the dead-code note on
+    // setupCollapsiblePanels' own h2 listener) could get yanked shut again moments later, mid-
+    // interaction, and whatever they tapped next landed on nothing. Marking it the instant a real
+    // person toggles it lets both of those scripts leave it alone from then on.
+    if(box){ box.classList.toggle('collapsed'); box.dataset.ppUserToggled='1'; }
   }
 
   document.addEventListener('pointerdown',function(e){
