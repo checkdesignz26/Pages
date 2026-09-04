@@ -3,7 +3,7 @@
 // renderLayers wrap, which gets silently discarded - Phase 0, 25/N), and generating/
 // regenerating a showcase never renders it above pre-existing decoration layers regardless of
 // add order (the banner-behind-showcase bug reported and fixed after the Phase 0 cleanup).
-const { test, expect, expandAllBoxes } = require('../support/fixtures');
+const { test, expect, expandAllBoxes, clickResilient } = require('../support/fixtures');
 
 test('setCards produces the right slotShape and direction for every layout type', async ({ page }) => {
   const results = await page.evaluate(() => {
@@ -342,17 +342,19 @@ test('an individual pattern-showcase strip stays selectable from the layers pane
   });
   expect(setup.stripIds.length).toBeGreaterThan(0);
 
-  await expandAllBoxes(page);
-  const groupRow = page.locator('#layerList .ppShowcaseGroupRow');
-  await expect(groupRow).toBeVisible();
-
-  // Collapsed by default - no per-strip row yet.
+  // Collapsed by default - no per-strip row yet (the DOM builds regardless of whether the
+  // surrounding panel box is currently expanded, so this doesn't need any retry of its own).
   await expect(page.locator(`#layerList .layerItem.childLayerRow[data-id="${setup.stripIds[0]}"]`)).toHaveCount(0);
 
-  await groupRow.locator('.dragGrip').click();
+  // Several independent boot()/setTimeout cycles re-render/re-collapse parts of this panel a
+  // moment after load, same as everywhere else in this codebase that interacts with it -
+  // clickResilient() self-heals against that instead of a one-shot expand+click.
+  const groupRow = page.locator('#layerList .ppShowcaseGroupRow');
+  await clickResilient(page, groupRow.locator('.dragGrip'));
+
   const stripRow = page.locator(`#layerList .layerItem.childLayerRow[data-id="${setup.stripIds[0]}"]`);
   await expect(stripRow).toBeVisible();
 
-  await stripRow.locator('.ppLayerSelectZone').click();
+  await clickResilient(page, stripRow.locator('.ppLayerSelectZone'));
   await expect.poll(() => page.evaluate(() => state.selected)).toBe(setup.stripIds[0]);
 });

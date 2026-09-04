@@ -13596,7 +13596,18 @@ window.addEventListener('DOMContentLoaded',function(){
     document.body.appendChild(done);
     active={ta:ta,done:done,node:node,layer:l,id:info.id,pageIndex:info.pageIndex};
 
-    ['pointerdown','pointerup','touchstart','touchend','mousedown','mouseup','click','dblclick'].forEach(function(t){
+    // Real report: tapping a QuickType autocorrect suggestion above the keyboard (iPad Safari)
+    // did nothing - the field kept the untouched, misspelled word. Only the down-type events
+    // (pointerdown/touchstart/mousedown) are actually needed here, to stop the drag/select
+    // engine from grabbing focus away the moment this textarea appears under the user's finger;
+    // stopping every up/click event too (as this used to) was pure defensive overkill left over
+    // from an earlier version of this editor, with no drag-engine behavior it was protecting -
+    // but iOS commits a QuickType correction through its own internal event sequence on the
+    // focused field, and that stopImmediatePropagation()/stopPropagation() on every up-type event
+    // is a plausible way to have gotten in that sequence's way. dblclick stays stopped - browsers
+    // already select-word-on-dblclick without any JS help, so blocking it from bubbling further
+    // only removes an unrelated risk (re-triggering an outer double-tap handler), not this one.
+    ['pointerdown','touchstart','mousedown','dblclick'].forEach(function(t){
       ta.addEventListener(t,function(ev){stop(ev);},true);
     });
     // NOTE: click/touchend/pointerup used to also get a stop-only handler here, registered
