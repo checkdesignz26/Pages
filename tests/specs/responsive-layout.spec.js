@@ -9,7 +9,7 @@
 // fit whatever space was left after the fixed-width side panels, the whole layout grew to fit
 // its content's natural width, overflowing the actual viewport with nothing to bring the
 // clipped-off content (like the right panel) back into view.
-const { test, expect, expandAllBoxes } = require('../support/fixtures');
+const { test, expect, expandAllBoxes, clickResilient } = require('../support/fixtures');
 
 test.use({ viewport: { width: 1080, height: 810 } });
 
@@ -402,4 +402,91 @@ test('more toolbar and pattern-tray buttons have a hover tooltip explaining what
   await expect(page.locator('button[onclick="fillSelectedFrame()"]')).toHaveAttribute('title', /./);
   await expect(page.locator('button[onclick="magicFillEmptySlots()"]')).toHaveAttribute('title', /./);
   await expect(page.locator('button[onclick="replaceAllShowcaseSlots()"]')).toHaveAttribute('title', /./);
+});
+
+// Real report: "temperamental" - selecting a different layer, especially right after copying
+// another one (copy layer A "for other page", then try to select layer B to copy that instead),
+// often silently failed to change the selection, leaving the OLD layer selected/copied. At a
+// real iPad's panel width, the layer row's grid columns for the drag grip, thumbnail, and the
+// eye/lock/delete buttons alone (plus their gaps) ate up nearly the whole row, leaving the
+// actual "tap to select" name zone only ~12px wide and pushed off to one side - while the row's
+// visual centre, where a normal, unhurried tap naturally lands, sat squarely on the eye/lock
+// buttons instead (silently toggling those, with no obvious sign anything went wrong). Verifies
+// the select zone is both wide enough to be a real touch target and actually spans the row's own
+// horizontal centre, at the narrow iPad viewport this file already uses.
+test('a layer row\'s tap-to-select zone is a real touch target that spans the row\'s own centre, not a sliver pushed off to one side', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => {
+    save();
+    addText('a');
+    render();
+  });
+
+  const row = page.locator('#layerList .layerItem[data-id]').first();
+  const zone = row.locator('.ppLayerSelectZone');
+  // Boxes here get rebuilt/re-collapsed by scattered boot()/setTimeout cycles a while after
+  // load (see fixtures.js's expandAllBoxes note) - re-expand right before checking visibility,
+  // not just once up front, and retry until it survives that race.
+  let rowBox = null;
+  let zoneBox = null;
+  await expect.poll(async () => {
+    await expandAllBoxes(page);
+    rowBox = await row.boundingBox();
+    zoneBox = rowBox ? await zone.boundingBox() : null;
+    return !!(rowBox && zoneBox);
+  }, { timeout: 5000 }).toBe(true);
+  expect(rowBox).not.toBeNull();
+  expect(zoneBox).not.toBeNull();
+
+  // A real, comfortably tappable target - not a sliver.
+  expect(zoneBox.width).toBeGreaterThanOrEqual(30);
+
+  // The row's own horizontal centre - where an ordinary, roughly-centred tap lands - actually
+  // falls inside the select zone, not on one of the icon buttons flanking it.
+  const rowCenterX = rowBox.x + rowBox.width / 2;
+  expect(rowCenterX).toBeGreaterThanOrEqual(zoneBox.x);
+  expect(rowCenterX).toBeLessThanOrEqual(zoneBox.x + zoneBox.width);
+});
+
+// Real report: "reacts after a few clicks" - a tap on a nearby button (e.g. "copy for other
+// page", right below the layers list) sometimes silently missed. Root cause: two different
+// scripts fought over the layers panel's help tip text - updateLayerTip() keeps it in sync with
+// "Thumbnails show each layer. Tap name to select, double-tap name to rename." on every
+// render(), while a since-removed block in the "V103D emergency fix" script re-asserted its own,
+// differently-worded (and, per the current click/dblclick handlers, less accurate) version 90ms
+// after literally every click/touch anywhere on the page. Different wording wraps onto a
+// different number of lines, so the tip's own height kept flipping by ~15px depending purely on
+// timing, shoving the "copy for other page"/"paste to page..." bar just below it up or down
+// mid-gesture - and if that shift landed between a touchstart and its touchend, they'd end up on
+// different elements and the browser wouldn't fire a click at all. Verifies the tip keeps its
+// one, canonical wording across several clicks in a row, instead of flipping.
+test('the layers panel help tip does not flip to a different, conflicting wording after ordinary clicks', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => {
+    save();
+    addText('a');
+    render();
+    addText('b');
+    render();
+  });
+
+  const tip = page.locator('#layerList').locator('xpath=ancestor::div[contains(@class,"panelBody")]').locator('p.smallText, p.ppLayerTip');
+  const rows = page.locator('#layerList .layerItem[data-id]');
+  // Boxes here get rebuilt/re-collapsed by scattered boot()/setTimeout cycles a while after
+  // load (see fixtures.js's expandAllBoxes note) - re-expand right before checking visibility,
+  // not just once up front, and retry until it survives that race.
+  await expect.poll(async () => {
+    await expandAllBoxes(page);
+    return (await tip.count()) > 0 && (await rows.count()) === 2;
+  }, { timeout: 5000 }).toBe(true);
+
+  const canonical = 'Drag rows to reorder. Thumbnails show each layer. Tap name to select, double-tap name to rename.';
+
+  // Several ordinary clicks in a row - each one is a chance for the old code's 90ms-later
+  // re-assertion to fire and flip the wording.
+  for (let i = 0; i < 3; i++) {
+    await clickResilient(page, rows.nth(i % 2));
+    await page.waitForTimeout(150);
+    await expect(tip).toHaveText(canonical);
+  }
 });

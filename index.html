@@ -11113,12 +11113,18 @@ button,.frameStepper button,.frameShapeGrid button,input,select,label{touch-acti
       }
     });
 
-    // Keep the help text useful.
-    var tip = body.querySelector('p.smallText') || box.querySelector('p.smallText');
-    if(tip){
-      tip.classList.add('ppLayerTip');
-      tip.textContent = 'Drag rows to reorder. Tap 👁 to hide/show, tap the layer name to rename, or × to delete.';
-    }
+    // Real report: "reacts after a few clicks" - a tap on a nearby button (e.g. "copy for
+    // other page", right below this panel) could silently miss. Root cause: this function re-
+    // asserts its OWN version of the help tip's text 90ms after every single click/touch
+    // anywhere on the page (see the listeners below), fighting with updateLayerTip() elsewhere
+    // (which keeps this same paragraph in sync on every render() and is the accurate, current
+    // version - "tap to select, double-tap to rename" - unlike this one's stale "tap ... to
+    // rename"). Two different wordings meant two different wrapped-line counts, so the tip's
+    // own height kept flipping by ~15px depending purely on timing, shoving the buttons below
+    // it up or down mid-gesture, right in the window a touchstart and touchend could land on
+    // different elements and produce no click at all. Leaving the tip's text to updateLayerTip
+    // alone removes the fight (and the shift) without losing this function's real job above:
+    // undoing the accidental display:none on the whole panel body.
   }
 
   function boot(){
@@ -19157,14 +19163,26 @@ else install();
      Goal: layer thumbnails are drawn from the current layer image only, on a clean offscreen canvas.
      They never screenshot the stage/workspace, never reuse old frozen pixels, and never include handles/guides. -->
 <style id="pp-v167-clean-thumbs-css">
+  /* Real report: "temperamental" - selecting a different layer, especially a second time in a
+     row (e.g. copy layer A, then try to select layer B to copy that instead), often failed
+     silently, leaving the OLD layer selected/copied. Root cause: at a real iPad's panel width,
+     the grid columns for the drag grip, thumbnail, and the eye/lock/delete buttons alone (plus
+     their gaps) ate up nearly the whole row, leaving the actual "tap to select" name zone only
+     ~12px wide - a sliver easy to miss, with the eye/lock buttons sitting right where a normal,
+     roughly-centred tap naturally lands (silently toggling visibility/lock instead of selecting,
+     with no obvious feedback that anything went wrong). Trimming the fixed columns and gap
+     reclaims real width for the name zone (still floored at a safe minimum via minmax) without
+     making the icon buttons uncomfortably small. Also reordered (matching the DOM order in
+     rowForLayerV170) so the name zone sits right after the thumbnail, in the row's visual
+     centre where a natural tap actually lands, instead of after the eye/lock buttons. */
   #layerList .layerItem.ppCleanThumbRow{
-    grid-template-columns:24px 38px 28px 28px minmax(0,1fr) 28px!important;
-    gap:7px!important;
+    grid-template-columns:20px 32px minmax(36px,1fr) 26px 26px 26px!important;
+    gap:5px!important;
     min-height:50px!important;
     align-items:center!important;
   }
   #layerList .ppCleanLayerThumb{
-    width:36px!important;height:36px!important;flex:0 0 36px!important;
+    width:32px!important;height:32px!important;flex:0 0 32px!important;
     position:relative!important;overflow:hidden!important;border-radius:9px!important;
     display:grid!important;place-items:center!important;
     background:linear-gradient(135deg,rgba(255,255,255,.18),rgba(255,255,255,.045))!important;
@@ -19197,7 +19215,7 @@ else install();
   #layerList .layerItem.ppCleanThumbRow .layerName{cursor:pointer!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
   #layerList .layerItem.ppCleanThumbRow .visibilityBtn,
   #layerList .layerItem.ppCleanThumbRow .lockBtn,
-  #layerList .layerItem.ppCleanThumbRow .deleteLayerBtn{width:28px!important;height:28px!important;padding:0!important;border-radius:9px!important;display:grid!important;place-items:center!important;font-size:12px!important;}
+  #layerList .layerItem.ppCleanThumbRow .deleteLayerBtn{width:26px!important;height:26px!important;padding:0!important;border-radius:9px!important;display:grid!important;place-items:center!important;font-size:12px!important;}
   /* Real report: locked vs unlocked was hard to tell apart at a glance - the lock/unlock emoji
      glyphs look near-identical at this size, and the old locked background (a 22%-opacity pink
      tint) barely showed up against the dark theme, especially confusable with the app's own
@@ -19207,10 +19225,10 @@ else install();
      as clearly different states without needing to read the tiny emoji at all. */
   #layerList .layerItem.ppCleanThumbRow .lockBtn{background:rgba(255,255,255,.05)!important;border:1px solid rgba(255,255,255,.14)!important;opacity:.68!important;}
   #layerList .layerItem.ppCleanThumbRow .lockBtn.layerLocked{background:rgba(255,196,64,.30)!important;border:1px solid rgba(255,196,64,.85)!important;opacity:1!important;box-shadow:0 0 0 1px rgba(255,196,64,.18)!important;}
-  #layerList .layerItem.ppCleanThumbRow .lockBtnSpacer{width:28px!important;height:28px!important;}
+  #layerList .layerItem.ppCleanThumbRow .lockBtnSpacer{width:26px!important;height:26px!important;}
   #layerList .layerItem.ppCleanThumbRow.rowLocked{opacity:.72!important;}
   body.ppLayersWide #layerList .ppCleanLayerThumb{width:42px!important;height:42px!important;}
-  body.ppLayersWide #layerList .layerItem.ppCleanThumbRow{grid-template-columns:22px 42px 28px 28px minmax(0,1fr) 28px!important;min-height:56px!important;}
+  body.ppLayersWide #layerList .layerItem.ppCleanThumbRow{grid-template-columns:22px 42px minmax(0,1fr) 28px 28px 28px!important;min-height:56px!important;}
 
 </style>
 <script id="pp-v167-clean-thumbs-js">
@@ -19627,7 +19645,15 @@ else install();
       else{var p=P(); if(p){p.layers=layers().filter(function(x){return x.id!==l.id;}); if((S()||{}).selected===l.id)(S()||{}).selected=null; try{render();}catch(_){}}}
     });
 
-    row.appendChild(grip); row.appendChild(thumb); row.appendChild(eye); row.appendChild(lockBtn); row.appendChild(zone); row.appendChild(del);
+    // Real report: "temperamental" - a normal, roughly-centred tap aimed at the layer's own name
+    // kept landing on the eye/lock buttons instead and silently toggling those, leaving the OLD
+    // layer selected. With grip+thumb+eye+lock all listed before the name, those four fixed-width
+    // icons dominated the row's visual centre - exactly where an unhurried, natural tap lands -
+    // while the actual "tap to select" zone was pushed off to one side. Moving the name zone
+    // right after the thumbnail (matching the CSS column order below) puts it back in the
+    // middle of the row, where taps actually go; the icon buttons now cluster at the trailing
+    // edge instead, away from where someone would naturally tap.
+    row.appendChild(grip); row.appendChild(thumb); row.appendChild(zone); row.appendChild(eye); row.appendChild(lockBtn); row.appendChild(del);
     row.addEventListener('click',function(){ window.ppSelectLayerFromRow(l.id); });
     row.addEventListener('pointerup',function(e){
       if(e.target.closest('button,.dragGrip'))return;
