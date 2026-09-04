@@ -16618,7 +16618,19 @@ window.generatePatternShowcaseLayout=function(){
   }
   function tray(){ return document.getElementById('patternTray'); }
   function thumbList(){ var t=tray(); return t?Array.from(t.querySelectorAll('.thumb')):[]; }
-  function srcFromThumb(th){ var im=th&&th.querySelector('img'); return im&&im.src?im.src:''; }
+  function srcFromThumb(th){
+    // Identify a thumb by the underlying pattern item's own .src, not the <img>'s
+    // currently-rendered src. The background memory trim (ppMemoryTrimState, elsewhere
+    // in this file) periodically re-encodes each tray item's thumbSrc via canvas and the
+    // renderer shows that instead of .src once it exists - so the exact string an <img>
+    // displays can silently change out from under an already-made multi-selection. Since
+    // that swap doesn't touch the model's own .src, anchoring identity to it instead keeps
+    // a selection intact across a trim that happens to land mid-session.
+    var idx=th&&th.dataset?Number(th.dataset.trayIndex):NaN;
+    var ps=patternList();
+    if(Number.isInteger(idx) && ps[idx] && ps[idx].src) return ps[idx].src;
+    var im=th&&th.querySelector('img'); return im&&im.src?im.src:'';
+  }
   function patternList(){ var s=S(); return s&&s.trays&&Array.isArray(s.trays.pattern)?s.trays.pattern:[]; }
 
   function normaliseSelection(){
@@ -16643,6 +16655,23 @@ window.generatePatternShowcaseLayout=function(){
   function paint(){
     paintQueued=false;
     normaliseSelection();
+    // Real report: multi-selecting two patterns then deleting one (which
+    // also clears state.selectedTray.pattern - the single index
+    // deleteSelectedTrayItem/removeTray, "place pattern" etc. actually act
+    // on) leaves the OTHER pattern still clearly marked as chosen via its
+    // ppMagicSelected ring+number badge, but a second "delete selected
+    // pattern" on it fails with "Select a pattern first" - multi-select's
+    // own `selected` list still has it, nothing had ever pointed
+    // state.selectedTray.pattern back at it since the user never re-tapped
+    // an already-selected thumb. Re-derive it here whenever it's gone
+    // stale/empty but a multi-selected pattern still exists, so every
+    // consumer that only ever reads the single index stays in sync with
+    // what's actually visible as chosen.
+    var s0=S();
+    if(s0 && s0.selectedTray && (s0.selectedTray.pattern==null || !patternList()[s0.selectedTray.pattern]) && selected.length){
+      var fallbackIndex=patternList().findIndex(function(p){return p&&p.src===selected[selected.length-1];});
+      if(fallbackIndex>-1) s0.selectedTray.pattern=fallbackIndex;
+    }
     // Real report, with a screenshot: two patterns could both look
     // "selected" at once - one with the plain .selected highlight, one
     // with the multi-select .ppMagicSelected ring + number badge - and the
@@ -16701,12 +16730,19 @@ window.generatePatternShowcaseLayout=function(){
   window.addEventListener('pointerdown',function(e){
     var th=e.target&&e.target.closest&&e.target.closest('#patternTray .thumb');
     if(!th) return;
-    gesture={thumb:th,id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};
+    gesture={thumb:th,id:e.pointerId,x:e.clientX,y:e.clientY,moved:false,pointerType:e.pointerType};
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
   },true);
   window.addEventListener('pointermove',function(e){
     if(!gesture||gesture.id!==e.pointerId) return;
-    if(Math.hypot(e.clientX-gesture.x,e.clientY-gesture.y)>10) gesture.moved=true;
+    // A finger naturally drifts more than a mouse cursor does during what's
+    // still meant as a single tap - iPad reports from real customers of a
+    // tap-select "not taking" line up with this: a 10px budget (fine for a
+    // mouse) can get eaten by ordinary touch jitter before pointerup even
+    // fires, silently reclassifying the tap as a drag attempt and skipping
+    // the selection toggle below. Give touch/pen input a wider berth.
+    var slop=gesture.pointerType==='touch'?24:(gesture.pointerType==='pen'?16:10);
+    if(Math.hypot(e.clientX-gesture.x,e.clientY-gesture.y)>slop) gesture.moved=true;
     e.stopPropagation(); e.stopImmediatePropagation();
   },true);
   window.addEventListener('pointerup',function(e){

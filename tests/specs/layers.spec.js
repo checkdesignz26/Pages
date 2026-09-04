@@ -2245,3 +2245,71 @@ test('selecting a different pattern after clearing the multi-select does not lea
     await page.evaluate(() => Array.from(document.querySelectorAll('#patternTray .thumb')).map((t) => t.classList.contains('ppMagicSelected')))
   ).toEqual([false, true]);
 });
+
+// Real report from an iPad customer, after the pointerup-fallback fix above already shipped: a
+// pattern still sometimes wouldn't register as selected. A finger drifts more than a mouse
+// cursor during what's still meant as a single tap - the tap-vs-drag move threshold that decides
+// whether pointerup actually toggles the selection was a flat 10px for every pointer type,
+// tight enough for ordinary touch jitter to exceed it before the finger lifts, silently
+// reclassifying a real tap as an abandoned drag and skipping the toggle entirely. Verifies a
+// touch-type pointer sequence that drifts past the old 10px budget (but within the new
+// touch-specific one) still selects the pattern.
+test('a touch tap on a pattern thumbnail with some finger drift still selects it (real iPad report)', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => {
+    const a = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    state.trays.pattern.push({ src: a, name: 'p1' });
+    if (typeof renderTrays === 'function') renderTrays();
+  });
+
+  await page.evaluate(() => {
+    const th = document.querySelector('#patternTray .thumb');
+    const rect = th.getBoundingClientRect();
+    const cx = rect.x + rect.width / 2, cy = rect.y + rect.height / 2;
+    const pointerId = 7;
+    th.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId, pointerType: 'touch', clientX: cx, clientY: cy }));
+    // 16px of drift - within the old 10px mouse-tuned budget's failure zone, but a perfectly
+    // ordinary amount of jitter for a real finger tap.
+    window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, cancelable: true, pointerId, pointerType: 'touch', clientX: cx + 16, clientY: cy }));
+    th.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerId, pointerType: 'touch', clientX: cx + 16, clientY: cy }));
+  });
+
+  await expect.poll(() => page.evaluate(() => state.selectedTray.pattern)).toBe(0);
+  expect(await page.evaluate(() => document.querySelector('#patternTray .thumb').classList.contains('ppMagicSelected'))).toBe(true);
+});
+
+// Real report: multi-select two patterns, delete one - it deletes fine (it was the one
+// state.selectedTray.pattern happened to be pointing at) - then try to delete the OTHER one,
+// still clearly shown as chosen via its own selection ring/badge, without re-tapping it first.
+// That second delete failed with "Select a pattern first", because deleting the first pattern
+// reset the single-select index to null and nothing had pointed it at the still-multi-selected
+// one since the user never tapped it again.
+test('deleting one multi-selected pattern, then deleting the still-selected other one without re-tapping it, deletes both', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => {
+    const a = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const b = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const c = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEUlEQVR42mNk+M9QDwABgQGA/f7uEQAAAABJRU5ErkJggg==';
+    state.trays.pattern.push({ src: a, name: 'p1' });
+    state.trays.pattern.push({ src: b, name: 'p2' });
+    state.trays.pattern.push({ src: c, name: 'p3' });
+    if (typeof renderTrays === 'function') renderTrays();
+  });
+
+  page.on('dialog', (d) => d.accept());
+  await page.click('#patternTray .thumb:nth-child(1)');
+  await page.waitForTimeout(150);
+  await page.click('#patternTray .thumb:nth-child(2)');
+  await page.waitForTimeout(150);
+  await expect.poll(() => page.evaluate(() => document.querySelectorAll('#patternTray .thumb.ppMagicSelected').length)).toBe(2);
+
+  await page.click('text=delete selected pattern');
+  await page.waitForTimeout(300);
+  await expect.poll(() => page.evaluate(() => state.trays.pattern.length)).toBe(2);
+
+  // Do NOT re-click a thumb here - matches the real report exactly (the remaining
+  // multi-selected pattern is left alone, still visibly chosen, and deleted a second time).
+  await page.click('text=delete selected pattern');
+  await page.waitForTimeout(300);
+  await expect.poll(() => page.evaluate(() => state.trays.pattern.length)).toBe(1);
+});
