@@ -3,7 +3,7 @@
 // renderLayers wrap, which gets silently discarded - Phase 0, 25/N), and generating/
 // regenerating a showcase never renders it above pre-existing decoration layers regardless of
 // add order (the banner-behind-showcase bug reported and fixed after the Phase 0 cleanup).
-const { test, expect } = require('../support/fixtures');
+const { test, expect, expandAllBoxes } = require('../support/fixtures');
 
 test('setCards produces the right slotShape and direction for every layout type', async ({ page }) => {
   const results = await page.evaluate(() => {
@@ -315,4 +315,44 @@ test('the layout-size slider scales captions together with their tiles, not just
     expect(g).toBeGreaterThan(0);
     expect(g).toBeLessThan(3);
   }
+});
+
+// Real report: once a banner (or any other layer) sits on top of a generated strip on canvas,
+// tapping the strip there just hits the banner instead - and the collapsed "Pattern Showcase"
+// row in the layers panel only ever selected the whole showcase as one resizable unit (see
+// selectGroup() in ppages-v182m-layer-fixes-js), with no way to reach one specific strip. The
+// showcase row can now be expanded (like a real layer group already can) to list each strip as
+// its own selectable row, so it stays reachable regardless of what covers it on canvas.
+test('an individual pattern-showcase strip stays selectable from the layers panel even when another layer covers it on canvas', async ({ page }) => {
+  await expandAllBoxes(page);
+
+  const setup = await page.evaluate(() => {
+    save();
+    addImageLayer('banner');
+    render();
+    window.showcaseLayoutType = 'strips';
+    window.stripDirection = 'vertical';
+    window.generateSelectedShowcaseLayout();
+    const p = current();
+    const banner = p.layers.find((l) => l.type === 'label');
+    const showcase = p.layers.filter((l) => l.generatedPatternLayout);
+    state.selected = banner.id;
+    render();
+    return { bannerId: banner.id, stripIds: showcase.map((s) => s.id) };
+  });
+  expect(setup.stripIds.length).toBeGreaterThan(0);
+
+  await expandAllBoxes(page);
+  const groupRow = page.locator('#layerList .ppShowcaseGroupRow');
+  await expect(groupRow).toBeVisible();
+
+  // Collapsed by default - no per-strip row yet.
+  await expect(page.locator(`#layerList .layerItem.childLayerRow[data-id="${setup.stripIds[0]}"]`)).toHaveCount(0);
+
+  await groupRow.locator('.dragGrip').click();
+  const stripRow = page.locator(`#layerList .layerItem.childLayerRow[data-id="${setup.stripIds[0]}"]`);
+  await expect(stripRow).toBeVisible();
+
+  await stripRow.locator('.ppLayerSelectZone').click();
+  await expect.poll(() => page.evaluate(() => state.selected)).toBe(setup.stripIds[0]);
 });

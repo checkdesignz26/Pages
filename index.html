@@ -20628,7 +20628,7 @@ else install();
     background:linear-gradient(90deg,rgba(155,107,255,.14),rgba(255,142,214,.08))!important;
     border-color:rgba(255,142,214,.24)!important;
   }
-  #layerList .ppShowcaseGroupRow .dragGrip{cursor:default!important;color:var(--pinkAccentText,#ffb8e7)!important;}
+  #layerList .ppShowcaseGroupRow .dragGrip{cursor:pointer!important;color:var(--pinkAccentText,#ffb8e7)!important;}
   #layerList .ppShowcaseGroupThumb{
     width:34px;height:34px;border-radius:9px;overflow:hidden;
     display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
@@ -20696,10 +20696,38 @@ else install();
     var s=getState();if(s&&list.some(function(l){return l.id===s.selected;}))s.selected=null;
     try{if(typeof render==='function')render();}catch(e){}
   }
+  var SHOWCASE_GROUP_KEY='__ppShowcaseGroup__';
+  // Real report: once another layer (e.g. a banner) sits on top of the generated strips and
+  // covers them on canvas, there was no way left to select an individual strip at all - tapping
+  // canvas there just hit whatever's on top, and this collapsed row itself only ever selected the
+  // showcase as one whole resizable unit (see selectGroup() below), with no way to drill into a
+  // single strip. Real groups already solve exactly this (appendGroupRow lists members underneath
+  // when expanded) - give the showcase row the same expand/collapse affordance and member list,
+  // reusing state.collapsedGroups (keyed by this synthetic id, since a showcase is not a real
+  // group layer with its own id) so tapping a strip's own row still selects it directly regardless
+  // of what's stacked above it on canvas.
+  // Defaults to collapsed (matching this row's original "one clean row" purpose) unless the user
+  // has explicitly expanded it - stored as `false` rather than merely absent/falsy so that state
+  // survives a save/load round trip the same way an explicit true would.
+  function isShowcaseCollapsed(){
+    var st=getState();
+    return !(st && st.collapsedGroups && st.collapsedGroups[SHOWCASE_GROUP_KEY]===false);
+  }
   function makeGroupRow(list){
     var hidden=list.length&&list.every(function(l){return !!l.hidden;});
+    var collapsed=isShowcaseCollapsed();
     var row=document.createElement('div');row.className='layerItem ppShowcaseGroupRow '+(hidden?'isHidden ':'');
-    var grip=document.createElement('span');grip.className='dragGrip';grip.textContent='▦';grip.title='Generated Pattern Showcase';
+    // A <button>, not a <span> - the document-level click handler below (which sends any other
+    // tap on this row to selectGroup()) explicitly leaves plain buttons alone, exactly like the
+    // eye/delete buttons on this same row already rely on.
+    var grip=document.createElement('button');grip.type='button';grip.className='dragGrip';grip.textContent=collapsed?'▶':'▼';grip.title=collapsed?'Expand to select an individual strip':'Collapse';
+    grip.addEventListener('click',function(e){
+      e.stopPropagation();
+      var s=getState(); if(!s)return;
+      s.collapsedGroups=s.collapsedGroups||{};
+      s.collapsedGroups[SHOWCASE_GROUP_KEY]=isShowcaseCollapsed()?false:true;
+      try{renderLayers();}catch(err){}
+    });
     var thumb=makeThumb(list);
     var eye=document.createElement('button');eye.type='button';eye.className='visibilityBtn '+(hidden?'layerHidden':'');eye.title=hidden?'show complete showcase':'hide complete showcase';eye.textContent=hidden?'🚫':'👁';eye.onclick=function(e){e.stopPropagation();setVisible(list,!hidden);};
     var name=document.createElement('span');name.className='layerName ppShowcaseGroupName';
@@ -20709,6 +20737,14 @@ else install();
     var del=document.createElement('button');del.type='button';del.className='deleteLayerBtn';del.title='remove complete showcase';del.textContent='×';del.onclick=function(e){e.stopPropagation();deleteShowcase();};
     row.appendChild(grip);row.appendChild(thumb);row.appendChild(eye);row.appendChild(name);row.appendChild(del);
     return row;
+  }
+  function appendShowcaseGroupRow(el,list){
+    el.appendChild(makeGroupRow(list));
+    if(isShowcaseCollapsed())return;
+    list.slice().sort(function(a,b){return (b.z||0)-(a.z||0);}).forEach(function(child){
+      var r=typeof window.rowForLayer==='function'?window.rowForLayer(child,'all'):null;
+      if(r){r.classList.add('childLayerRow');el.appendChild(r);}
+    });
   }
   // Real request: group/select multiple layers. This rewrite (below) replaced the base
   // renderLayers() wholesale and dropped two things the manual-grouping feature needs: rendering
@@ -20756,11 +20792,11 @@ else install();
         var inserted=false;
         list.forEach(function(l){
           if(l&&l.groupId)return;
-          if(!inserted && (l.z||0)<showcaseZ){el.appendChild(makeGroupRow(showcase));inserted=true;}
+          if(!inserted && (l.z||0)<showcaseZ){appendShowcaseGroupRow(el,showcase);inserted=true;}
           if(l&&typeof isGroupLayer==='function'&&isGroupLayer(l))appendGroupRow(el,l);
           else if(typeof window.rowForLayer==='function')el.appendChild(window.rowForLayer(l,'all'));
         });
-        if(!inserted)el.appendChild(makeGroupRow(showcase));
+        if(!inserted)appendShowcaseGroupRow(el,showcase);
       }else{
         list.forEach(function(l){
           if(l&&l.groupId)return;
