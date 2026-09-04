@@ -2372,3 +2372,53 @@ test('pasting a grouped layer onto a page with a very different aspect ratio kee
   expect(physical.pattern.w).toBeCloseTo(200, 0);
   expect(physical.pattern.h).toBeCloseTo(200, 0);
 });
+
+// Real report: a freshly added "+ rectangle" (extra design elements panel, documented as "a
+// plain shape layer") showed a "Your label" placeholder baked into it, with no way to edit or
+// clear it - double-tapping it never opened the floating text editor, since that only ever
+// recognizes layer type 'text'/'label' (see isText() elsewhere in this file), not plain shapes.
+// The shared layer() constructor sets text:'Your label' on every layer regardless of type, and
+// renderLayer() used to draw whatever's in l.text unconditionally for any non-image type -
+// nothing else in the app ever gives a plain shape real text, so the fix is to just never draw
+// it for these types (isPlainShape), on canvas and in every export-to-canvas path alike.
+test('a freshly added rectangle/square/circle shape shows no leftover "Your label" placeholder text', async ({ page }) => {
+  const ids = await page.evaluate(() => {
+    save();
+    addShape('rectangle');
+    addShape('square');
+    addShape('circle');
+    render();
+    return current().layers.filter((l) => ['rectangle', 'square', 'circle'].includes(l.type)).map((l) => ({ id: l.id, type: l.type }));
+  });
+  expect(ids.length).toBe(3);
+
+  for (const { id, type } of ids) {
+    const shapeText = await page.evaluate(
+      (layerId) => document.querySelector(`.layer[data-id="${layerId}"] .shapeText`)?.textContent ?? null,
+      id
+    );
+    expect(shapeText, `${type} shape should show no text on canvas`).toBe('');
+  }
+
+  // The underlying data can still carry the shared default (harmless, since nothing reads or
+  // displays it for these types any more) - what matters is every export path also stays silent.
+  // Spy on fillText/strokeText rather than sampling pixels - "Your label" centered in its box
+  // could easily sample right on the gap between the two words even with the bug still present,
+  // a real risk of this check passing for the wrong reason.
+  const drawnTexts = await page.evaluate(async () => {
+    const calls = [];
+    const proto = CanvasRenderingContext2D.prototype;
+    const origFillText = proto.fillText, origStrokeText = proto.strokeText;
+    proto.fillText = function (text, ...rest) { calls.push(text); return origFillText.call(this, text, ...rest); };
+    proto.strokeText = function (text, ...rest) { calls.push(text); return origStrokeText.call(this, text, ...rest); };
+    try {
+      const p = current();
+      await window.renderPageToCanvas(p);
+    } finally {
+      proto.fillText = origFillText;
+      proto.strokeText = origStrokeText;
+    }
+    return calls;
+  });
+  expect(drawnTexts.some((t) => String(t).includes('Your label'))).toBe(false);
+});
