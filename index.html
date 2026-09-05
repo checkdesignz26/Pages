@@ -7781,6 +7781,14 @@ document.addEventListener('click', function(e){
       drawPaperNoise(ctx,p.w,p.h,tex.kind==='natural'?0.035:0.05);
     }
   }
+  // Real report: a customer's Watercolour Paper page background (and any other non-white
+  // background texture) never showed up in exported PNGs - it renders live via CSS only
+  // (applyPageBackgroundStyles, above), and this function was the only exporter generation that
+  // ever painted it onto the canvas. A later export-function generation (see the NOTE near
+  // window.renderPageToCanvas's final reassignment) replaced this whole wrapper outright rather
+  // than building on it, silently losing this call along with everything else this one did.
+  // Exposed so that later generation can call it directly instead of just filling plain white.
+  window.drawTextureBackground=drawTextureBackground;
   const oldRenderPageToCanvas=window.renderPageToCanvas;
   if(typeof oldRenderPageToCanvas==='function'){
     window.renderPageToCanvas=async function(p){
@@ -12759,6 +12767,16 @@ window.addEventListener('DOMContentLoaded',function(){
   }
   function applyPasteScale(item,sf){
     if(!sf || !item) return;
+    // Real report: a full-bleed background image (covering the entire source page) came out with
+    // visible white margins down the sides after being pasted onto a page with a different
+    // aspect ratio - looked like "the background is missing" since so much of it was blank.
+    // Physical-size preservation below is right for a logo/mock-up/badge meant to stay a fixed
+    // size regardless of the page around it, but wrong for something meant to always fill the
+    // whole page: 100% of ANY page IS "the whole page", so a layer that already covered the
+    // entire source page should just cover the entire target page too, not shrink to match its
+    // old physical pixel size.
+    var isFullBleed=(+item.x||0)<=1 && (+item.y||0)<=1 && (+item.w||0)>=98 && (+item.h||0)>=98;
+    if(isFullBleed) return;
     if(item.x!=null) item.x=(+item.x||0)*sf.sx;
     if(item.w!=null) item.w=(+item.w||0)*sf.sx;
     if(item.y!=null) item.y=(+item.y||0)*sf.sy;
@@ -20558,7 +20576,13 @@ else install();
   }
   window.renderPageToCanvas=async function(p){
     var canvas=document.createElement('canvas'); canvas.width=p.w; canvas.height=p.h; var ctx=canvas.getContext('2d');
-    ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,p.w,p.h);
+    // Real report: a customer's Watercolour Paper page background (and any other non-white
+    // background texture, set via the "background textures" panel) never showed up in exported
+    // PNGs, even though it renders correctly live - this generation of the exporter always
+    // painted plain white here, having replaced an earlier generation that correctly called
+    // drawTextureBackground (see its own NOTE, above) without carrying that call forward.
+    if(typeof window.drawTextureBackground==='function') window.drawTextureBackground(ctx,p);
+    else{ ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,p.w,p.h); }
     var visualW=referenceStageWidth(p); var fontScale=Math.max(1,p.w/visualW);
     var layers=(p.layers||[]).slice().sort(function(a,b){return (a.z||0)-(b.z||0)});
     for(var i=0;i<layers.length;i++){

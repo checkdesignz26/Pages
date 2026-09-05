@@ -2621,3 +2621,51 @@ test('deleting a layer uses a custom in-page confirm dialog, not a native confir
   await expect(dialog).toHaveCount(0);
   expect(await page.evaluate(() => current().layers.length)).toBe(beforeCancel);
 });
+
+// Real report: "an image with a navy background... when I copied it over to another format the
+// background was missing." A full-bleed background image (covering the entire source page,
+// x=0,y=0,w=100%,h=100%) pasted onto a page with a different aspect ratio came out with visible
+// white margins down the sides instead of still filling the page - applyPasteScale's physical-
+// size preservation (added to fix a mock-up group looking stretched when pasted onto a very
+// different page shape) makes sense for a logo/mock-up/badge meant to stay a fixed size
+// regardless of the page around it, but is wrong for something meant to always fill the whole
+// page: 100% of ANY page IS "the whole page", so a layer that already covered the source page
+// entirely should just cover the target page entirely too, not shrink to match its old physical
+// pixel size.
+test('a full-bleed background image pasted onto a page with a different aspect ratio still covers the whole page', async ({ page }) => {
+  await expandAllBoxes(page);
+  await page.evaluate(() => {
+    const p = state.pages[state.selectedPage];
+    p.w = 1080; p.h = 1080;
+    const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    p.layers.push({ id: 'navyBg', type: 'image', x: 0, y: 0, w: 100, h: 100, z: 1, r: 0, opacity: 1, scale: 1, fit: 'cover', src: tinyPng });
+    render();
+    state.selected = 'navyBg';
+    render();
+  });
+
+  await page.evaluate(() => window.ppCopySelectedLayer());
+
+  await page.evaluate(() => {
+    addPage('pattern');
+    const p = state.pages[state.pages.length - 1];
+    p.w = 1200; p.h = 630;
+    state.selectedPage = 0;
+    state.selected = 'navyBg';
+    render();
+  });
+  const targetIndex = await page.evaluate(() => state.pages.length - 1);
+
+  await page.evaluate(() => window.ppPasteLayerToPage());
+  await page.fill('#ppPasteToPageInput', String(targetIndex + 1));
+  await page.click('#ppPasteToPageConfirm');
+
+  await expect
+    .poll(() => page.evaluate((idx) => state.pages[idx].layers.some((l) => l.type === 'image'), targetIndex))
+    .toBe(true);
+  const box = await page.evaluate((idx) => {
+    const l = state.pages[idx].layers.find((x) => x.type === 'image');
+    return { x: l.x, y: l.y, w: l.w, h: l.h };
+  }, targetIndex);
+  expect(box).toEqual({ x: 0, y: 0, w: 100, h: 100 });
+});
