@@ -1714,7 +1714,12 @@ body.theme-light .swbResizeHandle::after{
        relabeled. updateChosenSizePill(), which only ever existed to update this pill, and its
        call sites are removed too rather than left as permanent no-ops. -->
   <select id="sizePreset" onchange="applyPresetLabel()"><option value="3000,2250">Etsy listing image — 3000×2250</option><option value="3000,3000">Etsy square / pattern preview — 3000×3000</option><option value="3360,840">Etsy shop banner — 3360×840</option><option value="1080,1080">Instagram square post — 1080×1080</option><option value="1080,1350">Instagram portrait post — 1080×1350</option><option value="1080,1920">Instagram reel / story — 1080×1920</option><option value="1080,1920">TikTok video — 1080×1920</option><option value="1000,1500">Pinterest pin — 1000×1500</option><option value="1000,2100">Long Pinterest pin — 1000×2100</option><option value="1200,630">Facebook landscape post — 1200×630</option><option value="1640,924">Facebook cover — 1640×924</option><option value="3600,3600">Pattern tile square — 3600×3600</option><option value="custom">Custom size</option></select>
-  <div class="sizeInputs"><input id="customW" type="number" value="3000" aria-label="width"><span>×</span><input id="customH" type="number" value="2250" aria-label="height"></div>
+  <!-- Real request: typing a custom page size popped up the full QWERTY keyboard on iPad instead
+       of a compact number pad (like Procreate's canvas-size entry). type="number" alone doesn't
+       reliably get a numeric keypad on iPadOS Safari the way it does on iPhone - inputmode is the
+       actual hint iPadOS honours for which keyboard to show. "numeric" (not "decimal") since page
+       dimensions are always whole pixels, never fractional. -->
+  <div class="sizeInputs"><input id="customW" type="number" inputmode="numeric" value="3000" aria-label="width"><span>×</span><input id="customH" type="number" inputmode="numeric" value="2250" aria-label="height"></div>
   <div class="grid2"><button class="primary" onclick="addSelectedSizePage()" title="Add a new page using the size chosen above">add new page</button><button onclick="applyPageSize()" title="Resize the current page to the size chosen above">resize current</button></div></div>
   <div class="box texturePanelBox"><h2>background textures</h2>
   <p class="smallText">Tap a paper, fabric or natural background to apply it instantly to the current page.</p>
@@ -1829,7 +1834,7 @@ body.theme-light .swbResizeHandle::after{
   <button class="full" onclick="fontFile.click()" title="Upload your own font file (.ttf/.otf/.woff) to use in the app">import own font</button>
   <div class="styleChipGrid"><button onclick="applyTextStylePreset('pinHeadline')" title="Apply a bold headline style suited to Pinterest">Pinterest headline</button><button onclick="applyTextStylePreset('smallSubtitle')" title="Apply a small, understated subtitle style">small subtitle</button><button onclick="applyTextStylePreset('saleBadge')" title="Apply a bold sale/promo badge style">sale badge</button><button onclick="applyTextStylePreset('softLabel')" title="Apply a soft, muted label style">soft label</button></div>
   <div class="textSectionTitle">spacing & style</div>
-  <div class="rangeRow ppFontSizeRow"><label>font size</label><input id="fontSize" type="range" min="8" max="130" value="36"><input id="fontSizeNumber" type="number" min="8" max="130" value="36" class="ppFontSizeNumber" title="Type an exact font size (pt) - handy for matching several captions to the same size" aria-label="Font size in points"></div>
+  <div class="rangeRow ppFontSizeRow"><label>font size</label><input id="fontSize" type="range" min="8" max="130" value="36"><input id="fontSizeNumber" type="number" inputmode="numeric" min="8" max="130" value="36" class="ppFontSizeNumber" title="Type an exact font size (pt) - handy for matching several captions to the same size" aria-label="Font size in points"></div>
   <div class="rangeRow"><label>line space</label><input id="lineHeight" type="range" min="70" max="220" value="105"></div>
   <div class="rangeRow"><label>letter gap</label><input id="letterSpacing" type="range" min="-3" max="12" value="0" step="0.5"></div>
   <div class="rangeRow"><label>padding</label><input id="textPadding" type="range" min="0" max="35" value="10"></div>

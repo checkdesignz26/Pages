@@ -146,3 +146,12 @@ test('picking a preset that shares its pixel size with another preset still show
   await clickResilient(page, igReelBtn);
   expect(await select.locator('option:checked').textContent()).toMatch(/^Instagram reel/);
 });
+
+// Real report: typing a custom page width/height popped up the full QWERTY keyboard on iPad
+// instead of a compact number pad (like Procreate's canvas-size entry). type="number" alone
+// doesn't reliably get a numeric keypad on iPadOS Safari the way it does on iPhone - inputmode is
+// the hint iPadOS actually honours for which keyboard to show.
+test('the custom width/height fields hint a numeric keypad, not the full keyboard', async ({ page }) => {
+  await expect(page.locator('#customW')).toHaveAttribute('inputmode', 'numeric');
+  await expect(page.locator('#customH')).toHaveAttribute('inputmode', 'numeric');
+});
