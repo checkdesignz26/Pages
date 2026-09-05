@@ -1699,6 +1699,7 @@ body.theme-light .swbResizeHandle::after{
   <div class="sizePresetSections">
     <div class="presetMiniGroup"><span>etsy</span><button onclick="chooseQuickSize('Etsy listing image',3000,2250)" title="Set the page to Etsy's recommended listing image size">listing 3000×2250</button><button onclick="chooseQuickSize('Etsy square / pattern preview',3000,3000)" title="Set the page to a square Etsy pattern preview size">square 3000×3000</button><button onclick="chooseQuickSize('Etsy shop banner',3360,840)" title="Set the page to Etsy's shop banner size">shop banner 3360×840</button></div>
     <div class="presetMiniGroup"><span>instagram</span><button onclick="chooseQuickSize('Instagram square post',1080,1080)" title="Set the page to an Instagram square post size">square post 1080×1080</button><button onclick="chooseQuickSize('Instagram portrait post',1080,1350)" title="Set the page to an Instagram portrait post size">portrait post 1080×1350</button><button onclick="chooseQuickSize('Instagram reel / story',1080,1920)" title="Set the page to an Instagram Reel/Story size">reel / story 1080×1920</button></div>
+    <div class="presetMiniGroup"><span>tiktok</span><button onclick="chooseQuickSize('TikTok video',1080,1920)" title="Set the page to TikTok's standard video/cover size">video 1080×1920</button></div>
     <div class="presetMiniGroup"><span>pinterest</span><button onclick="chooseQuickSize('Pinterest pin',1000,1500)" title="Set the page to a standard Pinterest pin size">pin 1000×1500</button><button onclick="chooseQuickSize('Long Pinterest pin',1000,2100)" title="Set the page to a long Pinterest pin size">long pin 1000×2100</button></div>
     <!-- Real report: this group used to also have its own "square" button at 1080x1080 - pixel-
          identical to instagram's "square post" above, just relabeled. Removed rather than
@@ -1712,7 +1713,7 @@ body.theme-light .swbResizeHandle::after{
        (pick a preset from it directly), so the pill was purely redundant - removed rather than
        relabeled. updateChosenSizePill(), which only ever existed to update this pill, and its
        call sites are removed too rather than left as permanent no-ops. -->
-  <select id="sizePreset" onchange="applyPresetLabel()"><option value="3000,2250">Etsy listing image — 3000×2250</option><option value="3000,3000">Etsy square / pattern preview — 3000×3000</option><option value="3360,840">Etsy shop banner — 3360×840</option><option value="1080,1080">Instagram square post — 1080×1080</option><option value="1080,1350">Instagram portrait post — 1080×1350</option><option value="1080,1920">Instagram reel / story — 1080×1920</option><option value="1000,1500">Pinterest pin — 1000×1500</option><option value="1000,2100">Long Pinterest pin — 1000×2100</option><option value="1200,630">Facebook landscape post — 1200×630</option><option value="1640,924">Facebook cover — 1640×924</option><option value="3600,3600">Pattern tile square — 3600×3600</option><option value="custom">Custom size</option></select>
+  <select id="sizePreset" onchange="applyPresetLabel()"><option value="3000,2250">Etsy listing image — 3000×2250</option><option value="3000,3000">Etsy square / pattern preview — 3000×3000</option><option value="3360,840">Etsy shop banner — 3360×840</option><option value="1080,1080">Instagram square post — 1080×1080</option><option value="1080,1350">Instagram portrait post — 1080×1350</option><option value="1080,1920">Instagram reel / story — 1080×1920</option><option value="1080,1920">TikTok video — 1080×1920</option><option value="1000,1500">Pinterest pin — 1000×1500</option><option value="1000,2100">Long Pinterest pin — 1000×2100</option><option value="1200,630">Facebook landscape post — 1200×630</option><option value="1640,924">Facebook cover — 1640×924</option><option value="3600,3600">Pattern tile square — 3600×3600</option><option value="custom">Custom size</option></select>
   <div class="sizeInputs"><input id="customW" type="number" value="3000" aria-label="width"><span>×</span><input id="customH" type="number" value="2250" aria-label="height"></div>
   <div class="grid2"><button class="primary" onclick="addSelectedSizePage()" title="Add a new page using the size chosen above">add new page</button><button onclick="applyPageSize()" title="Resize the current page to the size chosen above">resize current</button></div></div>
   <div class="box texturePanelBox"><h2>background textures</h2>
@@ -1970,7 +1971,16 @@ function applyTextStylePreset(kind){
 }
 
 function applyPresetLabel(){let v=$('sizePreset').value;if(v!=='custom'){let [w,h]=v.split(',');$('customW').value=w;$('customH').value=h;let sel=$('sizePreset');window.selectedFriendlyPresetLabel=(sel.options[sel.selectedIndex]?.textContent||'').split('—')[0].trim();}}
-function chooseQuickSize(label,w,h){window.selectedFriendlyPresetLabel=label;$('customW').value=w;$('customH').value=h;let sel=$('sizePreset');let match=[...sel.options].find(o=>o.textContent.toLowerCase().startsWith(label.toLowerCase()) && o.value===`${w},${h}`);sel.value=match?match.value:'custom';document.querySelectorAll('.presetMiniGroup button').forEach(b=>b.classList.remove('activePreset'));if(event&&event.currentTarget)event.currentTarget.classList.add('activePreset');}
+function chooseQuickSize(label,w,h){window.selectedFriendlyPresetLabel=label;$('customW').value=w;$('customH').value=h;let sel=$('sizePreset');let match=[...sel.options].find(o=>o.textContent.toLowerCase().startsWith(label.toLowerCase()) && o.value===`${w},${h}`);
+  // Real bug, found adding a TikTok preset (same 1080x1920 size as Instagram's reel/story):
+  // sel.value=match.value picks whichever OPTION ELEMENT comes first in the dropdown with that
+  // value, not necessarily the specific option this function just found by label - so clicking
+  // "TikTok video" left the dropdown showing "Instagram reel / story" instead, since that option
+  // happens to sit earlier in the list and shares the exact same 1080x1920 value. Selecting the
+  // found option directly (by index) disambiguates size presets that intentionally share a
+  // pixel size but represent different platforms.
+  if(match) sel.selectedIndex=[...sel.options].indexOf(match); else sel.value='custom';
+  document.querySelectorAll('.presetMiniGroup button').forEach(b=>b.classList.remove('activePreset'));if(event&&event.currentTarget)event.currentTarget.classList.add('activePreset');}
 function labelForSelectedSize(){let w=+$('customW').value,h=+$('customH').value;return window.selectedFriendlyPresetLabel||labelForSize(w,h)}
 function addSelectedSizePage(){save();let w=+$('customW').value||3000;let h=+$('customH').value||2250;state.pages.push({type:labelForSelectedSize(),w,h,layers:[]});state.selectedPage=state.pages.length-1;state.selected=null;render();scrollSel()}
 function applyPageSize(){save();let p=current();p.w=+$('customW').value||3600;p.h=+$('customH').value||2700;p.type=labelForSize(p.w,p.h);render()}

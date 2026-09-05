@@ -113,3 +113,36 @@ test('picking a preset and adding a new page works end to end', async ({ page })
   expect(pagesAfter).toBe(pagesBefore + 1);
   expect(newPage).toEqual({ w: 1000, h: 1500 });
 });
+
+// Real request: add TikTok to the page size presets, alongside Instagram/Pinterest/Facebook.
+// TikTok's standard video/cover size (1080x1920) happens to be pixel-identical to Instagram's
+// reel/story preset - a real, expected overlap (both are the same portrait-video standard),
+// not a duplicate to remove like the earlier Facebook "square" bug.
+test('a TikTok preset is available and sets the page to 1080x1920', async ({ page }) => {
+  await expandAllBoxes(page);
+  const tiktokGroup = page.locator('.presetMiniGroup', { has: page.locator('span', { hasText: 'tiktok' }) });
+  await expect(tiktokGroup.locator('button')).toHaveCount(1);
+
+  await clickResilient(page, tiktokGroup.locator('button').first());
+  const size = await page.evaluate(() => [document.getElementById('customW').value, document.getElementById('customH').value]);
+  expect(size).toEqual(['1080', '1920']);
+});
+
+// Real bug, found while adding the TikTok preset above: chooseQuickSize() picked the matching
+// dropdown option by setting select.value, which - for a <select> with two <option>s sharing the
+// exact same value (TikTok video and Instagram reel/story both being 1080x1920) - always lands on
+// whichever one comes first in the DOM, regardless of which button was actually clicked. Clicking
+// "TikTok video" left the dropdown visibly showing "Instagram reel / story" instead.
+test('picking a preset that shares its pixel size with another preset still shows its own label in the size dropdown', async ({ page }) => {
+  await expandAllBoxes(page);
+  const select = page.locator('#sizePreset');
+
+  const tiktokBtn = page.locator('.presetMiniGroup', { has: page.locator('span', { hasText: 'tiktok' }) }).locator('button').first();
+  await clickResilient(page, tiktokBtn);
+  await expect(select).toHaveValue('1080,1920');
+  expect(await select.locator('option:checked').textContent()).toMatch(/^TikTok/);
+
+  const igReelBtn = page.locator('button:text-is("reel / story 1080×1920")');
+  await clickResilient(page, igReelBtn);
+  expect(await select.locator('option:checked').textContent()).toMatch(/^Instagram reel/);
+});
