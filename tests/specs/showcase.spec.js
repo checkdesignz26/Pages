@@ -317,6 +317,55 @@ test('the layout-size slider scales captions together with their tiles, not just
   }
 });
 
+// Real question: the layout size (and left/right, up/down) sliders in "showcase control room"
+// only ever scaled/moved circles, squares and rectangles - a strip layout (vertical or horizontal
+// stash) sat there completely unaffected, even though the same-looking panel is shown regardless
+// of which layout type is active. Both slot-filter generations of this panel (v179's
+// isScalableShowcaseSlot and the live v180 isShowcaseSlot) excluded slotShape==='strip' outright.
+test('the layout size slider also resizes strip layouts (vertical and horizontal stash), not just circles/squares/rectangles', async ({ page }) => {
+  for (const direction of ['vertical', 'horizontal']) {
+    await page.evaluate((dir) => {
+      save();
+      window.stripDirection = dir;
+      window.setCards(4, 'strips');
+      render();
+    }, direction);
+    await page.waitForTimeout(200); // afterGenerate()'s setTimeout(...,0) captures the scaling base
+
+    const before = await page.evaluate(() => {
+      const p = current();
+      return p.layers.filter((l) => l.generatedPatternLayout && l.slotShape === 'strip').map((l) => ({ w: l.w, h: l.h }));
+    });
+    expect(before.length).toBe(4);
+
+    await page.evaluate(() => {
+      const slider = document.getElementById('showcaseLayoutSize');
+      slider.value = '70';
+      slider.dispatchEvent(new Event('input'));
+      slider.dispatchEvent(new Event('change'));
+    });
+    await page.waitForTimeout(200);
+
+    const after = await page.evaluate(() => {
+      const p = current();
+      return p.layers.filter((l) => l.generatedPatternLayout && l.slotShape === 'strip').map((l) => ({ w: l.w, h: l.h }));
+    });
+
+    after.forEach((a, i) => {
+      expect(a.w).toBeCloseTo(before[i].w * 0.7, 1);
+      expect(a.h).toBeCloseTo(before[i].h * 0.7, 1);
+    });
+
+    // Reset back to 100% before the next iteration.
+    await page.evaluate(() => {
+      const slider = document.getElementById('showcaseLayoutSize');
+      slider.value = '100';
+      slider.dispatchEvent(new Event('input'));
+      slider.dispatchEvent(new Event('change'));
+    });
+  }
+});
+
 // Real report: once a banner (or any other layer) sits on top of a generated strip on canvas,
 // tapping the strip there just hits the banner instead - and the collapsed "Pattern Showcase"
 // row in the layers panel only ever selected the whole showcase as one resizable unit (see
